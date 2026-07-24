@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { FormEvent, KeyboardEvent } from "react"
-import { code } from "@streamdown/code"
+import { createCodePlugin } from "@streamdown/code"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
 import {
@@ -29,7 +29,11 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 
-const streamdownPlugins = { code }
+const streamdownPlugins = {
+  code: createCodePlugin({
+    themes: ["github-light", "min-dark"],
+  }),
+}
 
 export const Route = createFileRoute("/")({ component: ChatPage })
 
@@ -63,7 +67,7 @@ function ChatPage() {
   const showThinking = isLoading && messages.at(-1)?.role !== "assistant"
 
   return (
-    <div className="dark flex h-svh min-h-0 flex-col bg-[#151515] text-[#ededed]">
+    <div className="chat-surface dark flex h-svh min-h-0 flex-col bg-[#151515] text-[#ededed]">
       <header className="z-10 shrink-0 border-b border-white/[0.07] bg-[#181818]/95 backdrop-blur supports-backdrop-filter:bg-[#181818]/80">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-3 px-4">
           <div className="flex size-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#232323] text-[#d7d7d7]">
@@ -145,6 +149,7 @@ function ChatPage() {
                                       part.content
                                     ) : (
                                       <Streamdown
+                                        lineNumbers={false}
                                         mode={
                                           isStreaming ? "streaming" : "static"
                                         }
