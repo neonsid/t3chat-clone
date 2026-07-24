@@ -22,7 +22,7 @@ export const Route = createRootRouteWithContext<{
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "T3 Chat",
       },
     ],
     links: [
@@ -43,11 +43,11 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="overflow-hidden bg-background text-foreground">
         {children}
         <TanStackDevtools
           config={{

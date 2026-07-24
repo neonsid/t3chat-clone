@@ -1,25 +1,13 @@
-import { useState } from "react"
-import type { FormEvent, KeyboardEvent } from "react"
-import { createCodePlugin } from "@streamdown/code"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
+import type { UIMessage } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  ArrowUpIcon,
-  BotIcon,
-  LoaderCircleIcon,
-  MessageSquareIcon,
-} from "lucide-react"
-import { Streamdown } from "streamdown"
 
-import { Bubble, BubbleContent } from "@/components/ui/bubble"
-import { Button } from "@/components/ui/button"
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageFooter,
-  MessageHeader,
-} from "@/components/ui/message"
+import { AppSidebar } from "@/components/AppSidebar"
+import { ChatComposer } from "@/components/chat/ChatComposer"
+import { ChatMessage } from "@/components/chat/ChatMessage"
+import { TimelineMinimap } from "@/components/chat/TimelineMinimap"
+import type { TimelineMinimapItem } from "@/components/chat/TimelineMinimap"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -28,237 +16,295 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
-
-const streamdownPlugins = {
-  code: createCodePlugin({
-    themes: ["github-light", "min-dark"],
-  }),
-}
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { useDraftHeroTransition } from "@/hooks/useDraftHeroTransition"
+import { useThreads } from "@/hooks/useThreads"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/")({ component: ChatPage })
 
+function CollapsedSidebarControl() {
+  const { open, isMobile, openMobile } = useSidebar()
+  const visible = isMobile ? !openMobile : !open
+  if (!visible) return null
+
+  return (
+    <div className="pointer-events-none absolute top-0 left-0 z-30 flex h-12 items-center px-3">
+      <SidebarTrigger className="pointer-events-auto text-muted-foreground hover:bg-accent hover:text-foreground" />
+    </div>
+  )
+}
+
 function ChatPage() {
+  const {
+    activeThread,
+    threads,
+    selectThread,
+    createThread,
+    deleteThread,
+    updateActiveMessages,
+  } = useThreads()
+
+  return (
+    <TooltipProvider>
+      <SidebarProvider defaultOpen className="h-svh min-h-0! overflow-hidden">
+        <AppSidebar
+          threads={threads}
+          activeThreadId={activeThread.id}
+          onSelectThread={selectThread}
+          onCreateThread={createThread}
+          onDeleteThread={deleteThread}
+        />
+        <SidebarInset className="min-h-0 overflow-hidden bg-background">
+          <ChatThreadView
+            key={activeThread.id}
+            threadId={activeThread.id}
+            initialMessages={activeThread.messages}
+            onMessagesChange={updateActiveMessages}
+          />
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
+  )
+}
+
+function compactMinimapPreview(text: string | null | undefined) {
+  const compact = text?.replace(/\s+/g, " ").trim() ?? ""
+  return compact.length > 0 ? compact : null
+}
+
+function messageText(message: UIMessage) {
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.content)
+    .join(" ")
+}
+
+function deriveTimelineMinimapItems(
+  messages: UIMessage[]
+): TimelineMinimapItem[] {
+  const items: TimelineMinimapItem[] = []
+
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== "user") continue
+
+    let assistantText: string | null = null
+    for (const next of messages.slice(index + 1)) {
+      if (next.role === "user") break
+      if (next.role === "assistant") {
+        assistantText = compactMinimapPreview(messageText(next))
+      }
+    }
+
+    items.push({
+      id: message.id,
+      userText: compactMinimapPreview(messageText(message)),
+      assistantText,
+    })
+  }
+
+  return items
+}
+
+function ChatThreadView({
+  threadId,
+  initialMessages,
+  onMessagesChange,
+}: {
+  threadId: string
+  initialMessages: UIMessage[]
+  onMessagesChange: (messages: UIMessage[]) => void
+}) {
   const [input, setInput] = useState("")
+  const [composerOverlayHeight, setComposerOverlayHeight] = useState(120)
+  const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
+  const composerOverlayRef = useRef<HTMLDivElement | null>(null)
   const { messages, sendMessage, isLoading, error } = useChat({
+    id: threadId,
+    initialMessages,
     connection: fetchServerSentEvents("/api/chat"),
   })
 
+  const isDraftHeroState = messages.length === 0
+  const [
+    attachDraftHeroTransitionGroupRef,
+    attachDraftHeroComposerAnchorRef,
+    captureComposerRect,
+  ] = useDraftHeroTransition(isDraftHeroState)
+
+  useEffect(() => {
+    onMessagesChange(messages)
+  }, [messages, onMessagesChange])
+
+  useEffect(() => {
+    if (isLoading) {
+      setWorkStartedAt((current) => current ?? Date.now())
+      return
+    }
+    setWorkStartedAt(null)
+  }, [isLoading])
+
+  useEffect(() => {
+    const element = composerOverlayRef.current
+    if (!element) return
+
+    const updateHeight = () => {
+      setComposerOverlayHeight(element.getBoundingClientRect().height)
+    }
+
+    updateHeight()
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateHeight)
+    observer?.observe(element)
+    window.addEventListener("resize", updateHeight)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", updateHeight)
+    }
+  }, [isDraftHeroState])
+
+  const minimapItems = useMemo(
+    () => deriveTimelineMinimapItems(messages),
+    [messages]
+  )
+
   function submitMessage() {
     const content = input.trim()
-
     if (!content || isLoading) return
 
+    captureComposerRect()
+    setWorkStartedAt(Date.now())
     setInput("")
     void sendMessage(content)
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    submitMessage()
+  function scrollToMessage(item: TimelineMinimapItem) {
+    const target = document.querySelector(
+      `[data-message-id="${CSS.escape(item.id)}"]`
+    )
+    target?.scrollIntoView({ behavior: "smooth", block: "center" })
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault()
-      submitMessage()
-    }
-  }
-
-  const showThinking = isLoading && messages.at(-1)?.role !== "assistant"
+  const activeWorkedMs =
+    isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
 
   return (
-    <div className="chat-surface dark flex h-svh min-h-0 flex-col bg-[#151515] text-[#ededed]">
-      <header className="z-10 shrink-0 border-b border-white/[0.07] bg-[#181818]/95 backdrop-blur supports-backdrop-filter:bg-[#181818]/80">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-3 px-4">
-          <div className="flex size-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#232323] text-[#d7d7d7]">
-            <BotIcon className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold">New conversation</h1>
-            <p className="text-xs text-[#8b8b8b]">AI assistant</p>
-          </div>
-        </div>
-      </header>
+    <div className="chat-surface relative flex h-full min-h-0 flex-col bg-background text-foreground">
+      <CollapsedSidebarControl />
 
-      <main className="min-h-0 flex-1">
-        <MessageScrollerProvider autoScroll>
+      <main className="relative min-h-0 flex-1">
+        {!isDraftHeroState && (
+          <TimelineMinimap
+            items={minimapItems}
+            bottomInset={composerOverlayHeight}
+            onSelect={scrollToMessage}
+          />
+        )}
+
+        <MessageScrollerProvider autoScroll={!isDraftHeroState}>
           <MessageScroller>
             <MessageScrollerViewport>
               <MessageScrollerContent
-                className={
-                  messages.length === 0
-                    ? "mx-auto w-full max-w-3xl justify-center px-4 py-8"
-                    : "mx-auto w-full max-w-3xl px-4 py-8"
+                className={cn(
+                  "mx-auto w-full max-w-3xl px-4",
+                  isDraftHeroState ? "justify-center py-8" : "pt-8 pb-6"
+                )}
+                style={
+                  isDraftHeroState
+                    ? undefined
+                    : { paddingBottom: composerOverlayHeight + 24 }
                 }
               >
-                {messages.length === 0 && (
-                  <div className="mx-auto flex max-w-md flex-col items-center text-center">
-                    <div className="mb-5 flex size-12 items-center justify-center rounded-2xl border border-white/[0.08] bg-[#202020] text-[#d7d7d7] shadow-lg shadow-black/20">
-                      <MessageSquareIcon className="size-5" />
-                    </div>
-                    <h2 className="text-xl font-semibold tracking-tight">
-                      What can I help with?
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-[#929292]">
-                      Ask a question, explore an idea, or get help with
-                      something you&apos;re working on.
-                    </p>
-                  </div>
-                )}
+                {messages.map((message, index) => {
+                  const isStreaming =
+                    isLoading &&
+                    message.role === "assistant" &&
+                    message.id === messages.at(-1)?.id
 
-                {messages.map((message) => {
-                  const isUser = message.role === "user"
+                  const previousUser = [...messages.slice(0, index)]
+                    .reverse()
+                    .find((entry) => entry.role === "user")
 
                   return (
                     <MessageScrollerItem
                       key={message.id}
                       messageId={message.id}
-                      scrollAnchor={isUser}
+                      scrollAnchor={message.role === "user"}
+                      data-message-id={message.id}
                     >
-                      <Message align={isUser ? "end" : "start"}>
-                        {!isUser && (
-                          <MessageAvatar className="border border-white/[0.08] bg-[#202020] text-[#bcbcbc]">
-                            <BotIcon className="size-4" />
-                          </MessageAvatar>
-                        )}
-                        <MessageContent>
-                          <MessageHeader className="text-[#888888]">
-                            {isUser ? "You" : "Assistant"}
-                          </MessageHeader>
-                          <Bubble
-                            align={isUser ? "end" : "start"}
-                            variant={isUser ? "secondary" : "ghost"}
-                          >
-                            {message.parts.map((part, index) => {
-                              if (part.type === "text") {
-                                const isStreaming =
-                                  !isUser &&
-                                  isLoading &&
-                                  message.id === messages.at(-1)?.id
-
-                                return (
-                                  <BubbleContent
-                                    className={
-                                      isUser
-                                        ? "border-white/[0.07] bg-[#272727] whitespace-pre-wrap text-[#e7e7e7]"
-                                        : "text-[#d7d7d7] [&_[data-streamdown]]:min-w-0"
-                                    }
-                                    key={`${message.id}-text-${index}`}
-                                  >
-                                    {isUser ? (
-                                      part.content
-                                    ) : (
-                                      <Streamdown
-                                        lineNumbers={false}
-                                        mode={
-                                          isStreaming ? "streaming" : "static"
-                                        }
-                                        plugins={streamdownPlugins}
-                                      >
-                                        {part.content}
-                                      </Streamdown>
-                                    )}
-                                  </BubbleContent>
-                                )
-                              }
-
-                              if (part.type === "thinking") {
-                                return (
-                                  <BubbleContent
-                                    className="flex items-start gap-2 text-[#858585] italic"
-                                    key={`${message.id}-thinking-${index}`}
-                                  >
-                                    <LoaderCircleIcon className="mt-0.5 size-4 animate-spin" />
-                                    <span>{part.content || "Thinking…"}</span>
-                                  </BubbleContent>
-                                )
-                              }
-
-                              return null
-                            })}
-                          </Bubble>
-                          {isLoading &&
-                            !isUser &&
-                            message.id === messages.at(-1)?.id && (
-                              <MessageFooter className="text-[#777777]">
-                                <span role="status">Generating…</span>
-                              </MessageFooter>
-                            )}
-                        </MessageContent>
-                      </Message>
+                      <ChatMessage
+                        message={message}
+                        isStreaming={isStreaming}
+                        previousUserCreatedAt={previousUser?.createdAt ?? null}
+                        workedMs={isStreaming ? activeWorkedMs : null}
+                      />
                     </MessageScrollerItem>
                   )
                 })}
-
-                {showThinking && (
-                  <MessageScrollerItem messageId="assistant-thinking">
-                    <Message>
-                      <MessageAvatar className="border border-white/[0.08] bg-[#202020] text-[#bcbcbc]">
-                        <BotIcon className="size-4" />
-                      </MessageAvatar>
-                      <MessageContent>
-                        <Bubble variant="ghost">
-                          <BubbleContent className="text-[#858585]">
-                            <span className="flex items-center gap-2">
-                              <LoaderCircleIcon className="size-4 animate-spin" />
-                              <span className="sr-only">
-                                Assistant is thinking
-                              </span>
-                              <span aria-hidden="true">Thinking…</span>
-                            </span>
-                          </BubbleContent>
-                        </Bubble>
-                      </MessageContent>
-                    </Message>
-                  </MessageScrollerItem>
-                )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
-            <MessageScrollerButton />
+            {!isDraftHeroState && <MessageScrollerButton />}
           </MessageScroller>
         </MessageScrollerProvider>
-      </main>
 
-      <footer className="shrink-0 border-t border-white/[0.07] bg-[#181818]">
-        <div className="mx-auto w-full max-w-3xl px-4 py-3">
-          {error && (
-            <p className="mb-2 px-3 text-sm text-destructive" role="alert">
-              {error.message}
-            </p>
-          )}
-          <form
-            className="flex items-end gap-2 rounded-3xl border border-white/[0.08] bg-[#222222] p-2 shadow-lg shadow-black/20 transition-shadow focus-within:border-white/[0.14] focus-within:ring-3 focus-within:ring-white/[0.06]"
-            onSubmit={handleSubmit}
+        <div
+          ref={composerOverlayRef}
+          data-chat-composer-overlay="true"
+          className={
+            isDraftHeroState
+              ? "pointer-events-none absolute inset-0 z-20 flex items-center"
+              : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pt-2"
+          }
+        >
+          <div
+            ref={attachDraftHeroTransitionGroupRef}
+            className="chat-composer-horizontal-inset w-full"
           >
-            <textarea
-              aria-label="Message"
-              className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#ededed] outline-none placeholder:text-[#777777]"
-              disabled={isLoading}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message the assistant"
-              rows={1}
-              value={input}
-            />
-            <Button
-              aria-label="Send message"
-              className="mb-0.5 bg-[#ededed] text-[#171717] hover:bg-white"
-              disabled={!input.trim() || isLoading}
-              size="icon"
-              type="submit"
-            >
-              {isLoading ? (
-                <LoaderCircleIcon className="animate-spin" />
-              ) : (
-                <ArrowUpIcon />
+            <div className="pointer-events-auto relative z-10">
+              {isDraftHeroState && (
+                <div className="absolute inset-x-0 bottom-full z-0">
+                  <div className="pb-8">
+                    <h1 className="mx-auto w-full max-w-5xl text-center text-2xl font-normal tracking-tight text-foreground sm:text-3xl">
+                      What can I help with?
+                    </h1>
+                  </div>
+                </div>
               )}
-            </Button>
-          </form>
-          <p className="mt-2 text-center text-[11px] text-[#707070]">
-            AI can make mistakes. Check important information.
-          </p>
+
+              <div ref={attachDraftHeroComposerAnchorRef} className="relative">
+                {error && (
+                  <p
+                    className="mb-2 px-1 text-center text-sm text-destructive"
+                    role="alert"
+                  >
+                    {error.message}
+                  </p>
+                )}
+                <ChatComposer
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={submitMessage}
+                  isLoading={isLoading}
+                  placeholder={
+                    isDraftHeroState
+                      ? "Ask anything..."
+                      : "Ask for follow-up changes..."
+                  }
+                />
+              </div>
+            </div>
+          </div>
         </div>
-      </footer>
+      </main>
     </div>
   )
 }
