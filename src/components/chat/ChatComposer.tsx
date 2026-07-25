@@ -1,10 +1,18 @@
 import {
   useEffect,
   useRef,
+  useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react"
-import { BoxIcon, ChevronDownIcon, LoaderCircleIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  GlobeIcon,
+  LoaderCircleIcon,
+  PaperclipIcon,
+  ZapIcon,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -25,11 +33,13 @@ export function ChatComposer({
   onSubmit,
   isLoading = false,
   disabled = false,
-  modelLabel = "GPT 5.5",
-  placeholder = "Ask anything...",
+  modelLabel = "GPT-5.6 Terra",
+  placeholder = "Type your message here...",
   className,
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [instantEnabled, setInstantEnabled] = useState(true)
+  const [searchEnabled, setSearchEnabled] = useState(false)
   const canSend = value.trim().length > 0 && !isLoading && !disabled
 
   useEffect(() => {
@@ -81,16 +91,42 @@ export function ChatComposer({
                 />
               </div>
 
-              <div className="flex min-w-0 items-center justify-between gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-0 items-center gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
+                <button
+                  type="button"
+                  className="inline-flex min-w-0 max-w-48 shrink items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground sm:max-w-56 sm:px-3"
+                  aria-label="Model"
+                >
+                  <span className="truncate">{modelLabel}</span>
+                  <span
+                    className="shrink-0 text-[11px] font-medium tracking-tight text-emerald-500"
+                    aria-hidden="true"
+                  >
+                    $$$
+                  </span>
+                  <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+                </button>
+
+                <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <ToolbarToggle
+                    pressed={instantEnabled}
+                    onPressedChange={setInstantEnabled}
+                    label="Instant"
+                    icon={<ZapIcon className="size-3.5" />}
+                  />
+                  <ToolbarToggle
+                    pressed={searchEnabled}
+                    onPressedChange={setSearchEnabled}
+                    label="Search"
+                    icon={<GlobeIcon className="size-3.5" />}
+                  />
                   <button
                     type="button"
-                    className="inline-flex min-w-0 max-w-48 shrink items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground/80 sm:max-w-56 sm:px-3"
-                    aria-label="Model"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Attach"
                   >
-                    <BoxIcon className="size-4 shrink-0 opacity-80" />
-                    <span className="truncate">{modelLabel}</span>
-                    <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+                    <PaperclipIcon className="size-3.5" />
+                    Attach
                   </button>
                 </div>
 
@@ -98,7 +134,7 @@ export function ChatComposer({
                   type="submit"
                   aria-label={isLoading ? "Sending" : "Send message"}
                   disabled={!canSend}
-                  className="relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary/90 text-primary-foreground shadow-xs shadow-primary/24 transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] enabled:hover:scale-105 enabled:hover:bg-primary active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8"
+                  className="relative isolate flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-all duration-150 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 active:scale-95 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8"
                 >
                   {isLoading ? (
                     <LoaderCircleIcon className="size-3.5 animate-spin" />
@@ -126,5 +162,34 @@ export function ChatComposer({
         </form>
       </div>
     </div>
+  )
+}
+
+function ToolbarToggle({
+  pressed,
+  onPressedChange,
+  label,
+  icon,
+}: {
+  pressed: boolean
+  onPressedChange: (next: boolean) => void
+  label: string
+  icon: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={() => onPressedChange(!pressed)}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors",
+        pressed
+          ? "border-foreground/15 bg-accent text-foreground"
+          : "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

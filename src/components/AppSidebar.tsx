@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon, SquarePenIcon, Trash2Icon } from "lucide-react"
 
-import { T3Wordmark } from "@/components/T3Wordmark"
 import {
   Sidebar,
   SidebarContent,
@@ -13,7 +12,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
 import {
@@ -75,12 +73,10 @@ export function AppSidebar({
       data-sidebar-version="v2"
       className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
     >
-      <SidebarHeader className="h-[52px] shrink-0 flex-row items-center gap-2 px-3 py-0">
-        <SidebarTrigger className="text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground" />
+      <SidebarHeader className="h-[52px] shrink-0 flex-row items-center gap-2 py-0 pr-3 pl-[52px]">
         <div className="flex h-7 min-w-0 items-center gap-1 overflow-hidden rounded-md text-sidebar-foreground">
-          <T3Wordmark />
-          <span className="truncate text-sm font-medium tracking-tight text-sidebar-muted-foreground">
-            Chat
+          <span className="truncate font-medium tracking-tight text-sidebar-muted-foreground">
+            T3 Chat
           </span>
         </div>
       </SidebarHeader>
