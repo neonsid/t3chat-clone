@@ -2,6 +2,12 @@ import { useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
+import {
+  ClockIcon,
+  PlusIcon,
+  SearchIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react"
 
 import { AppSidebar } from "@/components/AppSidebar"
 import { BouncingDots } from "@/components/chat/BouncingDots"
@@ -10,6 +16,7 @@ import { ChatEmptyState } from "@/components/chat/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/ChatMessage"
 import { TimelineMinimap } from "@/components/chat/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/TimelineMinimap"
+import { Button } from "@/components/ui/button"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -22,6 +29,7 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect"
@@ -30,10 +38,71 @@ import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/")({ component: ChatPage })
 
+const controlButtonClass =
+  "pointer-events-auto bg-[#161616] rounded-md text-muted-foreground hover:bg-accent hover:text-foreground hover:p-1"
+
 function SidebarControl() {
+  const { open } = useSidebar()
   return (
-    <div className="pointer-events-none fixed top-[10px] left-3 z-60">
-      <SidebarTrigger className="pointer-events-auto text-muted-foreground hover:bg-accent hover:text-foreground" />
+    <div
+      className={cn(
+        "pointer-events-none fixed top-[10px] left-3 z-60 flex items-center gap-0.5",
+        !open && "rounded-md bg-[#161616] ring-4 ring-[#161616]"
+      )}
+    >
+      <SidebarTrigger
+        className={cn(
+          "pointer-events-auto text-muted-foreground",
+          !open && "hover:rounded-md hover:bg-accent hover:text-foreground"
+        )}
+      />
+      {!open && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Search"
+            className={controlButtonClass}
+          >
+            <SearchIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New chat"
+            className={controlButtonClass}
+          >
+            <PlusIcon />
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ChatHeaderActions() {
+  return (
+    <div className="pointer-events-none fixed top-[10px] right-3 z-60 flex items-center gap-0.5 rounded-lg bg-[#161616] p-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="History"
+        className={controlButtonClass}
+      >
+        <ClockIcon />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Settings"
+        className={controlButtonClass}
+      >
+        <SlidersHorizontalIcon />
+      </Button>
     </div>
   )
 }
@@ -58,6 +127,7 @@ function ChatPage() {
           onCreateThread={createThread}
           onDeleteThread={deleteThread}
         />
+        <ChatHeaderActions />
         <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
           <ChatThreadView
             key={activeThread.id}
@@ -239,7 +309,9 @@ function ChatThreadView({
                         <ChatMessage
                           message={message}
                           isStreaming={isStreaming}
-                          previousUserCreatedAt={previousUser?.createdAt ?? null}
+                          previousUserCreatedAt={
+                            previousUser?.createdAt ?? null
+                          }
                           workedMs={isStreaming ? activeWorkedMs : null}
                         />
                       </MessageScrollerItem>

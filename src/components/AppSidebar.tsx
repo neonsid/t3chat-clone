@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { SearchIcon, SquarePenIcon, Trash2Icon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchIcon, SquarePenIcon, Trash2Icon } from "lucide-react";
 
 import {
   Sidebar,
@@ -13,22 +13,18 @@ import {
   SidebarMenuItem,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import type { ChatThread } from "@/lib/threads"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { ChatThread } from "@/lib/threads";
+import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
-  threads: ChatThread[]
-  activeThreadId: string
-  onSelectThread: (threadId: string) => void
-  onCreateThread: () => void
-  onDeleteThread: (threadId: string) => void
-}
+  threads: ChatThread[];
+  activeThreadId: string;
+  onSelectThread: (threadId: string) => void;
+  onCreateThread: () => void;
+  onDeleteThread: (threadId: string) => void;
+};
 
 export function AppSidebar({
   threads,
@@ -37,45 +33,49 @@ export function AppSidebar({
   onCreateThread,
   onDeleteThread,
 }: AppSidebarProps) {
-  const { isMobile, setOpenMobile } = useSidebar()
-  const [query, setQuery] = useState("")
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const { isMobile, setOpen, setOpenMobile } = useSidebar();
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") {
-        return
+        return;
       }
-      event.preventDefault()
-      searchInputRef.current?.focus()
-    }
+      event.preventDefault();
+      if (isMobile) {
+        setOpenMobile(true);
+      } else {
+        setOpen(true);
+      }
+      window.setTimeout(() => searchInputRef.current?.focus(), 50);
+    };
 
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [])
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isMobile, setOpen, setOpenMobile]);
 
   const filteredThreads = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) return threads
-    return threads.filter((thread) =>
-      thread.title.toLowerCase().includes(normalized)
-    )
-  }, [query, threads])
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return threads;
+    return threads.filter((thread) => thread.title.toLowerCase().includes(normalized));
+  }, [query, threads]);
 
   function handleSelect(threadId: string) {
-    onSelectThread(threadId)
-    if (isMobile) setOpenMobile(false)
+    onSelectThread(threadId);
+    if (isMobile) setOpenMobile(false);
   }
 
   return (
     <Sidebar
       collapsible="offcanvas"
+      variant="inset"
       data-sidebar-version="v2"
-      className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+      className="bg-sidebar text-sidebar-foreground"
     >
-      <SidebarHeader className="h-[52px] shrink-0 flex-row items-center gap-2 py-0 pr-3 pl-[52px]">
-        <div className="flex h-7 min-w-0 items-center gap-1 overflow-hidden rounded-md text-sidebar-foreground">
-          <span className="truncate font-medium tracking-tight text-sidebar-muted-foreground">
+      <SidebarHeader className="h-[52px] shrink-0 flex-row items-start gap-2 py-0 pt-0.5 pr-3 pl-[52px]">
+        <div className="flex h-8 min-w-0 items-center gap-1 overflow-hidden rounded-md text-sidebar-foreground">
+          <span className="truncate text-base leading-none font-medium tracking-tight text-sidebar-muted-foreground">
             T3 Chat
           </span>
         </div>
@@ -88,6 +88,7 @@ export function AppSidebar({
               <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
               <input
                 ref={searchInputRef}
+                data-sidebar-search=""
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
@@ -118,9 +119,7 @@ export function AppSidebar({
         </SidebarGroup>
 
         <SidebarGroup className="px-2 pt-0">
-          <div className="px-2 pb-1.5 text-xs font-medium text-sidebar-muted-foreground">
-            Chats
-          </div>
+          <div className="px-2 pb-1.5 text-xs font-medium text-sidebar-muted-foreground">Chats</div>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredThreads.length === 0 ? (
@@ -129,7 +128,7 @@ export function AppSidebar({
                 </p>
               ) : (
                 filteredThreads.map((thread) => {
-                  const isActive = thread.id === activeThreadId
+                  const isActive = thread.id === activeThreadId;
 
                   return (
                     <SidebarMenuItem key={thread.id}>
@@ -137,7 +136,7 @@ export function AppSidebar({
                         isActive={isActive}
                         size="sm"
                         className={cn(
-                          "h-8 rounded-md px-2 text-sidebar-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground"
+                          "h-8 rounded-md px-2 text-sidebar-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground",
                         )}
                         onClick={() => handleSelect(thread.id)}
                         tooltip={thread.title}
@@ -149,14 +148,14 @@ export function AppSidebar({
                         aria-label={`Delete ${thread.title}`}
                         className="text-sidebar-muted-foreground transition-opacity duration-150 hover:text-destructive"
                         onClick={(event) => {
-                          event.stopPropagation()
-                          onDeleteThread(thread.id)
+                          event.stopPropagation();
+                          onDeleteThread(thread.id);
                         }}
                       >
                         <Trash2Icon />
                       </SidebarMenuAction>
                     </SidebarMenuItem>
-                  )
+                  );
                 })
               )}
             </SidebarMenu>
@@ -165,5 +164,5 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
