@@ -175,7 +175,7 @@
 
   .chat-composer-glass-shell {
     --chat-composer-glass-surface: var(--card);
-    --chat-composer-outline: rgb(0 0 0 / 8%);
+    --chat-composer-outline: color-mix(in srgb, var(--foreground) 12%, transparent);
 
     position: relative;
     isolation: isolate;
@@ -186,44 +186,32 @@
     position: absolute;
     z-index: 0;
     inset: 0;
-    border-radius: 22px;
-    background: color-mix(
-      in srgb,
-      var(--chat-composer-glass-surface) var(--glass-opacity),
-      transparent
-    );
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+    border-radius: 24px;
+    background: var(--chat-composer-glass-surface);
     content: "";
   }
 
   .dark .chat-composer-glass-shell {
-    --chat-composer-glass-surface: color-mix(in srgb, var(--background) 96%, white);
-    --chat-composer-outline: color-mix(in srgb, white 5%, transparent);
-    --chat-composer-highlight: rgb(255 255 255 / 3%);
+    /* Slightly lifted panel so the outer box reads against the canvas */
+    --chat-composer-glass-surface: #161616;
+    --chat-composer-outline: rgb(255 255 255 / 14%);
+    --chat-composer-highlight: rgb(255 255 255 / 5%);
   }
 
   .chat-composer-glass-host {
     position: relative;
-    box-shadow: 0 12px 28px -18px rgb(0 0 0 / 40%);
-  }
-
-  .dark .chat-composer-glass-host {
+    border: 1px solid var(--chat-composer-outline);
+    border-radius: 24px;
+    background: var(--chat-composer-glass-surface);
     box-shadow: none;
   }
 
-  .chat-composer-glass-host::after {
-    pointer-events: none;
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-    border: 1px solid var(--chat-composer-outline);
-    border-radius: inherit;
-    content: "";
+  .dark .chat-composer-glass-host {
+    box-shadow: inset 0 1px var(--chat-composer-highlight);
   }
 
-  .dark .chat-composer-glass-host::after {
-    box-shadow: inset 0 1px var(--chat-composer-highlight);
+  .chat-composer-glass-host::after {
+    display: none;
   }
 
   .dropdown-glass {

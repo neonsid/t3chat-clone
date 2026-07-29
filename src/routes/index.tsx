@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
 
 import { AppSidebar } from "@/components/AppSidebar"
+import { BouncingDots } from "@/components/chat/BouncingDots"
 import { ChatComposer } from "@/components/chat/ChatComposer"
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/ChatMessage"
@@ -23,6 +24,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect"
 import { useThreads } from "@/hooks/useThreads"
 import { cn } from "@/lib/utils"
 
@@ -48,7 +50,7 @@ function ChatPage() {
 
   return (
     <TooltipProvider>
-      <SidebarProvider defaultOpen className="h-svh min-h-0! overflow-hidden">
+      <SidebarProvider defaultOpen className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
           threads={threads}
           activeThreadId={activeThread.id}
@@ -56,7 +58,7 @@ function ChatPage() {
           onCreateThread={createThread}
           onDeleteThread={deleteThread}
         />
-        <SidebarInset className="min-h-0 overflow-hidden bg-background">
+        <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
           <ChatThreadView
             key={activeThread.id}
             threadId={activeThread.id}
@@ -107,6 +109,12 @@ function deriveTimelineMinimapItems(
   return items
 }
 
+function focusComposerInput() {
+  document
+    .querySelector<HTMLTextAreaElement>("[data-chat-composer-input]")
+    ?.focus()
+}
+
 function ChatThreadView({
   threadId,
   initialMessages,
@@ -117,36 +125,24 @@ function ChatThreadView({
   onMessagesChange: (messages: UIMessage[]) => void
 }) {
   const [input, setInput] = useState("")
-  const [composerOverlayHeight, setComposerOverlayHeight] = useState(120)
+  const [composerHeight, setComposerHeight] = useState(148)
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
+
   const { messages, sendMessage, isLoading, error } = useChat({
     id: threadId,
     initialMessages,
     connection: fetchServerSentEvents("/api/chat"),
   })
 
-  const isEmptyThread = messages.length === 0
-  const showEmptyState = isEmptyThread && input.trim().length === 0
+  useValueEffect(messages, onMessagesChange)
 
-  useEffect(() => {
-    onMessagesChange(messages)
-  }, [messages, onMessagesChange])
-
-  useEffect(() => {
-    if (isLoading) {
-      setWorkStartedAt((current) => current ?? Date.now())
-      return
-    }
-    setWorkStartedAt(null)
-  }, [isLoading])
-
-  useEffect(() => {
+  useMountEffect(() => {
     const element = composerOverlayRef.current
     if (!element) return
 
     const updateHeight = () => {
-      setComposerOverlayHeight(element.getBoundingClientRect().height)
+      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
     }
 
     updateHeight()
@@ -161,7 +157,12 @@ function ChatThreadView({
       observer?.disconnect()
       window.removeEventListener("resize", updateHeight)
     }
-  }, [])
+  })
+
+  const isEmptyThread = messages.length === 0
+  const showEmptyState = isEmptyThread && input.trim().length === 0
+  const lastMessage = messages.at(-1)
+  const showPendingDots = isLoading && lastMessage?.role === "user"
 
   const minimapItems = useMemo(
     () => deriveTimelineMinimapItems(messages),
@@ -176,6 +177,11 @@ function ChatThreadView({
     void sendMessage(content)
   }
 
+  function fillPrompt(prompt: string) {
+    setInput(prompt)
+    queueMicrotask(focusComposerInput)
+  }
+
   function scrollToMessage(item: TimelineMinimapItem) {
     const target = document.querySelector(
       `[data-message-id="${CSS.escape(item.id)}"]`
@@ -187,37 +193,31 @@ function ChatThreadView({
     isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
 
   return (
-    <div className="chat-surface relative flex h-full min-h-0 flex-col bg-background text-foreground">
+    <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
       <SidebarControl />
 
-      <main className="relative min-h-0 flex-1">
+      <div
+        className="absolute inset-0 z-0 overflow-hidden"
+        style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
+      >
         {!isEmptyThread && (
           <TimelineMinimap
             items={minimapItems}
-            bottomInset={composerOverlayHeight}
+            bottomInset={0}
             onSelect={scrollToMessage}
           />
         )}
 
         {showEmptyState ? (
-          <div
-            className="absolute inset-x-0 top-0 flex items-center justify-center overflow-y-auto"
-            style={{ bottom: composerOverlayHeight }}
-          >
-            <ChatEmptyState
-              className="py-10"
-              onSelectPrompt={(prompt) => submitMessage(prompt)}
-            />
+          <div className="flex size-full items-center justify-center overflow-y-auto">
+            <ChatEmptyState className="py-10" onSelectPrompt={fillPrompt} />
           </div>
         ) : (
           <MessageScrollerProvider autoScroll={!isEmptyThread}>
             <MessageScroller>
               <MessageScrollerViewport>
                 <MessageScrollerContent
-                  className={cn(
-                    "mx-auto w-full max-w-3xl px-4 pt-8 pb-6"
-                  )}
-                  style={{ paddingBottom: composerOverlayHeight + 24 }}
+                  className={cn("mx-auto w-full max-w-3xl px-4 pt-8 pb-6")}
                 >
                   {messages.map((message, index) => {
                     const isStreaming =
@@ -245,43 +245,52 @@ function ChatThreadView({
                       </MessageScrollerItem>
                     )
                   })}
+
+                  {showPendingDots ? (
+                    <MessageScrollerItem
+                      messageId="pending-assistant"
+                      scrollAnchor={false}
+                    >
+                      <BouncingDots className="px-1" />
+                    </MessageScrollerItem>
+                  ) : null}
                 </MessageScrollerContent>
               </MessageScrollerViewport>
               {!isEmptyThread && <MessageScrollerButton />}
             </MessageScroller>
           </MessageScrollerProvider>
         )}
+      </div>
 
-        <div
-          ref={composerOverlayRef}
-          data-chat-composer-overlay="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pt-2"
-        >
-          <div className="chat-composer-horizontal-inset w-full">
-            <div className="pointer-events-auto relative z-10">
-              {error && (
-                <p
-                  className="mb-2 px-1 text-center text-sm text-destructive"
-                  role="alert"
-                >
-                  {error.message}
-                </p>
-              )}
-              <ChatComposer
-                value={input}
-                onChange={setInput}
-                onSubmit={() => submitMessage()}
-                isLoading={isLoading}
-                placeholder={
-                  isEmptyThread
-                    ? "Type your message here..."
-                    : "Ask for follow-up changes..."
-                }
-              />
-            </div>
+      <div
+        ref={composerOverlayRef}
+        data-chat-composer-overlay="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 translate-y-4 pt-2"
+      >
+        <div className="chat-composer-horizontal-inset w-full">
+          <div className="pointer-events-auto relative z-10">
+            {error && (
+              <p
+                className="mb-2 px-1 text-center text-sm text-destructive"
+                role="alert"
+              >
+                {error.message}
+              </p>
+            )}
+            <ChatComposer
+              value={input}
+              onChange={setInput}
+              onSubmit={() => submitMessage()}
+              isLoading={isLoading}
+              placeholder={
+                isEmptyThread
+                  ? "Type your message here..."
+                  : "Ask for follow-up changes..."
+              }
+            />
           </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

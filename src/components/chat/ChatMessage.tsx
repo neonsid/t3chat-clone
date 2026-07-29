@@ -5,12 +5,12 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CopyIcon,
-  LoaderCircleIcon,
   Undo2Icon,
 } from "lucide-react"
 import { Streamdown } from "streamdown"
 import { createCodePlugin } from "@streamdown/code"
 
+import { BouncingDots } from "@/components/chat/BouncingDots"
 import { Button } from "@/components/ui/button"
 import { formatShortTimestamp } from "@/lib/threads"
 import { cn } from "@/lib/utils"
@@ -169,10 +169,7 @@ export function ChatMessage({
             </Streamdown>
           </div>
         ) : isStreaming && !thinking ? (
-          <span className="flex items-center gap-2 text-muted-foreground">
-            <LoaderCircleIcon className="size-4 animate-spin" />
-            <span className="sr-only">Assistant is thinking</span>
-          </span>
+          <BouncingDots label="Assistant is thinking" />
         ) : null}
 
         {(text || timestamp) && !isStreaming ? (
@@ -238,10 +235,7 @@ function WorkedForFold({
             </div>
           ) : isStreaming ? (
             <div className="mb-2 rounded-2xl border border-border/80 bg-accent p-4 sm:p-5">
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <LoaderCircleIcon className="size-4 animate-spin" />
-                Working…
-              </span>
+              <BouncingDots label="Working" />
             </div>
           ) : null}
         </div>
