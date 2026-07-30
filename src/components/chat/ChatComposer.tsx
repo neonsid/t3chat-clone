@@ -1,18 +1,13 @@
+import { useRef, useState } from "react"
+import type { FormEvent, KeyboardEvent, ReactNode } from "react"
 import {
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react"
-import {
-  ChevronDownIcon,
   GlobeIcon,
   LoaderCircleIcon,
   PaperclipIcon,
   ZapIcon,
 } from "lucide-react"
 
+import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import { cn } from "@/lib/utils"
 
 interface ChatComposerProps {
@@ -21,7 +16,6 @@ interface ChatComposerProps {
   onSubmit: () => void
   isLoading?: boolean
   disabled?: boolean
-  modelLabel?: string
   placeholder?: string
   className?: string
 }
@@ -32,7 +26,6 @@ export function ChatComposer({
   onSubmit,
   isLoading = false,
   disabled = false,
-  modelLabel = "GPT-5.6 Terra",
   placeholder = "Type your message here...",
   className,
 }: ChatComposerProps) {
@@ -63,7 +56,7 @@ export function ChatComposer({
     >
       <div className="chat-composer-glass-host relative z-10 w-full overflow-hidden rounded-[18px]">
         <form
-          className="mx-auto w-full min-w-0 max-w-3xl"
+          className="mx-auto w-full max-w-3xl min-w-0"
           data-chat-composer-form="true"
           onSubmit={handleSubmit}
         >
@@ -83,22 +76,9 @@ export function ChatComposer({
           </div>
 
           <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
-            <button
-              type="button"
-              className="inline-flex min-w-0 max-w-48 shrink items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground sm:max-w-56 sm:px-3"
-              aria-label="Model"
-            >
-              <span className="truncate">{modelLabel}</span>
-              <span
-                className="shrink-0 text-[11px] font-medium tracking-tight text-emerald-500"
-                aria-hidden="true"
-              >
-                $$$
-              </span>
-              <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
-            </button>
+            <ModelPicker />
 
-            <div className="flex min-w-0 flex-1 items-center justify-start gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               <ToolbarToggle
                 pressed={instantEnabled}
                 onPressedChange={setInstantEnabled}
@@ -125,7 +105,7 @@ export function ChatComposer({
               type="submit"
               aria-label={isLoading ? "Sending" : "Send message"}
               disabled={!canSend}
-              className="relative isolate flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-all duration-150 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 active:scale-95 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100"
+              className="relative isolate flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-[color,background-color,opacity,transform,box-shadow] duration-150 active:scale-95 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100"
             >
               {isLoading ? (
                 <LoaderCircleIcon className="size-3.5 animate-spin" />

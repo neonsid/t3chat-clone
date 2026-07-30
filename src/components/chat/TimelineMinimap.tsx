@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { MouseEvent as ReactMouseEvent } from "react"
 
 import {
@@ -31,7 +27,8 @@ type TimelineMinimapProps = {
 
 function timelineMinimapEventTargetsPreview(target: EventTarget) {
   return (
-    target instanceof Element && target.closest("[data-minimap-preview]") !== null
+    target instanceof Element &&
+    target.closest("[data-minimap-preview]") !== null
   )
 }
 
@@ -132,7 +129,7 @@ export function TimelineMinimap({
         "group/minimap pointer-events-none absolute top-0 left-0 z-40 hidden w-18 [@media(pointer:fine)]:block",
         hasPersistentGutter
           ? "opacity-100"
-          : "opacity-0 transition-opacity duration-150 hover:opacity-100 focus-within:opacity-100",
+          : "opacity-0 transition-opacity duration-150 focus-within:opacity-100 hover:opacity-100",
         className
       )}
       data-testid="timeline-minimap"
@@ -144,7 +141,7 @@ export function TimelineMinimap({
           type="button"
           aria-label={`Jump to message: ${activeItem?.userText ?? "User message"}`}
           className={cn(
-            "absolute top-1/2 left-3 -translate-y-1/2 cursor-pointer bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+            "absolute top-1/2 left-3 -translate-y-1/2 cursor-pointer bg-transparent focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none",
             hitStripWidth > 0 ? "pointer-events-auto" : "pointer-events-none"
           )}
           onBlur={() => setActiveIndex(null)}
@@ -228,7 +225,7 @@ export function TimelineMinimap({
               }}
             >
               <span className="dropdown-glass block rounded-xl p-3 text-left text-popover-foreground shadow-xl shadow-black/25">
-                <span className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-5">
+                <span className="block max-w-full overflow-hidden text-sm leading-5 font-medium text-ellipsis whitespace-nowrap">
                   {activeItem.userText ?? "User message"}
                 </span>
                 {activeItem.assistantText ? (

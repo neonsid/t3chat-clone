@@ -13,7 +13,6 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { ChatThread } from "@/lib/threads"
@@ -113,7 +112,7 @@ export function AppSidebar({
                 aria-label="Search chats"
               />
             </label>
-            <Separator className="transition-colors my-1" />
+            <Separator className="my-1 transition-colors" />
           </div>
         </div>
       </SidebarHeader>
@@ -172,7 +171,6 @@ export function AppSidebar({
           className="sidebar-list-top-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-6"
         />
       </div>
-      <SidebarRail />
     </Sidebar>
   )
 }

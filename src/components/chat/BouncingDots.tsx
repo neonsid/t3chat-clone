@@ -1,4 +1,4 @@
-import { motion } from "motion/react"
+import * as m from "motion/react-m"
 
 import { cn } from "@/lib/utils"
 
@@ -20,7 +20,7 @@ export function BouncingDots({
       aria-label={label}
     >
       {DOTS.map((index) => (
-        <motion.span
+        <m.span
           key={index}
           className="size-2 rounded-full bg-muted-foreground/80"
           animate={{ y: [0, -5, 0], opacity: [0.45, 1, 0.45] }}

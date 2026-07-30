@@ -41,7 +41,10 @@ export function resolveTimelineMinimapPreviewText(
 }
 
 export function resolveTimelineMinimapHeightStyle(itemCount: number): string {
-  const naturalHeight = Math.max(1, (itemCount - 1) * TIMELINE_MINIMAP_ITEM_SPACING)
+  const naturalHeight = Math.max(
+    1,
+    (itemCount - 1) * TIMELINE_MINIMAP_ITEM_SPACING
+  )
   return `min(${naturalHeight}px, ${TIMELINE_MINIMAP_MAX_HEIGHT_CSS})`
 }
 
@@ -100,7 +103,5 @@ export function resolveTimelineMinimapInteractiveWidth(
   collapsedWidth: number,
   expanded: boolean
 ): number | string {
-  return expanded
-    ? TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH
-    : collapsedWidth
+  return expanded ? TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH : collapsedWidth
 }

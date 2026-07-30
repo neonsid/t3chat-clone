@@ -9,7 +9,8 @@ import {
   SearchIcon,
   SlidersHorizontalIcon,
 } from "lucide-react"
-import { motion } from "motion/react"
+import { LazyMotion, domAnimation } from "motion/react"
+import * as m from "motion/react-m"
 
 import { AppSidebar } from "@/components/AppSidebar"
 import { BouncingDots } from "@/components/chat/BouncingDots"
@@ -34,7 +35,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect"
 import { useThreads } from "@/hooks/useThreads"
 import { cn } from "@/lib/utils"
@@ -65,7 +65,8 @@ function SidebarControl() {
       <SidebarTrigger
         className={cn(
           "pointer-events-auto text-muted-foreground",
-          !open && "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground"
+          !open &&
+            "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground"
         )}
       />
       {!open && (
@@ -178,37 +179,43 @@ function ChatHeaderActions() {
 
   return (
     <div className="pointer-events-none fixed top-[10px] right-3 z-60">
-      <motion.div
-        className="flex items-center gap-0.5 rounded-lg"
+      <m.div
+        className="rounded-lg p-1"
         initial={false}
         animate={{
           y: onNotch ? 8 : 0,
-          padding: onNotch ? 0 : 4,
           backgroundColor: onNotch
             ? HEADER_CHIP_SURFACE_HIDDEN
             : HEADER_CHIP_SURFACE,
         }}
         transition={{ duration: 0.2, ease: "linear" }}
       >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="History"
-          className={notchButtonClass}
+        <m.div
+          className="flex items-center gap-0.5"
+          initial={false}
+          animate={{ x: onNotch ? 4 : 0, y: onNotch ? -4 : 0 }}
+          transition={{ duration: 0.2, ease: "linear" }}
         >
-          <ClockIcon />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Settings"
-          className={notchButtonClass}
-        >
-          <SlidersHorizontalIcon />
-        </Button>
-      </motion.div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="History"
+            className={notchButtonClass}
+          >
+            <ClockIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Settings"
+            className={notchButtonClass}
+          >
+            <SlidersHorizontalIcon />
+          </Button>
+        </m.div>
+      </m.div>
     </div>
   )
 }
@@ -249,7 +256,7 @@ function ChatPage() {
   } = useThreads()
 
   return (
-    <TooltipProvider>
+    <LazyMotion features={domAnimation}>
       <SidebarProvider defaultOpen className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
           threads={threads}
@@ -270,15 +277,17 @@ function ChatPage() {
           </SidebarInset>
         </ChatShell>
       </SidebarProvider>
-    </TooltipProvider>
+    </LazyMotion>
   )
 }
 
 function messageText(message: UIMessage) {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.content)
-    .join(" ")
+  let text = ""
+  for (const part of message.parts) {
+    if (part.type !== "text") continue
+    text += `${text ? " " : ""}${part.content}`
+  }
+  return text
 }
 
 function deriveTimelineMinimapItems(
@@ -290,7 +299,8 @@ function deriveTimelineMinimapItems(
     if (message.role !== "user") continue
 
     let assistantText: string | null = null
-    for (const next of messages.slice(index + 1)) {
+    for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex++) {
+      const next = messages[nextIndex]
       if (next.role === "user") break
       if (next.role === "assistant") {
         assistantText = resolveTimelineMinimapPreviewText(messageText(next))
@@ -311,6 +321,30 @@ function focusComposerInput() {
   document
     .querySelector<HTMLTextAreaElement>("[data-chat-composer-input]")
     ?.focus()
+}
+
+function scrollToMessage(item: TimelineMinimapItem) {
+  const target = document.querySelector(
+    `[data-message-id="${CSS.escape(item.id)}"]`
+  )
+  target?.scrollIntoView({ behavior: "smooth", block: "center" })
+}
+
+function pairMessagesWithPreviousUser(messages: UIMessage[]) {
+  const pairs: Array<{
+    message: UIMessage
+    previousUserCreatedAt: UIMessage["createdAt"] | null
+  }> = []
+  let previousUserCreatedAt: UIMessage["createdAt"] | null = null
+
+  for (const message of messages) {
+    pairs.push({ message, previousUserCreatedAt })
+    if (message.role === "user") {
+      previousUserCreatedAt = message.createdAt ?? null
+    }
+  }
+
+  return pairs
 }
 
 function ChatThreadView({
@@ -380,15 +414,9 @@ function ChatThreadView({
     queueMicrotask(focusComposerInput)
   }
 
-  function scrollToMessage(item: TimelineMinimapItem) {
-    const target = document.querySelector(
-      `[data-message-id="${CSS.escape(item.id)}"]`
-    )
-    target?.scrollIntoView({ behavior: "smooth", block: "center" })
-  }
-
   const activeWorkedMs =
     isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
+  const messagePairs = pairMessagesWithPreviousUser(messages)
 
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
@@ -422,15 +450,11 @@ function ChatThreadView({
                 <MessageScrollerContent
                   className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
-                  {messages.map((message, index) => {
+                  {messagePairs.map(({ message, previousUserCreatedAt }) => {
                     const isStreaming =
                       isLoading &&
                       message.role === "assistant" &&
                       message.id === messages.at(-1)?.id
-
-                    const previousUser = [...messages.slice(0, index)]
-                      .reverse()
-                      .find((entry) => entry.role === "user")
 
                     return (
                       <MessageScrollerItem
@@ -442,9 +466,7 @@ function ChatThreadView({
                         <ChatMessage
                           message={message}
                           isStreaming={isStreaming}
-                          previousUserCreatedAt={
-                            previousUser?.createdAt ?? null
-                          }
+                          previousUserCreatedAt={previousUserCreatedAt}
                           workedMs={isStreaming ? activeWorkedMs : null}
                         />
                       </MessageScrollerItem>

@@ -22,21 +22,22 @@ const streamdownPlugins = {
 }
 
 function getMessageText(message: UIMessage) {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.content)
-    .join("")
+  let text = ""
+  for (const part of message.parts) {
+    if (part.type === "text") text += part.content
+  }
+  return text
 }
 
 function getThinkingText(message: UIMessage) {
-  return message.parts
-    .filter((part) => part.type === "thinking")
-    .map((part) => part.content)
-    .join("\n")
-    .trim()
+  const parts: string[] = []
+  for (const part of message.parts) {
+    if (part.type === "thinking") parts.push(part.content)
+  }
+  return parts.join("\n").trim()
 }
 
-export function formatWorkedDuration(elapsedMs: number | null | undefined) {
+function formatWorkedDuration(elapsedMs: number | null | undefined) {
   if (elapsedMs == null || elapsedMs < 0 || !Number.isFinite(elapsedMs)) {
     return null
   }
@@ -79,7 +80,11 @@ function MessageCopyControl({ text }: { text: string }) {
         })
       }}
     >
-      {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+      {copied ? (
+        <CheckIcon className="size-3" />
+      ) : (
+        <CopyIcon className="size-3" />
+      )}
     </Button>
   )
 }
@@ -116,13 +121,13 @@ export function ChatMessage({
   if (isUser) {
     return (
       <div className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[80%] rounded-2xl bg-accent p-3 text-[15px] leading-6 text-foreground whitespace-pre-wrap">
+        <div className="relative max-w-[80%] rounded-2xl bg-accent p-3 text-[15px] leading-6 whitespace-pre-wrap text-foreground">
           {text}
         </div>
-        <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+        <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
           <div className="flex shrink-0 items-center gap-2">
             {timestamp ? (
-              <p className="text-muted-foreground text-xs tabular-nums">
+              <p className="text-xs text-muted-foreground tabular-nums">
                 {timestamp}
               </p>
             ) : null}
@@ -173,10 +178,10 @@ export function ChatMessage({
         ) : null}
 
         {(text || timestamp) && !isStreaming ? (
-          <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
+          <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
             {text ? <MessageCopyControl text={text} /> : null}
             {timestamp ? (
-              <p className="text-muted-foreground text-xs tabular-nums">
+              <p className="text-xs text-muted-foreground tabular-nums">
                 {timestamp}
               </p>
             ) : null}
@@ -208,9 +213,14 @@ function WorkedForFold({
   const Icon = expanded ? ChevronDownIcon : ChevronRightIcon
   const preview = useMemo(() => {
     if (!content) return null
-    const firstLine = content.split("\n").find((line) => line.trim())?.trim()
+    const firstLine = content
+      .split("\n")
+      .find((line) => line.trim())
+      ?.trim()
     if (!firstLine) return null
-    return firstLine.length > 72 ? `${firstLine.slice(0, 72).trimEnd()}…` : firstLine
+    return firstLine.length > 72
+      ? `${firstLine.slice(0, 72).trimEnd()}…`
+      : firstLine
   }, [content])
 
   return (
@@ -229,7 +239,7 @@ function WorkedForFold({
                   {preview}
                 </p>
               ) : null}
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">
+              <p className="mt-1.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
                 {content}
               </p>
             </div>
@@ -244,7 +254,7 @@ function WorkedForFold({
       <button
         type="button"
         aria-expanded={expanded}
-        className="flex cursor-pointer select-none items-center gap-1 rounded-md px-1 text-xs text-muted-foreground tabular-nums transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+        className="flex cursor-pointer items-center gap-1 rounded-md px-1 text-xs text-muted-foreground tabular-nums transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none"
         onClick={() => setExpanded((value) => !value)}
       >
         <span>{label}</span>

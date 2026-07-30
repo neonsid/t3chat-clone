@@ -9,6 +9,10 @@ export type ChatThread = {
 }
 
 const STORAGE_KEY = "t3chat.threads.v1"
+const shortTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+})
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -33,11 +37,12 @@ export function titleFromMessages(messages: UIMessage[]): string {
   const firstUser = messages.find((message) => message.role === "user")
   if (!firstUser) return "New chat"
 
-  const text = firstUser.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.content)
-    .join(" ")
-    .trim()
+  let text = ""
+  for (const part of firstUser.parts) {
+    if (part.type !== "text") continue
+    text += `${text ? " " : ""}${part.content}`
+  }
+  text = text.trim()
 
   if (!text) return "New chat"
   return text.length > 48 ? `${text.slice(0, 48).trimEnd()}…` : text
@@ -49,7 +54,9 @@ type StoredState = {
 }
 
 function canUseStorage() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+  return (
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+  )
 }
 
 export function loadThreadState(): StoredState {
@@ -96,13 +103,12 @@ export function saveThreadState(state: StoredState) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
-export function formatShortTimestamp(value: Date | number | string | undefined) {
+export function formatShortTimestamp(
+  value: Date | number | string | undefined
+) {
   if (!value) return ""
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return ""
 
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
+  return shortTimeFormatter.format(date)
 }

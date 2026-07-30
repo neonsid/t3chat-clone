@@ -1,14 +1,14 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useEffectEvent } from "react"
 
 /**
  * Runs `fn` exactly once on mount.
  * If `fn` returns a cleanup function, it runs on unmount.
  */
 export function useMountEffect(fn: () => void | (() => void)) {
+  const onMount = useEffectEvent(fn)
+
   useEffect(() => {
-    return fn?.()
-    // Mount-only by design — see frontend use-effect skill.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return onMount()
   }, [])
 }
 
@@ -17,10 +17,9 @@ export function useMountEffect(fn: () => void | (() => void)) {
  * Use this instead of calling another component's setState during render.
  */
 export function useValueEffect<T>(value: T, onChange: (value: T) => void) {
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
+  const notifyChange = useEffectEvent(onChange)
 
   useEffect(() => {
-    onChangeRef.current(value)
+    notifyChange(value)
   }, [value])
 }
