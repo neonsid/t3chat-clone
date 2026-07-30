@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react"
+import { Fragment, useState } from "react"
+import type { ReactNode } from "react"
 import {
   BookOpenIcon,
   CodeXmlIcon,
@@ -6,6 +7,8 @@ import {
   SparklesIcon,
 } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
 type SuggestionCategory = "create" | "explore" | "code" | "learn"
@@ -81,7 +84,7 @@ export function ChatEmptyState({
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-2xl flex-col items-center px-4",
+        "flex w-full max-w-2xl flex-col items-start px-4",
         className
       )}
     >
@@ -90,37 +93,34 @@ export function ChatEmptyState({
       </h1>
 
       <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-        {CATEGORIES.map((category) => {
-          const isActive = category.id === activeCategory
-          return (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => setActiveCategory(category.id)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors",
-                isActive
-                  ? "border-foreground/20 bg-accent text-foreground"
-                  : "border-border/80 bg-card/40 text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              {category.icon}
-              {category.label}
-            </button>
-          )
-        })}
+        {CATEGORIES.map((category) => (
+          <Button
+            key={category.id}
+            type="button"
+            variant="outline"
+            aria-pressed={category.id === activeCategory}
+            onClick={() => setActiveCategory(category.id)}
+            className="gap-2 rounded-full px-3.5 text-muted-foreground aria-pressed:border-foreground/20 aria-pressed:bg-accent aria-pressed:text-foreground"
+          >
+            {category.icon}
+            {category.label}
+          </Button>
+        ))}
       </div>
 
-      <div className="mt-8 flex w-full max-w-md flex-col gap-1">
-        {SUGGESTIONS[activeCategory].map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => onSelectPrompt(prompt)}
-            className="rounded-lg px-3 py-2.5 text-left text-[15px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {prompt}
-          </button>
+      <div className="mt-8 flex w-full flex-col">
+        {SUGGESTIONS[activeCategory].map((prompt, index) => (
+          <Fragment key={prompt}>
+            {index > 0 && <Separator className="my-1" />}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onSelectPrompt(prompt)}
+              className="h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left text-[15px] font-normal whitespace-normal text-muted-foreground"
+            >
+              {prompt}
+            </Button>
+          </Fragment>
         ))}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
@@ -8,6 +9,7 @@ import {
   SearchIcon,
   SlidersHorizontalIcon,
 } from "lucide-react"
+import { motion } from "motion/react"
 
 import { AppSidebar } from "@/components/AppSidebar"
 import { BouncingDots } from "@/components/chat/BouncingDots"
@@ -38,22 +40,31 @@ import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/")({ component: ChatPage })
 
+/**
+ * Chrome buttons hover against either the #161616 chip or the near-black gutter
+ * depending on sidebar state, so the lift stays translucent to read on both. The
+ * opaque `accent` the button variant defaults to sits only three values above
+ * the chip and disappears against it.
+ */
 const controlButtonClass =
-  "pointer-events-auto bg-[#161616] rounded-md text-muted-foreground hover:bg-accent hover:text-foreground hover:p-1"
+  "pointer-events-auto rounded-md bg-[#161616] text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+
+const notchButtonClass =
+  "pointer-events-auto rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
 
 function SidebarControl() {
   const { open } = useSidebar()
   return (
     <div
       className={cn(
-        "pointer-events-none fixed top-[10px] left-3 z-60 flex items-center gap-0.5",
+        "pointer-events-none fixed top-3 left-3 z-60 flex items-center gap-0.5",
         !open && "rounded-md bg-[#161616] ring-4 ring-[#161616]"
       )}
     >
       <SidebarTrigger
         className={cn(
           "pointer-events-auto text-muted-foreground",
-          !open && "hover:rounded-md hover:bg-accent hover:text-foreground"
+          !open && "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground"
         )}
       />
       {!open && (
@@ -82,27 +93,146 @@ function SidebarControl() {
   )
 }
 
-function ChatHeaderActions() {
+/* Matches the gutter around the inset canvas, not the canvas itself. */
+const HEADER_NOTCH_FILL = "var(--sidebar)"
+const HEADER_NOTCH_STROKE = "rgb(255 255 255 / 10%)"
+
+/**
+ * The curve has to break just left of the header buttons, so the notch is
+ * anchored to the right edge of the canvas: 0.75rem of gutter + 4.125rem of
+ * buttons + the 3.5rem lead-in the path needs before the S bend, less the
+ * 11rem the element is wide. The flat tail runs off the right edge.
+ */
+const HEADER_NOTCH_RIGHT = "calc(0.75rem + 4.125rem + 3.5rem - 11rem)"
+
+/**
+ * Skewed S-curve that sweeps the header surface down into the canvas, so the
+ * controls read as part of the panel edge rather than a chip floating on it.
+ * The skew is applied to the element rather than baked into the path so the
+ * curve radii stay circular. Width must stay at 4x height to match the viewBox
+ * aspect, otherwise preserveAspectRatio letterboxes the curve.
+ *
+ * Sits 1px above its containing block so the stroke lands on the edge layer's
+ * top border rather than below it.
+ */
+function ChatHeaderNotch() {
   return (
-    <div className="pointer-events-none fixed top-[10px] right-3 z-60 flex items-center gap-0.5 rounded-lg bg-[#161616] p-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="History"
-        className={controlButtonClass}
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 128 32"
+      style={{ right: HEADER_NOTCH_RIGHT }}
+      className="pointer-events-none absolute -top-px h-11 w-44 origin-top-left skew-x-[30deg] overflow-visible"
+    >
+      <path
+        d="M0,0c5.9,0,10.7,4.8,10.7,10.7v10.7c0,5.9,4.8,10.7,10.7,10.7H128V0Z"
+        fill={HEADER_NOTCH_FILL}
+      />
+      <path
+        d="M0,0c5.9,0,10.7,4.8,10.7,10.7v10.7c0,5.9,4.8,10.7,10.7,10.7H128"
+        fill="none"
+        stroke={HEADER_NOTCH_STROKE}
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
+/**
+ * Hairline, corner radius and notch drawn as one absolutely positioned layer
+ * rather than a border on the shell plus a fixed SVG. Because it shares the
+ * shell's box it inherits the sidebar's inset animation, so the flat run and
+ * the curve stay joined for the whole 200ms and fade in as a single piece. A
+ * border on the shell instead popped in full width at the top of the viewport
+ * and only met the fixed notch on the last frame.
+ */
+function ChatShellEdge({ visible }: { visible: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute inset-0 z-50 border-t border-l border-white/10 transition-[opacity,border-radius] duration-200 ease-linear",
+        visible ? "rounded-tl-2xl opacity-100" : "opacity-0"
+      )}
+    >
+      <ChatHeaderNotch />
+    </div>
+  )
+}
+
+/* #161616, in the comma syntax Motion's colour parser accepts, so the chip can
+   fade its alpha out without travelling through another hue. */
+const HEADER_CHIP_SURFACE = "rgba(22, 22, 22, 1)"
+const HEADER_CHIP_SURFACE_HIDDEN = "rgba(22, 22, 22, 0)"
+
+/**
+ * Off the notch the buttons need their own chip to stand off the canvas; on it
+ * the notch already supplies the surface, so the chip dissolves and the row
+ * drops 8px into the notch band. Motion drives this because it is a mount-free
+ * crossfade with no CSS transition of its own to stay in step with.
+ */
+function ChatHeaderActions() {
+  const { isMobile, open } = useSidebar()
+  const onNotch = open && !isMobile
+
+  return (
+    <div className="pointer-events-none fixed top-[10px] right-3 z-60">
+      <motion.div
+        className="flex items-center gap-0.5 rounded-lg"
+        initial={false}
+        animate={{
+          y: onNotch ? 8 : 0,
+          padding: onNotch ? 0 : 4,
+          backgroundColor: onNotch
+            ? HEADER_CHIP_SURFACE_HIDDEN
+            : HEADER_CHIP_SURFACE,
+        }}
+        transition={{ duration: 0.2, ease: "linear" }}
       >
-        <ClockIcon />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Settings"
-        className={controlButtonClass}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="History"
+          className={notchButtonClass}
+        >
+          <ClockIcon />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Settings"
+          className={notchButtonClass}
+        >
+          <SlidersHorizontalIcon />
+        </Button>
+      </motion.div>
+    </div>
+  )
+}
+
+function ChatShell({ children }: { children: ReactNode }) {
+  const { isMobile, open } = useSidebar()
+  const showSidebarEdge = open && !isMobile
+
+  return (
+    <div
+      data-chat-shell=""
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 transition-[margin] duration-200 ease-linear",
+        showSidebarEdge && "mt-3"
+      )}
+    >
+      <div
+        className={cn(
+          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background transition-[border-radius] duration-200 ease-linear",
+          showSidebarEdge && "rounded-tl-2xl"
+        )}
       >
-        <SlidersHorizontalIcon />
-      </Button>
+        {children}
+      </div>
+      <ChatShellEdge visible={showSidebarEdge} />
     </div>
   )
 }
@@ -128,14 +258,16 @@ function ChatPage() {
           onDeleteThread={deleteThread}
         />
         <ChatHeaderActions />
-        <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
-          <ChatThreadView
-            key={activeThread.id}
-            threadId={activeThread.id}
-            initialMessages={activeThread.messages}
-            onMessagesChange={updateActiveMessages}
-          />
-        </SidebarInset>
+        <ChatShell>
+          <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
+            <ChatThreadView
+              key={activeThread.id}
+              threadId={activeThread.id}
+              initialMessages={activeThread.messages}
+              onMessagesChange={updateActiveMessages}
+            />
+          </SidebarInset>
+        </ChatShell>
       </SidebarProvider>
     </TooltipProvider>
   )
@@ -279,15 +411,20 @@ function ChatThreadView({
         )}
 
         {showEmptyState ? (
-          <div className="flex size-full items-center justify-center overflow-y-auto">
-            <ChatEmptyState className="py-10" onSelectPrompt={fillPrompt} />
+          <div className="flex size-full flex-col items-center overflow-y-auto">
+            {/* mt-auto rather than justify-end so the block still scrolls from
+                its top on short viewports instead of overflowing out of reach. */}
+            <ChatEmptyState
+              className="mt-auto pt-20 pb-4"
+              onSelectPrompt={fillPrompt}
+            />
           </div>
         ) : (
           <MessageScrollerProvider autoScroll={!isEmptyThread}>
             <MessageScroller>
               <MessageScrollerViewport>
                 <MessageScrollerContent
-                  className={cn("mx-auto w-full max-w-3xl px-4 pt-8 pb-6")}
+                  className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
                   {messages.map((message, index) => {
                     const isStreaming =
@@ -333,6 +470,11 @@ function ChatThreadView({
           </MessageScrollerProvider>
         )}
       </div>
+
+      <div
+        aria-hidden="true"
+        className="chat-canvas-top-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-20"
+      />
 
       <div
         ref={composerOverlayRef}
