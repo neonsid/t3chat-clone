@@ -22,13 +22,13 @@ export function BouncingDots({
       {DOTS.map((index) => (
         <motion.span
           key={index}
-          className="size-1.5 rounded-full bg-muted-foreground/80"
+          className="size-2 rounded-full bg-muted-foreground/80"
           animate={{ y: [0, -5, 0], opacity: [0.45, 1, 0.45] }}
           transition={{
-            duration: 0.7,
+            duration: 1.1,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: index * 0.16,
+            delay: index * 0.25,
           }}
         />
       ))}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
   SidebarContent,
@@ -78,7 +79,7 @@ export function AppSidebar({
       data-sidebar-version="v2"
       className="bg-sidebar text-sidebar-foreground"
     >
-      <SidebarHeader className="shrink-0 gap-0 border-b border-sidebar-border p-0">
+      <SidebarHeader className="shrink-0 gap-0 p-0">
         <div className="flex h-[52px] items-start pt-0.5 pr-3 pl-[52px]">
           <div className="flex h-8 min-w-0 items-center gap-1 overflow-hidden rounded-md text-sidebar-foreground">
             <span className="truncate text-base leading-none font-medium tracking-tight text-sidebar-muted-foreground">
@@ -96,27 +97,30 @@ export function AppSidebar({
             New Chat
           </Button>
 
-          <label className="flex cursor-text items-center gap-2 border-b border-white/10 pb-2 transition-colors focus-within:border-white/25">
-            <SearchIcon
-              className="size-4 shrink-0 text-sidebar-muted-foreground"
-              aria-hidden="true"
-            />
-            <input
-              ref={searchInputRef}
-              data-sidebar-search=""
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search your threads..."
-              className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
-              aria-label="Search chats"
-            />
-          </label>
+          <div className="group flex flex-col">
+            <label className="flex cursor-text items-center gap-2 py-2">
+              <SearchIcon
+                className="size-4 shrink-0 text-sidebar-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                ref={searchInputRef}
+                data-sidebar-search=""
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search your threads..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
+                aria-label="Search chats"
+              />
+            </label>
+            <Separator className="transition-colors my-1" />
+          </div>
         </div>
       </SidebarHeader>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <SidebarContent className="gap-0">
-          <SidebarGroup className="px-2 pt-3">
+          <SidebarGroup className="px-2">
             <div className="px-2 pb-1.5 text-xs font-medium text-sidebar-muted-foreground">
               Chats
             </div>
