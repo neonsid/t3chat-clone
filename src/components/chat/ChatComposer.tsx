@@ -61,7 +61,7 @@ export function ChatComposer({
         className
       )}
     >
-      <div className="chat-composer-glass-host relative z-10 w-full overflow-hidden rounded-[24px]">
+      <div className="chat-composer-glass-host relative z-10 w-full overflow-hidden rounded-[18px]">
         <form
           className="mx-auto w-full min-w-0 max-w-3xl"
           data-chat-composer-form="true"

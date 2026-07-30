@@ -18,6 +18,7 @@ import { ChatEmptyState } from "@/components/chat/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/ChatMessage"
 import { TimelineMinimap } from "@/components/chat/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/TimelineMinimap"
+import { resolveTimelineMinimapPreviewText } from "@/components/chat/timelineMinimapLogic"
 import { Button } from "@/components/ui/button"
 import {
   MessageScroller,
@@ -273,11 +274,6 @@ function ChatPage() {
   )
 }
 
-function compactMinimapPreview(text: string | null | undefined) {
-  const compact = text?.replace(/\s+/g, " ").trim() ?? ""
-  return compact.length > 0 ? compact : null
-}
-
 function messageText(message: UIMessage) {
   return message.parts
     .filter((part) => part.type === "text")
@@ -297,13 +293,13 @@ function deriveTimelineMinimapItems(
     for (const next of messages.slice(index + 1)) {
       if (next.role === "user") break
       if (next.role === "assistant") {
-        assistantText = compactMinimapPreview(messageText(next))
+        assistantText = resolveTimelineMinimapPreviewText(messageText(next))
       }
     }
 
     items.push({
       id: message.id,
-      userText: compactMinimapPreview(messageText(message)),
+      userText: resolveTimelineMinimapPreviewText(messageText(message)),
       assistantText,
     })
   }
