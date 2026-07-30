@@ -432,7 +432,7 @@ function ChatThreadView({
             />
           </div>
         ) : (
-          <MessageScrollerProvider autoScroll={!isEmptyThread}>
+          <MessageScrollerProvider>
             <MessageScroller>
               <MessageScrollerViewport>
                 <MessageScrollerContent
@@ -448,7 +448,6 @@ function ChatThreadView({
                       <MessageScrollerItem
                         key={message.id}
                         messageId={message.id}
-                        scrollAnchor={message.role === "user"}
                         data-message-id={message.id}
                       >
                         <ChatMessage
@@ -462,10 +461,7 @@ function ChatThreadView({
                   })}
 
                   {showPendingDots ? (
-                    <MessageScrollerItem
-                      messageId="pending-assistant"
-                      scrollAnchor={false}
-                    >
+                    <MessageScrollerItem messageId="pending-assistant">
                       <BouncingDots className="px-1" />
                     </MessageScrollerItem>
                   ) : null}
