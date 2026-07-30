@@ -3,7 +3,6 @@ import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 
 import { ModelCapabilityBadges } from "@/components/chat/model-picker/ModelCapabilityBadges"
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
-import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import {
   formatCost,
   formatTokenLimit,
@@ -45,76 +44,81 @@ export function ModelPickerRow({
   onToggleFavorite,
 }: ModelPickerRowProps) {
   return (
-    <div className="group/model relative">
+    <div
+      data-selected={isSelected || undefined}
+      onClick={() => onSelect(model.id)}
+      className="relative flex w-full cursor-pointer items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] data-selected:bg-[color-mix(in_srgb,var(--foreground)_9%,transparent)]"
+    >
       <button
         type="button"
-        onClick={() => onSelect(model.id)}
-        data-selected={isSelected || undefined}
-        className="flex w-full cursor-pointer items-start gap-3 rounded-lg px-2.5 py-2.5 pr-8 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-selected:bg-[color-mix(in_srgb,var(--foreground)_9%,transparent)]"
-      >
-        <ProviderLogo
-          providerId={model.providerId}
-          className="mt-0.5 size-4.5 text-foreground/85"
-        />
+        aria-label={`Select ${model.name}`}
+        className="absolute inset-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+      />
 
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-foreground">
-              {model.name}
-            </span>
-            <ModelPriceMeter
-              inputCostPerMillion={model.inputCostPerMillion}
-              className="shrink-0"
-            />
-            {model.experimental ? (
-              <Tooltip content="Experimental">
-                <span
-                  aria-label="Experimental"
-                  className="size-1.5 shrink-0 rounded-full bg-amber-400"
-                />
-              </Tooltip>
-            ) : null}
+      <span className="relative flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">
+            {model.name}
           </span>
-          {model.description ? (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-xs leading-4 text-muted-foreground">
-                {model.description}
-              </span>
-              <Tooltip content={describeModel(model)}>
-                <span className="shrink-0 text-muted-foreground/70">
-                  <InfoIcon className="size-3" />
-                </span>
-              </Tooltip>
-            </span>
+          <ModelPriceMeter
+            inputCostPerMillion={model.inputCostPerMillion}
+            outputCostPerMillion={model.outputCostPerMillion}
+            className="shrink-0"
+          />
+          <Tooltip
+            content={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <button
+              type="button"
+              aria-pressed={isFavorite}
+              aria-label={
+                isFavorite
+                  ? `Remove ${model.name} from favorites`
+                  : `Add ${model.name} to favorites`
+              }
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleFavorite(model.id)
+              }}
+              className={cn(
+                "relative inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-[color,opacity,transform] hover:scale-105 hover:text-amber-400 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                isFavorite
+                  ? "text-amber-400 opacity-100"
+                  : "opacity-60 focus-visible:opacity-100"
+              )}
+            >
+              <StarIcon
+                className={cn(
+                  "size-3.5",
+                  isFavorite && "fill-amber-400 text-amber-400"
+                )}
+              />
+            </button>
+          </Tooltip>
+          {model.experimental ? (
+            <Tooltip content="Experimental">
+              <span
+                aria-label="Experimental"
+                className="size-1.5 shrink-0 rounded-full bg-amber-400"
+              />
+            </Tooltip>
           ) : null}
         </span>
+        {model.description ? (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-xs leading-4 text-muted-foreground">
+              {model.description}
+            </span>
+            <Tooltip content={describeModel(model)}>
+              <span className="shrink-0 text-muted-foreground/70">
+                <InfoIcon className="size-3" />
+              </span>
+            </Tooltip>
+          </span>
+        ) : null}
+      </span>
 
-        <ModelCapabilityBadges capabilities={model.capabilities} />
-      </button>
-
-      <button
-        type="button"
-        aria-pressed={isFavorite}
-        aria-label={
-          isFavorite
-            ? `Remove ${model.name} from favorites`
-            : `Add ${model.name} to favorites`
-        }
-        onClick={() => onToggleFavorite(model.id)}
-        className={cn(
-          "absolute top-2 right-1 inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-opacity hover:text-amber-400 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
-          isFavorite
-            ? "opacity-100"
-            : "opacity-0 group-hover/model:opacity-100 focus-visible:opacity-100"
-        )}
-      >
-        <StarIcon
-          className={cn(
-            "size-3.5",
-            isFavorite && "fill-amber-400 text-amber-400"
-          )}
-        />
-      </button>
+      <ModelCapabilityBadges capabilities={model.capabilities} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { CheckIcon, FilterIcon } from "lucide-react"
+import { CheckIcon, FilterIcon, XIcon } from "lucide-react"
 import { MODEL_CAPABILITIES } from "@t3chat/model-catalog"
 import type { ModelCapability } from "@t3chat/model-catalog"
 
@@ -15,15 +15,19 @@ import { cn } from "@/lib/utils"
 type ModelPickerFilterMenuProps = {
   activeCapabilities: ReadonlyArray<ModelCapability>
   combineResults: boolean
+  hasActiveFilters: boolean
   onToggleCapability: (capability: ModelCapability) => void
   onCombineResultsChange: (combineResults: boolean) => void
+  onClearFilters: () => void
 }
 
 export function ModelPickerFilterMenu({
   activeCapabilities,
   combineResults,
+  hasActiveFilters,
   onToggleCapability,
   onCombineResultsChange,
+  onClearFilters,
 }: ModelPickerFilterMenuProps) {
   const activeCount = activeCapabilities.length
 
@@ -116,6 +120,19 @@ export function ModelPickerFilterMenu({
             ) : null}
           </button>
         </Tooltip>
+
+        {hasActiveFilters &&
+          <>
+            <Separator className="my-1" />
+            <button
+              type="button"
+              disabled={!hasActiveFilters}
+              onClick={onClearFilters}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <span className="flex-1 truncate">Clear filters</span>
+            </button>
+          </>}
       </PopoverContent>
     </Popover>
   )

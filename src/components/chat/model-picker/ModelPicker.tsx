@@ -61,7 +61,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
   )
 
   const selectedModel = getModelById(state.selectedModelId)
-  const railIgnored = ignoresRailScope(query)
+  const railHidden = ignoresRailScope(query)
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -100,6 +100,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
         {selectedModel ? (
           <ModelPriceMeter
             inputCostPerMillion={selectedModel.inputCostPerMillion}
+            outputCostPerMillion={selectedModel.outputCostPerMillion}
           />
         ) : null}
         <ChevronDownIcon
@@ -133,8 +134,12 @@ export function ModelPicker({ className }: ModelPickerProps) {
           <ModelPickerFilterMenu
             activeCapabilities={state.capabilities}
             combineResults={state.combineResults}
+            hasActiveFilters={
+              state.search.trim().length > 0 || state.capabilities.length > 0
+            }
             onToggleCapability={modelStore.toggleCapability}
             onCombineResultsChange={modelStore.setCombineResults}
+            onClearFilters={modelStore.clearFilters}
           />
           <Separator className="absolute right-[3.25rem] bottom-1.5 left-3 w-auto! bg-border/60" />
         </div>
@@ -144,7 +149,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
             providers={RAIL_PROVIDERS}
             activeTab={state.railTab}
             onSelectTab={modelStore.setRailTab}
-            dimmed={railIgnored}
+            hidden={railHidden}
           />
           <ModelPickerList
             models={visibleModels}

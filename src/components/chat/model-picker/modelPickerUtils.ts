@@ -43,7 +43,7 @@ const modelsByRecency = [...MODEL_CATALOG].sort(
 )
 
 export function ignoresRailScope(query: ModelQuery): boolean {
-  return query.combineResults && query.search.trim().length > 0
+  return query.combineResults
 }
 
 /**

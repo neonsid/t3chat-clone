@@ -17,8 +17,7 @@ type ModelPickerRailProps = {
   providers: ReadonlyArray<ModelPickerRailProvider>
   activeTab: ModelRailTab
   onSelectTab: (tab: ModelRailTab) => void
-  /** Rail selection is ignored while combined results are on. */
-  dimmed: boolean
+  hidden: boolean
 }
 
 const RAIL_TAB_CLASS_NAME =
@@ -41,7 +40,7 @@ export function ModelPickerRail({
   providers,
   activeTab,
   onSelectTab,
-  dimmed,
+  hidden,
 }: ModelPickerRailProps) {
   const [scroll, setScroll] = useState(INITIAL_SCROLL_STATE)
 
@@ -70,9 +69,12 @@ export function ModelPickerRail({
 
   return (
     <div
+      aria-hidden={hidden || undefined}
+      inert={hidden || undefined}
       className={cn(
-        "relative flex w-14 shrink-0 flex-col items-center rounded-tr-3xl border-t border-r border-border transition-opacity",
-        dimmed && "opacity-45"
+        "relative flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-tr-3xl border-t border-r border-border transition-[width,opacity,transform,border-color] duration-200 ease-out motion-reduce:transition-none",
+        hidden &&
+          "pointer-events-none w-0 -translate-x-2 border-transparent opacity-0"
       )}
       role="tablist"
       aria-label="Filter by provider"

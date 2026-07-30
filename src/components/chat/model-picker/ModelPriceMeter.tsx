@@ -4,6 +4,12 @@ import { cn } from "@/lib/utils"
 
 const SLOTS = [0, 1, 2] as const
 const TIER_BOUNDS = [0.5, 1.5, 5, 15] as const
+const TIER_LABELS = [
+  "Low model cost",
+  "Medium model cost",
+  "High model cost",
+  "Very high model cost",
+] as const
 
 function resolveModelPriceMeter(inputCostPerMillion: number | null) {
   if (inputCostPerMillion === null) {
@@ -11,12 +17,17 @@ function resolveModelPriceMeter(inputCostPerMillion: number | null) {
       tier: 0,
       overflow: false,
       unknown: true,
-      label: "Pricing unavailable",
+      title: "Model pricing unavailable",
     }
   }
 
   if (inputCostPerMillion === 0) {
-    return { tier: 0, overflow: false, unknown: false, label: "Free" }
+    return {
+      tier: 0,
+      overflow: false,
+      unknown: false,
+      title: "Free model",
+    }
   }
 
   const bound = TIER_BOUNDS.findIndex((limit) => inputCostPerMillion < limit)
@@ -24,13 +35,32 @@ function resolveModelPriceMeter(inputCostPerMillion: number | null) {
     tier: bound === -1 ? 3 : bound,
     overflow: bound === -1,
     unknown: false,
-    label: `$${formatCost(inputCostPerMillion)} per 1M input tokens`,
+    title: TIER_LABELS[bound === -1 ? TIER_LABELS.length - 1 : bound],
   }
 }
 
 type ModelPriceMeterProps = {
   inputCostPerMillion: number | null
+  outputCostPerMillion: number | null
   className?: string
+}
+
+function formatPriceDetails(
+  inputCostPerMillion: number | null,
+  outputCostPerMillion: number | null
+): string {
+  const prices = [
+    inputCostPerMillion === null
+      ? null
+      : `$${formatCost(inputCostPerMillion)} input`,
+    outputCostPerMillion === null
+      ? null
+      : `$${formatCost(outputCostPerMillion)} output`,
+  ].filter((price): price is string => price !== null)
+
+  return prices.length > 0
+    ? `${prices.join(" · ")} / 1M tokens`
+    : "Input and output pricing unavailable"
 }
 
 /**
@@ -39,12 +69,26 @@ type ModelPriceMeterProps = {
  */
 export function ModelPriceMeter({
   inputCostPerMillion,
+  outputCostPerMillion,
   className,
 }: ModelPriceMeterProps) {
   const meter = resolveModelPriceMeter(inputCostPerMillion)
+  const details = formatPriceDetails(inputCostPerMillion, outputCostPerMillion)
+  const label = `${meter.title}. ${details}`
 
   return (
-    <Tooltip content={meter.label} wrapperClassName="shrink-0">
+    <Tooltip
+      content={
+        <span className="flex flex-col gap-0.5 text-left">
+          <span>{meter.title}</span>
+          <span className="font-normal text-popover-foreground/80">
+            {details}
+          </span>
+        </span>
+      }
+      wrapperClassName="shrink-0"
+      className="px-3 py-2"
+    >
       <span
         className={cn(
           "inline-flex items-center font-mono text-xs leading-none tracking-tight",
@@ -52,7 +96,7 @@ export function ModelPriceMeter({
           meter.unknown && "text-muted-foreground",
           className
         )}
-        aria-label={meter.label}
+        aria-label={label}
       >
         {SLOTS.map((slot) =>
           slot < meter.tier ? (
