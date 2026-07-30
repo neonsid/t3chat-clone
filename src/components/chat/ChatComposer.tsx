@@ -1,13 +1,11 @@
 import { useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
-import {
-  GlobeIcon,
-  LoaderCircleIcon,
-  PaperclipIcon,
-  ZapIcon,
-} from "lucide-react"
+import { GlobeIcon, LoaderCircleIcon, PaperclipIcon } from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
+import { ReasoningEffortSelect } from "@/components/chat/ReasoningEffortSelect"
+import type { ReasoningEffort } from "@/components/chat/ReasoningEffortSelect"
+import { Tooltip } from "@/components/motion/tooltip"
 import { cn } from "@/lib/utils"
 
 interface ChatComposerProps {
@@ -30,7 +28,8 @@ export function ChatComposer({
   className,
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [instantEnabled, setInstantEnabled] = useState(true)
+  const [reasoningEffort, setReasoningEffort] =
+    useState<ReasoningEffort>("instant")
   const [searchEnabled, setSearchEnabled] = useState(false)
   const canSend = value.trim().length > 0 && !isLoading && !disabled
 
@@ -54,7 +53,7 @@ export function ChatComposer({
         className
       )}
     >
-      <div className="chat-composer-glass-host relative z-10 w-full overflow-hidden rounded-[18px]">
+      <div className="chat-composer-glass-host relative z-10 w-full rounded-[18px]">
         <form
           className="mx-auto w-full max-w-3xl min-w-0"
           data-chat-composer-form="true"
@@ -78,27 +77,32 @@ export function ChatComposer({
           <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
             <ModelPicker />
 
+            <ReasoningEffortSelect
+              value={reasoningEffort}
+              onValueChange={setReasoningEffort}
+              disabled={disabled || isLoading}
+            />
+
             <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-              <ToolbarToggle
-                pressed={instantEnabled}
-                onPressedChange={setInstantEnabled}
-                label="Instant"
-                icon={<ZapIcon className="size-3.5" />}
-              />
               <ToolbarToggle
                 pressed={searchEnabled}
                 onPressedChange={setSearchEnabled}
                 label="Search"
                 icon={<GlobeIcon className="size-3.5" />}
+                tooltip={
+                  searchEnabled ? "Disable web search" : "Search the web"
+                }
               />
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label="Attach"
-              >
-                <PaperclipIcon className="size-3.5" />
-                Attach
-              </button>
+              <Tooltip content="Attach files">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label="Attach"
+                >
+                  <PaperclipIcon className="size-3.5" />
+                  Attach
+                </button>
+              </Tooltip>
             </div>
 
             <button
@@ -139,13 +143,15 @@ function ToolbarToggle({
   onPressedChange,
   label,
   icon,
+  tooltip,
 }: {
   pressed: boolean
   onPressedChange: (next: boolean) => void
   label: string
   icon: ReactNode
+  tooltip?: ReactNode
 }) {
-  return (
+  const button = (
     <button
       type="button"
       aria-pressed={pressed}
@@ -161,4 +167,6 @@ function ToolbarToggle({
       {label}
     </button>
   )
+
+  return tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button
 }

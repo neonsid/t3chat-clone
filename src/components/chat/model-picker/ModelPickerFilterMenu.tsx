@@ -1,4 +1,4 @@
-import { CheckIcon, FilterIcon, XIcon } from "lucide-react"
+import { CheckIcon, FilterIcon } from "lucide-react"
 import { MODEL_CAPABILITIES } from "@t3chat/model-catalog"
 import type { ModelCapability } from "@t3chat/model-catalog"
 
@@ -64,7 +64,7 @@ export function ModelPickerFilterMenu({
       <PopoverContent
         side="bottom"
         align="end"
-        className="w-60 overflow-hidden p-1"
+        className="w-60 overflow-hidden p-2"
       >
         {MODEL_CAPABILITIES.map((capability) => {
           const isActive = activeCapabilities.includes(capability.id)

@@ -3,16 +3,12 @@ import type { ReactNode } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  ClockIcon,
-  PlusIcon,
-  SearchIcon,
-  SlidersHorizontalIcon,
-} from "lucide-react"
+import { ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
 import { LazyMotion, domAnimation } from "motion/react"
 import * as m from "motion/react-m"
 
 import { AppSidebar } from "@/components/AppSidebar"
+import { SettingsMenu } from "@/components/SettingsMenu"
 import { BouncingDots } from "@/components/chat/BouncingDots"
 import { ChatComposer } from "@/components/chat/ChatComposer"
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState"
@@ -205,15 +201,7 @@ function ChatHeaderActions() {
           >
             <ClockIcon />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Settings"
-            className={notchButtonClass}
-          >
-            <SlidersHorizontalIcon />
-          </Button>
+          <SettingsMenu triggerClassName={notchButtonClass} />
         </m.div>
       </m.div>
     </div>
