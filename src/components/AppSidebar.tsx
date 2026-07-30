@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { SearchIcon, SquarePenIcon, Trash2Icon } from "lucide-react"
+import { SearchIcon, Trash2Icon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
@@ -14,11 +15,6 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import type { ChatThread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
@@ -91,40 +87,30 @@ export function AppSidebar({
           </div>
         </div>
 
-        <div className="px-2 pb-2">
-          <div className="flex items-center gap-1">
-            <label className="flex h-8 min-w-0 flex-1 cursor-text items-center gap-2 rounded-md px-2 text-sm font-medium text-sidebar-muted-foreground transition-colors focus-within:bg-sidebar-accent focus-within:text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground">
-              <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-              <input
-                ref={searchInputRef}
-                data-sidebar-search=""
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
-                aria-label="Search chats"
-              />
-              <kbd className="hidden h-4 min-w-0 items-center rounded-sm bg-muted px-1.5 text-[10px] text-sidebar-muted-foreground ring-1 ring-sidebar-border sm:inline-flex">
-                Ctrl+K
-              </kbd>
-            </label>
+        <div className="flex flex-col gap-3 px-2 pb-3">
+          <Button
+            type="button"
+            onClick={onCreateThread}
+            className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar-accent text-sm font-medium text-sidebar-foreground shadow-[inset_0_1px_0_rgb(255_255_255/6%)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_12%,transparent)] hover:text-sidebar-accent-foreground"
+          >
+            New Chat
+          </Button>
 
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label="New chat"
-                    onClick={onCreateThread}
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-                  />
-                }
-              >
-                <SquarePenIcon className="size-4 text-sidebar-muted-foreground/80" />
-              </TooltipTrigger>
-              <TooltipContent side="right">New chat</TooltipContent>
-            </Tooltip>
-          </div>
+          <label className="flex cursor-text items-center gap-2 border-b border-white/10 pb-2 transition-colors focus-within:border-white/25">
+            <SearchIcon
+              className="size-4 shrink-0 text-sidebar-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              ref={searchInputRef}
+              data-sidebar-search=""
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search your threads..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
+              aria-label="Search chats"
+            />
+          </label>
         </div>
       </SidebarHeader>
 

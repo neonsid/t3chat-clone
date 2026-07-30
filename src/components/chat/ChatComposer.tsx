@@ -85,7 +85,7 @@ export function ChatComposer({
           <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
             <button
               type="button"
-              className="inline-flex min-w-0 max-w-48 shrink items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground sm:max-w-56 sm:px-3"
+              className="inline-flex min-w-0 max-w-48 shrink items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground sm:max-w-56 sm:px-3"
               aria-label="Model"
             >
               <span className="truncate">{modelLabel}</span>
@@ -98,7 +98,7 @@ export function ChatComposer({
               <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
             </button>
 
-            <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-w-0 flex-1 items-center justify-start gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <ToolbarToggle
                 pressed={instantEnabled}
                 onPressedChange={setInstantEnabled}
