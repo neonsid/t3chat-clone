@@ -30,8 +30,8 @@ export function SidebarControl() {
     >
       <SidebarTrigger
         className={cn(
-          "pointer-events-auto text-muted-foreground",
-          !open && "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground",
+          "pointer-events-auto text-muted-foreground hover:rounded-md",
+          !open && "hover:bg-sidebar-accent hover:text-foreground",
         )}
       />
       {!open && (
