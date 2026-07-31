@@ -19,8 +19,15 @@ const controlButtonClass =
 export const notchButtonClass =
   "pointer-events-auto rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground";
 
-export function SidebarControl() {
+export function SidebarControl({
+  hasConversation,
+  onCreateThread,
+}: {
+  hasConversation: boolean;
+  onCreateThread: () => void;
+}) {
   const { open } = useSidebar();
+  const highlightedControlClass = hasConversation && "bg-sidebar-accent text-foreground";
   return (
     <div
       className={cn(
@@ -32,6 +39,7 @@ export function SidebarControl() {
         className={cn(
           "pointer-events-auto text-muted-foreground hover:rounded-md",
           !open && "hover:bg-sidebar-accent hover:text-foreground",
+          !open && highlightedControlClass,
         )}
       />
       {!open && (
@@ -41,7 +49,7 @@ export function SidebarControl() {
             variant="ghost"
             size="icon-sm"
             aria-label="Search"
-            className={controlButtonClass}
+            className={cn(controlButtonClass, highlightedControlClass)}
           >
             <SearchIcon />
           </Button>
@@ -50,7 +58,8 @@ export function SidebarControl() {
             variant="ghost"
             size="icon-sm"
             aria-label="New chat"
-            className={controlButtonClass}
+            className={cn(controlButtonClass, highlightedControlClass)}
+            onClick={onCreateThread}
           >
             <PlusIcon />
           </Button>

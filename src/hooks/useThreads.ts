@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
 
 import {
@@ -9,85 +9,119 @@ import {
 } from "@/lib/threads"
 import type { ChatThread } from "@/lib/threads"
 
-export function useThreads() {
+export function useThreads(initialThreadId?: string) {
   const [state, setState] = useState(() => loadThreadState())
+  const stateRef = useRef(state)
 
-  useEffect(() => {
-    saveThreadState(state)
-  }, [state])
+  const commitState = useCallback((nextState: typeof state) => {
+    stateRef.current = nextState
+    setState(nextState)
+    saveThreadState(nextState)
+  }, [])
 
   const activeThread = useMemo(
     () =>
+      state.threads.find((thread) => thread.id === initialThreadId) ??
       state.threads.find((thread) => thread.id === state.activeThreadId) ??
       state.threads[0],
-    [state.activeThreadId, state.threads]
+    [initialThreadId, state.activeThreadId, state.threads]
   )
 
   const sortedThreads = useMemo(
-    () =>
-      [...state.threads].sort((a, b) => b.updatedAt - a.updatedAt),
+    () => [...state.threads].sort((a, b) => b.updatedAt - a.updatedAt),
     [state.threads]
   )
 
-  const selectThread = useCallback((threadId: string) => {
-    setState((current) => {
-      if (!current.threads.some((thread) => thread.id === threadId)) {
-        return current
+  const selectThread = useCallback(
+    (threadId: string) => {
+      const current = stateRef.current
+      const thread = current.threads.find((item) => item.id === threadId)
+      if (!thread) return undefined
+
+      if (current.activeThreadId !== threadId) {
+        commitState({ ...current, activeThreadId: threadId })
       }
-      return { ...current, activeThreadId: threadId }
-    })
-  }, [])
+      return thread
+    },
+    [commitState]
+  )
 
   const createThread = useCallback(() => {
+    const current = stateRef.current
+    const existingEmptyThread = current.threads.find(
+      (thread) => thread.messages.length === 0
+    )
+
+    if (existingEmptyThread) {
+      if (current.activeThreadId !== existingEmptyThread.id) {
+        commitState({ ...current, activeThreadId: existingEmptyThread.id })
+      }
+      return existingEmptyThread
+    }
+
     const thread = createEmptyThread()
-    setState((current) => ({
+    commitState({
       activeThreadId: thread.id,
       threads: [thread, ...current.threads],
-    }))
+    })
     return thread
-  }, [])
+  }, [commitState])
 
-  const deleteThread = useCallback((threadId: string) => {
-    setState((current) => {
-      const remaining = current.threads.filter((thread) => thread.id !== threadId)
+  const deleteThread = useCallback(
+    (threadId: string) => {
+      const current = stateRef.current
+      const remaining = current.threads.filter(
+        (thread) => thread.id !== threadId
+      )
+      if (remaining.length === current.threads.length) {
+        return (
+          current.threads.find(
+            (thread) => thread.id === current.activeThreadId
+          ) ?? current.threads[0]
+        )
+      }
+
       if (remaining.length === 0) {
         const thread = createEmptyThread()
-        return { activeThreadId: thread.id, threads: [thread] }
+        commitState({ activeThreadId: thread.id, threads: [thread] })
+        return thread
       }
 
       const activeThreadId =
         current.activeThreadId === threadId
           ? remaining[0].id
           : current.activeThreadId
-
-      return { activeThreadId, threads: remaining }
-    })
-  }, [])
-
-  const updateActiveMessages = useCallback((messages: UIMessage[]) => {
-    setState((current) => {
-      const active = current.threads.find(
-        (thread) => thread.id === current.activeThreadId
+      const nextState = { activeThreadId, threads: remaining }
+      commitState(nextState)
+      return (
+        remaining.find((thread) => thread.id === activeThreadId) ?? remaining[0]
       )
-      if (!active || active.messages === messages) {
-        return current
-      }
+    },
+    [commitState]
+  )
+
+  const updateThreadMessages = useCallback(
+    (threadId: string, messages: UIMessage[]) => {
+      const current = stateRef.current
+      const thread = current.threads.find((item) => item.id === threadId)
+      if (!thread || thread.messages === messages) return
 
       const nextThread: ChatThread = {
-        ...active,
+        ...thread,
         messages,
         updatedAt: Date.now(),
         title: titleFromMessages(messages),
       }
 
-      return {
+      commitState({
         ...current,
-        threads: current.threads.map((thread) =>
-          thread.id === nextThread.id ? nextThread : thread
+        threads: current.threads.map((item) =>
+          item.id === nextThread.id ? nextThread : item
         ),
-      }
-    })
-  }, [])
+      })
+    },
+    [commitState]
+  )
 
   return {
     activeThread,
@@ -95,6 +129,6 @@ export function useThreads() {
     selectThread,
     createThread,
     deleteThread,
-    updateActiveMessages,
+    updateThreadMessages,
   }
 }

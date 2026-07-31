@@ -90,10 +90,12 @@ export function ChatThreadView({
   threadId,
   initialMessages,
   onMessagesChange,
+  onCreateThread,
 }: {
   threadId: string;
   initialMessages: UIMessage[];
   onMessagesChange: (messages: UIMessage[]) => void;
+  onCreateThread: () => void;
 }) {
   const [input, setInput] = useState("");
   const [composerHeight, setComposerHeight] = useState(148);
@@ -154,7 +156,7 @@ export function ChatThreadView({
 
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
-      <SidebarControl />
+      <SidebarControl hasConversation={messages.length > 0} onCreateThread={onCreateThread} />
 
       <MessageScrollerProvider autoScroll={!isLoading} defaultScrollPosition="end">
         <MessageScrollerEnsureEnd threadId={threadId} hasMessages={!isEmptyThread} />

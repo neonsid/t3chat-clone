@@ -59,8 +59,11 @@ export function AppSidebar({
 
   const filteredThreads = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    if (!normalized) return threads
-    return threads.filter((thread) =>
+    const conversationThreads = threads.filter(
+      (thread) => thread.messages.length > 0
+    )
+    if (!normalized) return conversationThreads
+    return conversationThreads.filter((thread) =>
       thread.title.toLowerCase().includes(normalized)
     )
   }, [query, threads])
