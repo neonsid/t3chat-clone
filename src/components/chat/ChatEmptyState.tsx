@@ -100,7 +100,7 @@ export function ChatEmptyState({
             variant="outline"
             aria-pressed={category.id === activeCategory}
             onClick={() => setActiveCategory(category.id)}
-            className="gap-2 rounded-full px-3.5 text-muted-foreground aria-pressed:border-foreground/20 aria-pressed:bg-accent aria-pressed:text-foreground"
+            className="gap-2 rounded-full px-3.5 text-foreground aria-pressed:border-foreground/20 aria-pressed:bg-accent aria-pressed:text-foreground"
           >
             {category.icon}
             {category.label}
@@ -116,7 +116,7 @@ export function ChatEmptyState({
               type="button"
               variant="ghost"
               onClick={() => onSelectPrompt(prompt)}
-              className="h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left text-[15px] font-normal whitespace-normal text-muted-foreground"
+              className="h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left text-[15px] font-medium whitespace-normal text-foreground"
             >
               {prompt}
             </Button>
