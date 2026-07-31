@@ -126,12 +126,17 @@ export function ChatComposer({
                   aria-label={isLoading ? "Stop generating" : "Send message"}
                   disabled={isActionDisabled}
                   onClick={isLoading ? onStop : undefined}
-                  className="relative isolate flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-[color,background-color,opacity,transform,box-shadow] duration-150 active:scale-95 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100"
+                  className={cn(
+                    "relative isolate flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border transition-[color,background-color,opacity,transform,box-shadow] duration-150 active:scale-95 enabled:cursor-pointer disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100",
+                    isActionDisabled
+                      ? "border-border bg-card text-muted-foreground"
+                      : "border-transparent bg-primary text-primary-foreground shadow-xs shadow-black/5 enabled:hover:scale-105 enabled:hover:bg-[var(--primary-hover)] enabled:active:bg-[var(--primary-focus)]",
+                  )}
                 >
                   {isLoading ? (
-                    <SquareIcon className="size-3.5 fill-current" />
+                    <SquareIcon className="size-5 fill-current" />
                   ) : (
-                    <ArrowUpIcon className="size-4" />
+                    <ArrowUpIcon className="size-5" />
                   )}
                 </button>
               </span>

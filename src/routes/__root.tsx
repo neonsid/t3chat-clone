@@ -9,6 +9,8 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 
 import appCss from "../styles.css?url"
 
+import { themeBootScript } from "../lib/theme"
+
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
 }>()({
@@ -43,8 +45,9 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
       </head>
       <body className="overflow-hidden bg-background text-foreground">

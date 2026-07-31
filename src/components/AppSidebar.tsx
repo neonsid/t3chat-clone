@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon, Trash2Icon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
@@ -88,13 +87,13 @@ export function AppSidebar({
         </div>
 
         <div className="flex flex-col gap-3 px-2 pb-3">
-          <Button
+          <button
             type="button"
             onClick={onCreateThread}
-            className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar-accent text-sm font-medium text-sidebar-foreground shadow-[inset_0_1px_0_rgb(255_255_255/6%)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_12%,transparent)] hover:text-sidebar-accent-foreground"
+            className="sidebar-new-chat-button inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           >
             New Chat
-          </Button>
+          </button>
 
           <div className="group flex flex-col">
             <label className="flex cursor-text items-center gap-2 py-2">

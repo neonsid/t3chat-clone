@@ -6,7 +6,6 @@ import { ModelPickerFilterMenu } from "@/components/chat/model-picker/ModelPicke
 import { ModelPickerList } from "@/components/chat/model-picker/ModelPickerList"
 import { ModelPickerRail } from "@/components/chat/model-picker/ModelPickerRail"
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
-import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import {
   filterModels,
   ignoresRailScope,
@@ -88,12 +87,6 @@ export function ModelPicker({ className }: ModelPickerProps) {
           />
         }
       >
-        {selectedModel ? (
-          <ProviderLogo
-            providerId={selectedModel.providerId}
-            className="size-4"
-          />
-        ) : null}
         <span className="truncate">
           {selectedModel?.name ?? "Select model"}
         </span>

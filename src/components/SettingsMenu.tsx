@@ -14,40 +14,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useMountEffect } from "@/hooks/useMountEffect"
+import {
+  applyTheme,
+  isColorSchemePreference,
+  readColorSchemePreference,
+  storeColorSchemePreference,
+  type ColorSchemePreference,
+} from "@/lib/theme"
 import { cn } from "@/lib/utils"
-
-type ThemePreference = "light" | "system" | "dark"
-
-const THEME_STORAGE_KEY = "t3chat-theme"
-
-function isThemePreference(value: string | null): value is ThemePreference {
-  return value === "light" || value === "system" || value === "dark"
-}
-
-function readThemePreference(): ThemePreference {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
-    return isThemePreference(stored) ? stored : "system"
-  } catch {
-    return "system"
-  }
-}
-
-function applyTheme(preference: ThemePreference) {
-  const isDark =
-    preference === "dark" ||
-    (preference === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches)
-  document.documentElement.classList.toggle("dark", isDark)
-}
-
-function storeThemePreference(preference: ThemePreference) {
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, preference)
-  } catch {
-    // The preference still applies for the current page when storage is blocked.
-  }
-}
 
 export function SettingsMenu({
   triggerClassName,
@@ -55,13 +29,13 @@ export function SettingsMenu({
   triggerClassName?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [theme, setTheme] = useState<ThemePreference>("system")
+  const [theme, setTheme] = useState<ColorSchemePreference>("system")
 
   useMountEffect(() => {
-    const initialTheme = readThemePreference()
+    const initialTheme = readColorSchemePreference()
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
     const handleSystemThemeChange = () => {
-      if (readThemePreference() === "system") applyTheme("system")
+      if (readColorSchemePreference() === "system") applyTheme("system")
     }
 
     setTheme(initialTheme)
@@ -74,9 +48,9 @@ export function SettingsMenu({
   })
 
   function handleThemeChange(value: string) {
-    if (!isThemePreference(value)) return
+    if (!isColorSchemePreference(value)) return
     setTheme(value)
-    storeThemePreference(value)
+    storeColorSchemePreference(value)
     applyTheme(value)
   }
 
