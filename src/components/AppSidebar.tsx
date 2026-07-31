@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon, Trash2Icon } from "lucide-react"
+import * as m from "motion/react-m"
 
 import { Separator } from "@/components/ui/separator"
 import {
@@ -90,13 +91,15 @@ export function AppSidebar({
         </div>
 
         <div className="flex flex-col gap-3 px-2 pb-3">
-          <button
+          <m.button
             type="button"
             onClick={onCreateThread}
+            whileTap={{ scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 500, damping: 16 }}
             className="sidebar-new-chat-button inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           >
             New Chat
-          </button>
+          </m.button>
 
           <div className="group flex flex-col">
             <label className="flex cursor-text items-center gap-2 py-2">

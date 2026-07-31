@@ -27,7 +27,8 @@ export function SidebarControl({
   onCreateThread: () => void;
 }) {
   const { open } = useSidebar();
-  const highlightedControlClass = hasConversation && "bg-sidebar-accent text-foreground";
+  const highlightedIconClass = "[&_svg]:stroke-foreground";
+  const highlightedPlusIconClass = hasConversation && highlightedIconClass;
   return (
     <div
       className={cn(
@@ -39,7 +40,7 @@ export function SidebarControl({
         className={cn(
           "pointer-events-auto text-muted-foreground hover:rounded-md",
           !open && "hover:bg-sidebar-accent hover:text-foreground",
-          !open && highlightedControlClass,
+          !open && highlightedIconClass,
         )}
       />
       {!open && (
@@ -49,20 +50,26 @@ export function SidebarControl({
             variant="ghost"
             size="icon-sm"
             aria-label="Search"
-            className={cn(controlButtonClass, highlightedControlClass)}
+            className={cn(controlButtonClass, highlightedIconClass)}
           >
             <SearchIcon />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="New chat"
-            className={cn(controlButtonClass, highlightedControlClass)}
-            onClick={onCreateThread}
+          <m.div
+            className="pointer-events-auto size-8"
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 500, damping: 16 }}
           >
-            <PlusIcon />
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="New chat"
+              className={cn(controlButtonClass, highlightedPlusIconClass)}
+              onClick={onCreateThread}
+            >
+              <PlusIcon />
+            </Button>
+          </m.div>
         </>
       )}
     </div>
