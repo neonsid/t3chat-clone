@@ -1,22 +1,22 @@
-import { useMemo, useRef, useState } from "react"
-import type { ReactNode } from "react"
-import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
-import type { UIMessage } from "@tanstack/ai-react"
-import { createFileRoute } from "@tanstack/react-router"
-import { ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
-import { LazyMotion, domAnimation } from "motion/react"
-import * as m from "motion/react-m"
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
+import type { UIMessage } from "@tanstack/ai-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { ClockIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { LazyMotion, domAnimation } from "motion/react";
+import * as m from "motion/react-m";
 
-import { AppSidebar } from "@/components/AppSidebar"
-import { SettingsMenu } from "@/components/SettingsMenu"
-import { BouncingDots } from "@/components/chat/BouncingDots"
-import { ChatComposer } from "@/components/chat/ChatComposer"
-import { ChatEmptyState } from "@/components/chat/ChatEmptyState"
-import { ChatMessage } from "@/components/chat/ChatMessage"
-import { TimelineMinimap } from "@/components/chat/TimelineMinimap"
-import type { TimelineMinimapItem } from "@/components/chat/TimelineMinimap"
-import { resolveTimelineMinimapPreviewText } from "@/components/chat/timelineMinimapLogic"
-import { Button } from "@/components/ui/button"
+import { AppSidebar } from "@/components/AppSidebar";
+import { SettingsMenu } from "@/components/SettingsMenu";
+import { BouncingDots } from "@/components/chat/BouncingDots";
+import { ChatComposer } from "@/components/chat/ChatComposer";
+import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
+import { ChatMessage } from "@/components/chat/ChatMessage";
+import { TimelineMinimap } from "@/components/chat/TimelineMinimap";
+import type { TimelineMinimapItem } from "@/components/chat/TimelineMinimap";
+import { resolveTimelineMinimapPreviewText } from "@/components/chat/timelineMinimapLogic";
+import { Button } from "@/components/ui/button";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -24,18 +24,14 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
-} from "@/components/ui/message-scroller"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-  useSidebar,
-} from "@/components/ui/sidebar"
-import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect"
-import { useThreads } from "@/hooks/useThreads"
-import { cn } from "@/lib/utils"
+  useMessageScroller,
+} from "@/components/ui/message-scroller";
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect";
+import { useThreads } from "@/hooks/useThreads";
+import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/")({ component: ChatPage })
+export const Route = createFileRoute("/")({ component: ChatPage });
 
 /**
  * Chrome buttons hover against either the #161616 chip or the near-black gutter
@@ -44,25 +40,24 @@ export const Route = createFileRoute("/")({ component: ChatPage })
  * the chip and disappears against it.
  */
 const controlButtonClass =
-  "pointer-events-auto rounded-md bg-[#161616] text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+  "pointer-events-auto rounded-md bg-[#161616] text-muted-foreground hover:bg-sidebar-accent hover:text-foreground";
 
 const notchButtonClass =
-  "pointer-events-auto rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+  "pointer-events-auto rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground";
 
 function SidebarControl() {
-  const { open } = useSidebar()
+  const { open } = useSidebar();
   return (
     <div
       className={cn(
         "pointer-events-none fixed top-3 left-3 z-60 flex items-center gap-0.5",
-        !open && "rounded-md bg-[#161616] ring-4 ring-[#161616]"
+        !open && "rounded-md bg-[#161616] ring-4 ring-[#161616]",
       )}
     >
       <SidebarTrigger
         className={cn(
           "pointer-events-auto text-muted-foreground",
-          !open &&
-            "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground"
+          !open && "hover:rounded-md hover:bg-sidebar-accent hover:text-foreground",
         )}
       />
       {!open && (
@@ -88,12 +83,12 @@ function SidebarControl() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 /* Matches the gutter around the inset canvas, not the canvas itself. */
-const HEADER_NOTCH_FILL = "var(--sidebar)"
-const HEADER_NOTCH_STROKE = "rgb(255 255 255 / 10%)"
+const HEADER_NOTCH_FILL = "var(--sidebar)";
+const HEADER_NOTCH_STROKE = "rgb(255 255 255 / 10%)";
 
 /**
  * The curve has to break just left of the header buttons, so the notch is
@@ -101,7 +96,7 @@ const HEADER_NOTCH_STROKE = "rgb(255 255 255 / 10%)"
  * buttons + the 3.5rem lead-in the path needs before the S bend, less the
  * 11rem the element is wide. The flat tail runs off the right edge.
  */
-const HEADER_NOTCH_RIGHT = "calc(0.75rem + 4.125rem + 3.5rem - 11rem)"
+const HEADER_NOTCH_RIGHT = "calc(0.75rem + 4.125rem + 3.5rem - 11rem)";
 
 /**
  * Skewed S-curve that sweeps the header surface down into the canvas, so the
@@ -133,7 +128,7 @@ function ChatHeaderNotch() {
         vectorEffect="non-scaling-stroke"
       />
     </svg>
-  )
+  );
 }
 
 /**
@@ -150,18 +145,18 @@ function ChatShellEdge({ visible }: { visible: boolean }) {
       aria-hidden="true"
       className={cn(
         "pointer-events-none absolute inset-0 z-50 border-t border-l border-white/10 transition-[opacity,border-radius] duration-200 ease-linear",
-        visible ? "rounded-tl-2xl opacity-100" : "opacity-0"
+        visible ? "rounded-tl-2xl opacity-100" : "opacity-0",
       )}
     >
       <ChatHeaderNotch />
     </div>
-  )
+  );
 }
 
 /* #161616, in the comma syntax Motion's colour parser accepts, so the chip can
    fade its alpha out without travelling through another hue. */
-const HEADER_CHIP_SURFACE = "rgba(22, 22, 22, 1)"
-const HEADER_CHIP_SURFACE_HIDDEN = "rgba(22, 22, 22, 0)"
+const HEADER_CHIP_SURFACE = "rgba(22, 22, 22, 1)";
+const HEADER_CHIP_SURFACE_HIDDEN = "rgba(22, 22, 22, 0)";
 
 /**
  * Off the notch the buttons need their own chip to stand off the canvas; on it
@@ -170,8 +165,8 @@ const HEADER_CHIP_SURFACE_HIDDEN = "rgba(22, 22, 22, 0)"
  * crossfade with no CSS transition of its own to stay in step with.
  */
 function ChatHeaderActions() {
-  const { isMobile, open } = useSidebar()
-  const onNotch = open && !isMobile
+  const { isMobile, open } = useSidebar();
+  const onNotch = open && !isMobile;
 
   return (
     <div className="pointer-events-none fixed top-[10px] right-3 z-60">
@@ -180,9 +175,7 @@ function ChatHeaderActions() {
         initial={false}
         animate={{
           y: onNotch ? 8 : 0,
-          backgroundColor: onNotch
-            ? HEADER_CHIP_SURFACE_HIDDEN
-            : HEADER_CHIP_SURFACE,
+          backgroundColor: onNotch ? HEADER_CHIP_SURFACE_HIDDEN : HEADER_CHIP_SURFACE,
         }}
         transition={{ duration: 0.2, ease: "linear" }}
       >
@@ -205,43 +198,37 @@ function ChatHeaderActions() {
         </m.div>
       </m.div>
     </div>
-  )
+  );
 }
 
 function ChatShell({ children }: { children: ReactNode }) {
-  const { isMobile, open } = useSidebar()
-  const showSidebarEdge = open && !isMobile
+  const { isMobile, open } = useSidebar();
+  const showSidebarEdge = open && !isMobile;
 
   return (
     <div
       data-chat-shell=""
       className={cn(
         "relative flex min-h-0 min-w-0 flex-1 transition-[margin] duration-200 ease-linear",
-        showSidebarEdge && "mt-3"
+        showSidebarEdge && "mt-3",
       )}
     >
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background transition-[border-radius] duration-200 ease-linear",
-          showSidebarEdge && "rounded-tl-2xl"
+          showSidebarEdge && "rounded-tl-2xl",
         )}
       >
         {children}
       </div>
       <ChatShellEdge visible={showSidebarEdge} />
     </div>
-  )
+  );
 }
 
 function ChatPage() {
-  const {
-    activeThread,
-    threads,
-    selectThread,
-    createThread,
-    deleteThread,
-    updateActiveMessages,
-  } = useThreads()
+  const { activeThread, threads, selectThread, createThread, deleteThread, updateActiveMessages } =
+    useThreads();
 
   return (
     <LazyMotion features={domAnimation}>
@@ -266,32 +253,30 @@ function ChatPage() {
         </ChatShell>
       </SidebarProvider>
     </LazyMotion>
-  )
+  );
 }
 
 function messageText(message: UIMessage) {
-  let text = ""
+  let text = "";
   for (const part of message.parts) {
-    if (part.type !== "text") continue
-    text += `${text ? " " : ""}${part.content}`
+    if (part.type !== "text") continue;
+    text += `${text ? " " : ""}${part.content}`;
   }
-  return text
+  return text;
 }
 
-function deriveTimelineMinimapItems(
-  messages: UIMessage[]
-): TimelineMinimapItem[] {
-  const items: TimelineMinimapItem[] = []
+function deriveTimelineMinimapItems(messages: UIMessage[]): TimelineMinimapItem[] {
+  const items: TimelineMinimapItem[] = [];
 
   for (const [index, message] of messages.entries()) {
-    if (message.role !== "user") continue
+    if (message.role !== "user") continue;
 
-    let assistantText: string | null = null
+    let assistantText: string | null = null;
     for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex++) {
-      const next = messages[nextIndex]
-      if (next.role === "user") break
+      const next = messages[nextIndex];
+      if (next.role === "user") break;
       if (next.role === "assistant") {
-        assistantText = resolveTimelineMinimapPreviewText(messageText(next))
+        assistantText = resolveTimelineMinimapPreviewText(messageText(next));
       }
     }
 
@@ -299,40 +284,77 @@ function deriveTimelineMinimapItems(
       id: message.id,
       userText: resolveTimelineMinimapPreviewText(messageText(message)),
       assistantText,
-    })
+    });
   }
 
-  return items
+  return items;
 }
 
 function focusComposerInput() {
-  document
-    .querySelector<HTMLTextAreaElement>("[data-chat-composer-input]")
-    ?.focus()
-}
-
-function scrollToMessage(item: TimelineMinimapItem) {
-  const target = document.querySelector(
-    `[data-message-id="${CSS.escape(item.id)}"]`
-  )
-  target?.scrollIntoView({ behavior: "smooth", block: "center" })
+  document.querySelector<HTMLTextAreaElement>("[data-chat-composer-input]")?.focus();
 }
 
 function pairMessagesWithPreviousUser(messages: UIMessage[]) {
   const pairs: Array<{
-    message: UIMessage
-    previousUserCreatedAt: UIMessage["createdAt"] | null
-  }> = []
-  let previousUserCreatedAt: UIMessage["createdAt"] | null = null
+    message: UIMessage;
+    previousUserCreatedAt: UIMessage["createdAt"] | null;
+  }> = [];
+  let previousUserCreatedAt: UIMessage["createdAt"] | null = null;
 
   for (const message of messages) {
-    pairs.push({ message, previousUserCreatedAt })
+    pairs.push({ message, previousUserCreatedAt });
     if (message.role === "user") {
-      previousUserCreatedAt = message.createdAt ?? null
+      previousUserCreatedAt = message.createdAt ?? null;
     }
   }
 
-  return pairs
+  return pairs;
+}
+
+function findLastUserMessageId(messages: UIMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index]?.role === "user") {
+      return messages[index].id;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
+ * can land short because message items use content-visibility placeholders until
+ * painted. Re-scroll after layout settles so the last assistant message is visible
+ * on thread load. Runs once per thread (or when a thread gains its first message),
+ * not when streaming ends, so a user who scrolled up during a response stays put.
+ */
+function MessageScrollerEnsureEnd({
+  threadId,
+  hasMessages,
+}: {
+  threadId: string;
+  hasMessages: boolean;
+}) {
+  const { scrollToEnd } = useMessageScroller();
+
+  useLayoutEffect(() => {
+    if (!hasMessages) return;
+
+    scrollToEnd({ behavior: "auto" });
+
+    let frame = 0;
+    const timeout = window.setTimeout(() => {
+      scrollToEnd({ behavior: "auto" });
+      frame = requestAnimationFrame(() => scrollToEnd({ behavior: "auto" }));
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timeout);
+      cancelAnimationFrame(frame);
+    };
+  }, [threadId, hasMessages, scrollToEnd]);
+
+  return null;
 }
 
 function ChatThreadView({
@@ -340,115 +362,105 @@ function ChatThreadView({
   initialMessages,
   onMessagesChange,
 }: {
-  threadId: string
-  initialMessages: UIMessage[]
-  onMessagesChange: (messages: UIMessage[]) => void
+  threadId: string;
+  initialMessages: UIMessage[];
+  onMessagesChange: (messages: UIMessage[]) => void;
 }) {
-  const [input, setInput] = useState("")
-  const [composerHeight, setComposerHeight] = useState(148)
-  const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
-  const composerOverlayRef = useRef<HTMLDivElement | null>(null)
+  const [input, setInput] = useState("");
+  const [composerHeight, setComposerHeight] = useState(148);
+  const [workStartedAt, setWorkStartedAt] = useState<number | null>(null);
+  const composerOverlayRef = useRef<HTMLDivElement | null>(null);
 
   const { messages, sendMessage, isLoading, error } = useChat({
     id: threadId,
     initialMessages,
     connection: fetchServerSentEvents("/api/chat"),
-  })
+  });
 
-  useValueEffect(messages, onMessagesChange)
+  useValueEffect(messages, onMessagesChange);
 
   useMountEffect(() => {
-    const element = composerOverlayRef.current
-    if (!element) return
+    const element = composerOverlayRef.current;
+    if (!element) return;
 
     const updateHeight = () => {
-      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
-    }
+      setComposerHeight(Math.ceil(element.getBoundingClientRect().height));
+    };
 
-    updateHeight()
+    updateHeight();
     const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateHeight)
-    observer?.observe(element)
-    window.addEventListener("resize", updateHeight)
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
+    observer?.observe(element);
+    window.addEventListener("resize", updateHeight);
 
     return () => {
-      observer?.disconnect()
-      window.removeEventListener("resize", updateHeight)
-    }
-  })
+      observer?.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  });
 
-  const isEmptyThread = messages.length === 0
-  const showEmptyState = isEmptyThread && input.trim().length === 0
-  const lastMessage = messages.at(-1)
-  const showPendingDots = isLoading && lastMessage?.role === "user"
+  const isEmptyThread = messages.length === 0;
+  const showEmptyState = isEmptyThread && input.trim().length === 0;
+  const lastMessage = messages.at(-1);
+  const showPendingDots = isLoading && lastMessage?.role === "user";
 
-  const minimapItems = useMemo(
-    () => deriveTimelineMinimapItems(messages),
-    [messages]
-  )
+  const minimapItems = useMemo(() => deriveTimelineMinimapItems(messages), [messages]);
 
   function submitMessage(content = input.trim()) {
-    if (!content || isLoading) return
+    if (!content || isLoading) return;
 
-    setWorkStartedAt(Date.now())
-    setInput("")
-    void sendMessage(content)
+    setWorkStartedAt(Date.now());
+    setInput("");
+    void sendMessage(content);
   }
 
   function fillPrompt(prompt: string) {
-    setInput(prompt)
-    queueMicrotask(focusComposerInput)
+    setInput(prompt);
+    queueMicrotask(focusComposerInput);
   }
 
-  const activeWorkedMs =
-    isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
-  const messagePairs = pairMessagesWithPreviousUser(messages)
+  const activeWorkedMs = isLoading && workStartedAt != null ? Date.now() - workStartedAt : null;
+  const messagePairs = pairMessagesWithPreviousUser(messages);
+  const latestUserMessageId = findLastUserMessageId(messages);
 
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
       <SidebarControl />
 
-      <div
-        className="absolute inset-0 z-0 overflow-hidden"
-        style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
-      >
-        {!isEmptyThread && (
-          <TimelineMinimap
-            items={minimapItems}
-            bottomInset={0}
-            onSelect={scrollToMessage}
-          />
-        )}
+      <MessageScrollerProvider autoScroll={!isLoading} defaultScrollPosition="end">
+        <MessageScrollerEnsureEnd threadId={threadId} hasMessages={!isEmptyThread} />
+        <div
+          className="absolute inset-0 z-0 overflow-hidden"
+          style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
+        >
+          {!isEmptyThread && <ChatTimelineMinimap items={minimapItems} bottomInset={0} />}
 
-        {showEmptyState ? (
-          <div className="flex size-full flex-col items-center overflow-y-auto">
-            {/* mt-auto rather than justify-end so the block still scrolls from
-                its top on short viewports instead of overflowing out of reach. */}
-            <ChatEmptyState
-              className="mt-auto pt-20 pb-4"
-              onSelectPrompt={fillPrompt}
-            />
-          </div>
-        ) : (
-          <MessageScrollerProvider>
+          {showEmptyState ? (
+            <div className="flex size-full flex-col items-center overflow-y-auto">
+              {/* mt-auto rather than justify-end so the block still scrolls from
+                  its top on short viewports instead of overflowing out of reach. */}
+              <ChatEmptyState className="mt-auto pt-20 pb-4" onSelectPrompt={fillPrompt} />
+            </div>
+          ) : (
             <MessageScroller>
               <MessageScrollerViewport>
                 <MessageScrollerContent
+                  aria-busy={isLoading}
                   className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
                   {messagePairs.map(({ message, previousUserCreatedAt }) => {
                     const isStreaming =
                       isLoading &&
                       message.role === "assistant" &&
-                      message.id === messages.at(-1)?.id
+                      message.id === messages.at(-1)?.id;
 
                     return (
                       <MessageScrollerItem
                         key={message.id}
                         messageId={message.id}
-                        data-message-id={message.id}
+                        scrollAnchor={
+                          isLoading && message.id === latestUserMessageId
+                        }
                       >
                         <ChatMessage
                           message={message}
@@ -457,7 +469,7 @@ function ChatThreadView({
                           workedMs={isStreaming ? activeWorkedMs : null}
                         />
                       </MessageScrollerItem>
-                    )
+                    );
                   })}
 
                   {showPendingDots ? (
@@ -469,14 +481,9 @@ function ChatThreadView({
               </MessageScrollerViewport>
               {!isEmptyThread && <MessageScrollerButton />}
             </MessageScroller>
-          </MessageScrollerProvider>
-        )}
-      </div>
-
-      <div
-        aria-hidden="true"
-        className="chat-canvas-top-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-20"
-      />
+          )}
+        </div>
+      </MessageScrollerProvider>
 
       <div
         ref={composerOverlayRef}
@@ -486,10 +493,7 @@ function ChatThreadView({
         <div className="chat-composer-horizontal-inset w-full">
           <div className="pointer-events-auto relative z-10">
             {error && (
-              <p
-                className="mb-2 px-1 text-center text-sm text-destructive"
-                role="alert"
-              >
+              <p className="mb-2 px-1 text-center text-sm text-destructive" role="alert">
                 {error.message}
               </p>
             )}
@@ -499,14 +503,35 @@ function ChatThreadView({
               onSubmit={() => submitMessage()}
               isLoading={isLoading}
               placeholder={
-                isEmptyThread
-                  ? "Type your message here..."
-                  : "Ask for follow-up changes..."
+                isEmptyThread ? "Type your message here..." : "Ask for follow-up changes..."
               }
             />
           </div>
         </div>
       </div>
     </div>
-  )
+  );
+}
+
+function ChatTimelineMinimap({
+  items,
+  bottomInset,
+}: {
+  items: TimelineMinimapItem[];
+  bottomInset: number;
+}) {
+  const { scrollToMessage } = useMessageScroller();
+
+  return (
+    <TimelineMinimap
+      items={items}
+      bottomInset={bottomInset}
+      onSelect={(item) => {
+        scrollToMessage(item.id, {
+          align: "center",
+          behavior: "smooth",
+        });
+      }}
+    />
+  );
 }

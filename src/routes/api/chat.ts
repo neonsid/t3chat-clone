@@ -1,6 +1,6 @@
-import { chat, toServerSentEventsResponse } from "@tanstack/ai";
-import { openaiText } from "@tanstack/ai-openai";
-import { createFileRoute } from "@tanstack/react-router";
+import { chat, toServerSentEventsResponse } from "@tanstack/ai"
+import { openaiText } from "@tanstack/ai-openai"
+import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -15,11 +15,11 @@ export const Route = createFileRoute("/api/chat")({
             {
               status: 500,
               headers: { "Content-Type": "application/json" },
-            },
-          );
+            }
+          )
         }
 
-        const body = await request.json();
+        const body = await request.json()
 
         try {
           // Create a streaming chat response. `chat()` reads the AG-UI
@@ -27,10 +27,16 @@ export const Route = createFileRoute("/api/chat")({
           const stream = chat({
             adapter: openaiText("gpt-5.5"),
             messages: body.messages,
-          });
+          })
 
           // Convert stream to HTTP response
-          return toServerSentEventsResponse(stream);
+          return toServerSentEventsResponse(stream, {
+            headers: {
+              "Cache-Control": "no-cache, no-transform",
+              "X-Accel-Buffering": "no",
+              "X-Content-Type-Options": "nosniff",
+            },
+          })
         } catch (error) {
           return new Response(
             JSON.stringify({
@@ -40,10 +46,10 @@ export const Route = createFileRoute("/api/chat")({
             {
               status: 500,
               headers: { "Content-Type": "application/json" },
-            },
-          );
+            }
+          )
         }
       },
     },
   },
-});
+})

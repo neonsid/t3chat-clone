@@ -167,7 +167,7 @@ export function ChatMessage({
           <div className="text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0">
             <Streamdown
               lineNumbers={false}
-              mode={isStreaming ? "streaming" : "static"}
+              mode="static"
               plugins={streamdownPlugins}
             >
               {text}
