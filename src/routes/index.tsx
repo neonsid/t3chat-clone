@@ -371,7 +371,7 @@ function ChatThreadView({
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null);
   const composerOverlayRef = useRef<HTMLDivElement | null>(null);
 
-  const { messages, sendMessage, isLoading, error } = useChat({
+  const { messages, sendMessage, stop, isLoading, error } = useChat({
     id: threadId,
     initialMessages,
     connection: fetchServerSentEvents("/api/chat"),
@@ -501,6 +501,7 @@ function ChatThreadView({
               value={input}
               onChange={setInput}
               onSubmit={() => submitMessage()}
+              onStop={stop}
               isLoading={isLoading}
               placeholder={
                 isEmptyThread ? "Type your message here..." : "Ask for follow-up changes..."

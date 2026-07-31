@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
-import { GlobeIcon, LoaderCircleIcon, PaperclipIcon } from "lucide-react"
+import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import { ReasoningEffortSelect } from "@/components/chat/ReasoningEffortSelect"
@@ -12,6 +12,7 @@ interface ChatComposerProps {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
+  onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
   placeholder?: string
@@ -22,6 +23,7 @@ export function ChatComposer({
   value,
   onChange,
   onSubmit,
+  onStop,
   isLoading = false,
   disabled = false,
   placeholder = "Type your message here...",
@@ -32,6 +34,13 @@ export function ChatComposer({
     useState<ReasoningEffort>("instant")
   const [searchEnabled, setSearchEnabled] = useState(false)
   const canSend = value.trim().length > 0 && !isLoading && !disabled
+  const canStop = isLoading && !disabled && Boolean(onStop)
+  const isActionDisabled = isLoading ? !canStop : !canSend
+  const actionTooltip = isLoading
+    ? "Stop generating"
+    : canSend
+      ? "Send message"
+      : "Message requires text"
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -105,32 +114,28 @@ export function ChatComposer({
               </Tooltip>
             </div>
 
-            <button
-              type="submit"
-              aria-label={isLoading ? "Sending" : "Send message"}
-              disabled={!canSend}
-              className="relative isolate flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-[color,background-color,opacity,transform,box-shadow] duration-150 active:scale-95 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100"
-            >
-              {isLoading ? (
-                <LoaderCircleIcon className="size-3.5 animate-spin" />
-              ) : (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  aria-hidden="true"
+            <Tooltip content={actionTooltip}>
+              <span
+                className={cn(
+                  "inline-flex",
+                  isActionDisabled && "cursor-not-allowed"
+                )}
+              >
+                <button
+                  type={isLoading ? "button" : "submit"}
+                  aria-label={isLoading ? "Stop generating" : "Send message"}
+                  disabled={isActionDisabled}
+                  onClick={isLoading ? onStop : undefined}
+                  className="relative isolate flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 transition-[color,background-color,opacity,transform,box-shadow] duration-150 active:scale-95 enabled:cursor-pointer enabled:hover:scale-105 enabled:hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100"
                 >
-                  <path
-                    d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </button>
+                  {isLoading ? (
+                    <SquareIcon className="size-3.5 fill-current" />
+                  ) : (
+                    <ArrowUpIcon className="size-4" />
+                  )}
+                </button>
+              </span>
+            </Tooltip>
           </div>
         </form>
       </div>
