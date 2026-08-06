@@ -1,0 +1,366 @@
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
+import type { UIMessage } from "@tanstack/ai-react"
+import type { StreamChunk } from "@tanstack/ai/client"
+
+import { ChatComposer } from "@/components/chat/composer/ChatComposer"
+import type { ReasoningEffort } from "@/components/chat/composer/ReasoningEffortSelect"
+import { SidebarControl } from "@/components/chat/shell/ChatShellChrome"
+import { BouncingDots } from "@/components/chat/thread/BouncingDots"
+import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
+import { ChatMessage } from "@/components/chat/thread/ChatMessage"
+import {
+  createChatPersistence,
+  deriveTimelineMinimapItems,
+  findLastUserMessageId,
+  focusComposerInput,
+  pairMessagesWithPreviousUser,
+} from "@/components/chat/thread/logic"
+import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
+import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+  useMessageScroller,
+} from "@/components/shared/ui/message-scroller"
+import { useMountEffect } from "@/hooks/useMountEffect"
+import { getModelById, getModelStoreState } from "@/lib/model-store"
+import type { AssistantGenerationStats } from "@/lib/threads"
+import { cn } from "@/lib/utils"
+
+type ActiveGeneration = {
+  startedAt: number
+  firstTokenAt: number | null
+  finishedAt: number | null
+  outputTokens: number | null
+  modelName: string
+  mode: string
+}
+
+function formatReasoningEffort(reasoningEffort: ReasoningEffort) {
+  return `${reasoningEffort.charAt(0).toUpperCase()}${reasoningEffort.slice(1)}`
+}
+
+function isContentChunk(chunk: StreamChunk) {
+  return (
+    chunk.type === "TEXT_MESSAGE_CONTENT" ||
+    String(chunk.type) === "THINKING_TEXT_MESSAGE_CONTENT" ||
+    chunk.type === "REASONING_MESSAGE_CONTENT"
+  )
+}
+
+/**
+ * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
+ * can land short because message items use content-visibility placeholders until
+ * painted. Re-scroll after layout settles so the last assistant message is visible
+ * on thread load. Runs once per thread (or when a thread gains its first message),
+ * not when streaming ends, so a user who scrolled up during a response stays put.
+ */
+function MessageScrollerEnsureEnd({
+  threadId,
+  hasMessages,
+}: {
+  threadId: string
+  hasMessages: boolean
+}) {
+  const { scrollToEnd } = useMessageScroller()
+
+  useLayoutEffect(() => {
+    if (!hasMessages) return
+
+    scrollToEnd({ behavior: "auto" })
+
+    let frame = 0
+    const timeout = window.setTimeout(() => {
+      scrollToEnd({ behavior: "auto" })
+      frame = requestAnimationFrame(() => scrollToEnd({ behavior: "auto" }))
+    }, 120)
+
+    return () => {
+      window.clearTimeout(timeout)
+      cancelAnimationFrame(frame)
+    }
+  }, [threadId, hasMessages, scrollToEnd])
+
+  return null
+}
+
+function ChatTimelineMinimap({
+  items,
+  bottomInset,
+}: {
+  items: TimelineMinimapItem[]
+  bottomInset: number
+}) {
+  const { scrollToMessage } = useMessageScroller()
+
+  return (
+    <TimelineMinimap
+      items={items}
+      bottomInset={bottomInset}
+      onSelect={(item) => {
+        scrollToMessage(item.id, {
+          align: "center",
+          behavior: "smooth",
+        })
+      }}
+    />
+  )
+}
+
+export function ChatThreadView({
+  threadId,
+  initialMessages,
+  generationStats,
+  onMessagesChange,
+  onGenerationStatsChange,
+  onCreateThread,
+}: {
+  threadId: string
+  initialMessages: UIMessage[]
+  generationStats: Record<string, AssistantGenerationStats>
+  onMessagesChange: (messages: UIMessage[]) => void
+  onGenerationStatsChange: (
+    messageId: string,
+    generationStats: AssistantGenerationStats
+  ) => void
+  onCreateThread: () => void
+}) {
+  const [input, setInput] = useState("")
+  const [composerHeight, setComposerHeight] = useState(148)
+  const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
+  const composerOverlayRef = useRef<HTMLDivElement | null>(null)
+  const activeGenerationRef = useRef<ActiveGeneration | null>(null)
+  const [chatPersistence] = useState(() =>
+    createChatPersistence(initialMessages, onMessagesChange)
+  )
+
+  const { messages, sendMessage, stop, isLoading, error } = useChat({
+    id: threadId,
+    initialMessages,
+    persistence: chatPersistence,
+    connection: fetchServerSentEvents("/api/chat"),
+    onChunk(chunk) {
+      const activeGeneration = activeGenerationRef.current
+      if (!activeGeneration) return
+
+      const now = performance.now()
+      if (activeGeneration.firstTokenAt == null && isContentChunk(chunk)) {
+        activeGeneration.firstTokenAt = now
+      }
+
+      if (chunk.type === "RUN_FINISHED") {
+        activeGeneration.finishedAt = now
+        activeGeneration.outputTokens = chunk.usage?.completionTokens ?? null
+      }
+    },
+    onFinish(message) {
+      const activeGeneration = activeGenerationRef.current
+      activeGenerationRef.current = null
+      if (
+        !activeGeneration ||
+        activeGeneration.firstTokenAt == null ||
+        activeGeneration.outputTokens == null
+      ) {
+        return
+      }
+
+      const finishedAt = activeGeneration.finishedAt ?? performance.now()
+      const generationSeconds = Math.max(
+        (finishedAt - activeGeneration.firstTokenAt) / 1000,
+        0.001
+      )
+
+      onGenerationStatsChange(message.id, {
+        modelName: activeGeneration.modelName,
+        mode: activeGeneration.mode,
+        outputTokens: activeGeneration.outputTokens,
+        tokensPerSecond: activeGeneration.outputTokens / generationSeconds,
+        timeToFirstTokenSeconds:
+          (activeGeneration.firstTokenAt - activeGeneration.startedAt) / 1000,
+      })
+    },
+    onError() {
+      activeGenerationRef.current = null
+    },
+  })
+
+  useMountEffect(() => {
+    const element = composerOverlayRef.current
+    if (!element) return
+
+    const updateHeight = () => {
+      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
+    }
+
+    updateHeight()
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateHeight)
+    observer?.observe(element)
+    window.addEventListener("resize", updateHeight)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", updateHeight)
+    }
+  })
+
+  const isEmptyThread = messages.length === 0
+  const showEmptyState = isEmptyThread && input.trim().length === 0
+  const lastMessage = messages.at(-1)
+  const showPendingDots = isLoading && lastMessage?.role === "user"
+
+  const minimapItems = useMemo(
+    () => deriveTimelineMinimapItems(messages),
+    [messages]
+  )
+
+  function submitMessage(
+    content = input.trim(),
+    reasoningEffort: ReasoningEffort = "instant"
+  ) {
+    if (!content || isLoading) return
+
+    const modelState = getModelStoreState()
+    const selectedModel = getModelById(modelState.selectedModelId)
+    activeGenerationRef.current = {
+      startedAt: performance.now(),
+      firstTokenAt: null,
+      finishedAt: null,
+      outputTokens: null,
+      modelName: selectedModel?.name ?? modelState.selectedModelId,
+      mode: formatReasoningEffort(reasoningEffort),
+    }
+    setWorkStartedAt(Date.now())
+    setInput("")
+    void sendMessage(content)
+  }
+
+  function fillPrompt(prompt: string) {
+    setInput(prompt)
+    queueMicrotask(focusComposerInput)
+  }
+
+  const activeWorkedMs =
+    isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
+  const messagePairs = pairMessagesWithPreviousUser(messages)
+  const latestUserMessageId = findLastUserMessageId(messages)
+
+  return (
+    <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
+      <SidebarControl
+        hasConversation={messages.length > 0}
+        onCreateThread={onCreateThread}
+      />
+
+      <MessageScrollerProvider
+        autoScroll={!isLoading}
+        defaultScrollPosition="end"
+      >
+        <MessageScrollerEnsureEnd
+          threadId={threadId}
+          hasMessages={!isEmptyThread}
+        />
+        <div
+          className="absolute inset-0 z-0 overflow-hidden"
+          style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
+        >
+          {!isEmptyThread && (
+            <ChatTimelineMinimap items={minimapItems} bottomInset={0} />
+          )}
+
+          {showEmptyState ? (
+            <div className="flex size-full flex-col items-center overflow-y-auto">
+              {/* mt-auto rather than justify-end so the block still scrolls from
+                  its top on short viewports instead of overflowing out of reach. */}
+              <ChatEmptyState
+                className="mt-auto pt-20 pb-4"
+                onSelectPrompt={fillPrompt}
+              />
+            </div>
+          ) : (
+            <MessageScroller>
+              <MessageScrollerViewport>
+                <MessageScrollerContent
+                  aria-busy={isLoading}
+                  className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
+                >
+                  {messagePairs.map(({ message, previousUserCreatedAt }) => {
+                    const isStreaming =
+                      isLoading &&
+                      message.role === "assistant" &&
+                      message.id === messages.at(-1)?.id
+
+                    return (
+                      <MessageScrollerItem
+                        key={message.id}
+                        messageId={message.id}
+                        scrollAnchor={
+                          isLoading && message.id === latestUserMessageId
+                        }
+                      >
+                        <ChatMessage
+                          message={message}
+                          isStreaming={isStreaming}
+                          previousUserCreatedAt={previousUserCreatedAt}
+                          workedMs={isStreaming ? activeWorkedMs : null}
+                          generationStats={generationStats[message.id]}
+                        />
+                      </MessageScrollerItem>
+                    )
+                  })}
+
+                  {showPendingDots ? (
+                    <MessageScrollerItem messageId="pending-assistant">
+                      <BouncingDots className="px-1" />
+                    </MessageScrollerItem>
+                  ) : null}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              {!isEmptyThread && <MessageScrollerButton />}
+            </MessageScroller>
+          )}
+        </div>
+      </MessageScrollerProvider>
+
+      <div
+        ref={composerOverlayRef}
+        data-chat-composer-overlay="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 translate-y-4 pt-2"
+      >
+        <div className="chat-composer-horizontal-inset w-full">
+          <div className="pointer-events-auto relative z-10">
+            {error && (
+              <p
+                className="mb-2 px-1 text-center text-sm text-destructive"
+                role="alert"
+              >
+                {error.message}
+              </p>
+            )}
+            <ChatComposer
+              value={input}
+              onChange={setInput}
+              onSubmit={(reasoningEffort) =>
+                submitMessage(input.trim(), reasoningEffort)
+              }
+              onStop={stop}
+              isLoading={isLoading}
+              placeholder={
+                isEmptyThread
+                  ? "Type your message here..."
+                  : "Ask for follow-up changes..."
+              }
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

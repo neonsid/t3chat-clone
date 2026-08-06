@@ -2,14 +2,14 @@ import { CheckIcon, FilterIcon } from "lucide-react"
 import { MODEL_CAPABILITIES } from "@t3chat/model-catalog"
 import type { ModelCapability } from "@t3chat/model-catalog"
 
-import { MODEL_CAPABILITY_VISUALS } from "@/components/chat/model-picker/modelCapabilityVisuals"
-import { Tooltip } from "@/components/motion/tooltip"
+import { MODEL_CAPABILITY_VISUALS } from "@/components/chat/model-picker/constants"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import { Separator } from "@/components/ui/separator"
+} from "@/components/shared/ui/popover"
+import { Separator } from "@/components/shared/ui/separator"
 import { cn } from "@/lib/utils"
 
 type ModelPickerFilterMenuProps = {
@@ -121,7 +121,7 @@ export function ModelPickerFilterMenu({
           </button>
         </Tooltip>
 
-        {hasActiveFilters &&
+        {hasActiveFilters && (
           <>
             <Separator className="my-1" />
             <button
@@ -132,7 +132,8 @@ export function ModelPickerFilterMenu({
             >
               <span className="flex-1 truncate">Clear filters</span>
             </button>
-          </>}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   )

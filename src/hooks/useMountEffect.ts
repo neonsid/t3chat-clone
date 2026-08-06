@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react"
+import { useEffect, useEffectEvent, useRef } from "react"
 
 /**
  * Runs `fn` exactly once on mount.
@@ -13,13 +13,19 @@ export function useMountEffect(fn: () => void | (() => void)) {
 }
 
 /**
- * Notifies an external consumer after `value` commits.
- * Use this instead of calling another component's setState during render.
+ * Subscribes once while letting the external source call the latest listener.
+ * The Effect Event stays inside the same hook and effect that own the
+ * subscription, which keeps React's event semantics intact.
  */
-export function useValueEffect<T>(value: T, onChange: (value: T) => void) {
-  const notifyChange = useEffectEvent(onChange)
+export function useMountSubscription<TArguments extends unknown[]>(
+  listener: (...args: TArguments) => void,
+  subscribe: (listener: (...args: TArguments) => void) => void | (() => void)
+) {
+  const onEvent = useEffectEvent(listener)
+  const subscribeOnMount = useRef(subscribe)
 
   useEffect(() => {
-    notifyChange(value)
-  }, [value])
+    const handleEvent = (...args: TArguments) => onEvent(...args)
+    return subscribeOnMount.current(handleEvent)
+  }, [])
 }

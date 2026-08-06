@@ -1,15 +1,11 @@
-import { Tooltip } from "@/components/motion/tooltip"
-import { formatCost } from "@/components/chat/model-picker/modelPickerUtils"
+import {
+  MODEL_PRICE_METER_SLOTS,
+  MODEL_PRICE_TIER_BOUNDS,
+  MODEL_PRICE_TIER_LABELS,
+} from "@/components/chat/model-picker/constants"
+import { formatCost } from "@/components/chat/model-picker/logic"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import { cn } from "@/lib/utils"
-
-const SLOTS = [0, 1, 2] as const
-const TIER_BOUNDS = [0.5, 1.5, 5, 15] as const
-const TIER_LABELS = [
-  "Low model cost",
-  "Medium model cost",
-  "High model cost",
-  "Very high model cost",
-] as const
 
 function resolveModelPriceMeter(inputCostPerMillion: number | null) {
   if (inputCostPerMillion === null) {
@@ -30,12 +26,17 @@ function resolveModelPriceMeter(inputCostPerMillion: number | null) {
     }
   }
 
-  const bound = TIER_BOUNDS.findIndex((limit) => inputCostPerMillion < limit)
+  const bound = MODEL_PRICE_TIER_BOUNDS.findIndex(
+    (limit) => inputCostPerMillion < limit
+  )
   return {
     tier: bound === -1 ? 3 : bound,
     overflow: bound === -1,
     unknown: false,
-    title: TIER_LABELS[bound === -1 ? TIER_LABELS.length - 1 : bound],
+    title:
+      MODEL_PRICE_TIER_LABELS[
+        bound === -1 ? MODEL_PRICE_TIER_LABELS.length - 1 : bound
+      ],
   }
 }
 
@@ -98,7 +99,7 @@ export function ModelPriceMeter({
         )}
         aria-label={label}
       >
-        {SLOTS.map((slot) =>
+        {MODEL_PRICE_METER_SLOTS.map((slot) =>
           slot < meter.tier ? (
             <span key={slot}>$</span>
           ) : (

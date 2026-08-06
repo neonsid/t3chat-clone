@@ -3,7 +3,7 @@ export type ColorSchemePreference = "light" | "system" | "dark"
 export const COLOR_SCHEME_STORAGE_KEY = "t3chat-theme"
 
 export function isColorSchemePreference(
-  value: string | null,
+  value: string | null
 ): value is ColorSchemePreference {
   return value === "light" || value === "system" || value === "dark"
 }

@@ -1,10 +1,13 @@
 import { Navigate, useNavigate } from "@tanstack/react-router"
 import { LazyMotion, domAnimation } from "motion/react"
 
-import { AppSidebar } from "@/components/AppSidebar"
-import { ChatShell, ChatHeaderActions } from "@/components/chat/chatShellChrome"
-import { ChatThreadView } from "@/components/chat/ChatThreadView"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import {
+  ChatHeaderActions,
+  ChatShell,
+} from "@/components/chat/shell/ChatShellChrome"
+import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
+import { AppSidebar } from "@/components/sidebar/AppSidebar"
+import { SidebarInset, SidebarProvider } from "@/components/shared/ui/sidebar"
 import { useThreads } from "@/hooks/useThreads"
 
 export function ChatPage({ threadId }: { threadId: string }) {

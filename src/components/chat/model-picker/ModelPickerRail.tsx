@@ -2,9 +2,14 @@ import { useState } from "react"
 import { ChevronDownIcon, StarIcon } from "lucide-react"
 import type { ModelProviderId } from "@t3chat/model-catalog"
 
+import {
+  INITIAL_MODEL_PICKER_RAIL_SCROLL_STATE,
+  MODEL_PICKER_RAIL_END_CUE_FADE_DISTANCE,
+  MODEL_PICKER_RAIL_TAB_CLASS_NAME,
+} from "@/components/chat/model-picker/constants"
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
-import { Tooltip } from "@/components/motion/tooltip"
-import { Separator } from "@/components/ui/separator"
+import { Tooltip } from "@/components/shared/motion/tooltip"
+import { Separator } from "@/components/shared/ui/separator"
 import type { ModelRailTab } from "@/lib/model-store"
 import { cn } from "@/lib/utils"
 
@@ -20,21 +25,10 @@ type ModelPickerRailProps = {
   hidden: boolean
 }
 
-const RAIL_TAB_CLASS_NAME =
-  "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] hover:scale-105 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-active:text-white"
-
 type RailScrollState = {
   overflowing: boolean
   endCueOpacity: number
 }
-
-const INITIAL_SCROLL_STATE: RailScrollState = {
-  overflowing: false,
-  endCueOpacity: 0,
-}
-
-/** Ease the bottom cue out as the final row scrolls into view. */
-const END_CUE_FADE_DISTANCE = 48
 
 export function ModelPickerRail({
   providers,
@@ -42,7 +36,9 @@ export function ModelPickerRail({
   onSelectTab,
   hidden,
 }: ModelPickerRailProps) {
-  const [scroll, setScroll] = useState(INITIAL_SCROLL_STATE)
+  const [scroll, setScroll] = useState<RailScrollState>(
+    INITIAL_MODEL_PICKER_RAIL_SCROLL_STATE
+  )
 
   /**
    * Doubles as the ref callback and the scroll handler: React runs ref
@@ -57,7 +53,10 @@ export function ModelPickerRail({
     )
     const next: RailScrollState = {
       overflowing: element.scrollHeight > element.clientHeight + 1,
-      endCueOpacity: Math.min(distanceToEnd / END_CUE_FADE_DISTANCE, 1),
+      endCueOpacity: Math.min(
+        distanceToEnd / MODEL_PICKER_RAIL_END_CUE_FADE_DISTANCE,
+        1
+      ),
     }
     setScroll((current) =>
       current.overflowing === next.overflowing &&
@@ -87,7 +86,7 @@ export function ModelPickerRail({
           aria-label="Favorites"
           aria-selected={activeTab === "favorites"}
           data-active={activeTab === "favorites" || undefined}
-          className={RAIL_TAB_CLASS_NAME}
+          className={MODEL_PICKER_RAIL_TAB_CLASS_NAME}
           onClick={() => onSelectTab("favorites")}
         >
           <StarIcon
@@ -112,7 +111,7 @@ export function ModelPickerRail({
                 aria-label={provider.name}
                 aria-selected={activeTab === provider.id}
                 data-active={activeTab === provider.id || undefined}
-                className={RAIL_TAB_CLASS_NAME}
+                className={MODEL_PICKER_RAIL_TAB_CLASS_NAME}
                 onClick={() => onSelectTab(provider.id)}
               >
                 <ProviderLogo providerId={provider.id} className="size-6" />

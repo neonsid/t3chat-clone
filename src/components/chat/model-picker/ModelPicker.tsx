@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { ChevronDownIcon, SearchIcon } from "lucide-react"
-import { MODEL_CATALOG, MODEL_PROVIDERS } from "@t3chat/model-catalog"
 
+import { MODEL_PICKER_RAIL_PROVIDERS } from "@/components/chat/model-picker/constants"
 import { ModelPickerFilterMenu } from "@/components/chat/model-picker/ModelPickerFilterMenu"
 import { ModelPickerList } from "@/components/chat/model-picker/ModelPickerList"
 import { ModelPickerRail } from "@/components/chat/model-picker/ModelPickerRail"
@@ -9,26 +9,17 @@ import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
 import {
   filterModels,
   ignoresRailScope,
-} from "@/components/chat/model-picker/modelPickerUtils"
-import type { ModelQuery } from "@/components/chat/model-picker/modelPickerUtils"
+} from "@/components/chat/model-picker/logic"
+import type { ModelQuery } from "@/components/chat/model-picker/logic"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import { Separator } from "@/components/ui/separator"
+} from "@/components/shared/ui/popover"
+import { Separator } from "@/components/shared/ui/separator"
 import { useModelStore } from "@/hooks/useModelStore"
 import { getModelById, modelStore } from "@/lib/model-store"
 import { cn } from "@/lib/utils"
-
-const PROVIDER_IDS_WITH_MODELS = new Set(
-  MODEL_CATALOG.map((model) => model.providerId)
-)
-
-/** Providers without catalog entries are left off the rail. */
-const RAIL_PROVIDERS = MODEL_PROVIDERS.filter((provider) =>
-  PROVIDER_IDS_WITH_MODELS.has(provider.id)
-)
 
 type ModelPickerProps = {
   className?: string
@@ -37,6 +28,7 @@ type ModelPickerProps = {
 export function ModelPicker({ className }: ModelPickerProps) {
   const state = useModelStore()
   const [open, setOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const favoriteIds = useMemo(
     () => new Set(state.favoriteModelIds),
@@ -106,6 +98,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
       </PopoverTrigger>
 
       <PopoverContent
+        initialFocus={searchInputRef}
         side="top"
         align="start"
         sideOffset={12}
@@ -117,7 +110,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
             aria-hidden="true"
           />
           <input
-            autoFocus
+            ref={searchInputRef}
             value={state.search}
             onChange={(event) => modelStore.setSearch(event.target.value)}
             placeholder="Search models..."
@@ -139,7 +132,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
 
         <div className="mt-1 flex min-h-0 flex-1">
           <ModelPickerRail
-            providers={RAIL_PROVIDERS}
+            providers={MODEL_PICKER_RAIL_PROVIDERS}
             activeTab={state.railTab}
             onSelectTab={modelStore.setRailTab}
             hidden={railHidden}

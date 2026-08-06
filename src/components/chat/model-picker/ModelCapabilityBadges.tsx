@@ -1,15 +1,12 @@
-import { MODEL_CAPABILITIES } from "@t3chat/model-catalog"
 import type { ModelCapability } from "@t3chat/model-catalog"
 
-import { MODEL_CAPABILITY_VISUALS } from "@/components/chat/model-picker/modelCapabilityVisuals"
-import { Tooltip } from "@/components/motion/tooltip"
+import {
+  MAX_VISIBLE_MODEL_CAPABILITIES,
+  MODEL_CAPABILITY_LABELS,
+  MODEL_CAPABILITY_VISUALS,
+} from "@/components/chat/model-picker/constants"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import { cn } from "@/lib/utils"
-
-const CAPABILITY_LABELS = new Map(
-  MODEL_CAPABILITIES.map((capability) => [capability.id, capability.label])
-)
-
-const MAX_VISIBLE_CAPABILITIES = 3
 
 type ModelCapabilityBadgesProps = {
   capabilities: ReadonlyArray<ModelCapability>
@@ -22,7 +19,10 @@ export function ModelCapabilityBadges({
 }: ModelCapabilityBadgesProps) {
   if (capabilities.length === 0) return null
 
-  const visibleCapabilities = capabilities.slice(0, MAX_VISIBLE_CAPABILITIES)
+  const visibleCapabilities = capabilities.slice(
+    0,
+    MAX_VISIBLE_MODEL_CAPABILITIES
+  )
 
   return (
     <span
@@ -33,7 +33,7 @@ export function ModelCapabilityBadges({
     >
       {visibleCapabilities.map((capability) => {
         const visual = MODEL_CAPABILITY_VISUALS[capability]
-        const label = CAPABILITY_LABELS.get(capability) ?? capability
+        const label = MODEL_CAPABILITY_LABELS.get(capability) ?? capability
         const Icon = visual.icon
 
         return (
