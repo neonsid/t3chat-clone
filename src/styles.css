@@ -188,10 +188,6 @@
     padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);
   }
 
-  .sidebar-list-top-fade {
-    background: linear-gradient(to bottom, var(--sidebar) 0%, transparent 100%);
-  }
-
   .sidebar-thread-title {
     max-width: 100%;
   }

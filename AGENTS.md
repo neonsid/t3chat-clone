@@ -11,3 +11,14 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Code style
+
+- Dont write this one line function for simple tasks and if needed reuse it dont scatter for example.
+```
+function BrainIconLow({ className }: { className?: string }) {
+  return <BrainAssetIcon src="/BrainIconLow.svg" className={className} />
+}
+```
+
+- Have constants in a proper file instead of setting it inside components.
