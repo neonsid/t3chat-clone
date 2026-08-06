@@ -21,8 +21,13 @@ export function useThreads(initialThreadId?: string) {
 
   const activeThread = useMemo(
     () =>
-      state.threads.find((thread) => thread.id === initialThreadId) ??
-      state.threads.find((thread) => thread.id === state.activeThreadId) ??
+      state.threads.find(
+        (thread) => thread.id === initialThreadId && !thread.archivedAt
+      ) ??
+      state.threads.find(
+        (thread) => thread.id === state.activeThreadId && !thread.archivedAt
+      ) ??
+      state.threads.find((thread) => !thread.archivedAt) ??
       state.threads[0],
     [initialThreadId, state.activeThreadId, state.threads]
   )
@@ -49,7 +54,7 @@ export function useThreads(initialThreadId?: string) {
   const createThread = useCallback(() => {
     const current = stateRef.current
     const existingEmptyThread = current.threads.find(
-      (thread) => thread.messages.length === 0
+      (thread) => thread.messages.length === 0 && !thread.archivedAt
     )
 
     if (existingEmptyThread) {
@@ -81,20 +86,25 @@ export function useThreads(initialThreadId?: string) {
         )
       }
 
-      if (remaining.length === 0) {
+      const visibleRemaining = remaining.filter((thread) => !thread.archivedAt)
+      if (visibleRemaining.length === 0) {
         const thread = createEmptyThread()
-        commitState({ activeThreadId: thread.id, threads: [thread] })
+        commitState({
+          activeThreadId: thread.id,
+          threads: [thread, ...remaining],
+        })
         return thread
       }
 
       const activeThreadId =
         current.activeThreadId === threadId
-          ? remaining[0].id
+          ? visibleRemaining[0].id
           : current.activeThreadId
       const nextState = { activeThreadId, threads: remaining }
       commitState(nextState)
       return (
-        remaining.find((thread) => thread.id === activeThreadId) ?? remaining[0]
+        visibleRemaining.find((thread) => thread.id === activeThreadId) ??
+        visibleRemaining[0]
       )
     },
     [commitState]
@@ -151,6 +161,99 @@ export function useThreads(initialThreadId?: string) {
     [commitState]
   )
 
+  const toggleThreadPinned = useCallback(
+    (threadId: string) => {
+      const current = stateRef.current
+      const thread = current.threads.find((item) => item.id === threadId)
+      if (!thread || thread.archivedAt) return
+
+      commitState({
+        ...current,
+        threads: current.threads.map((item) =>
+          item.id === threadId
+            ? {
+                ...item,
+                pinnedAt: item.pinnedAt ? undefined : Date.now(),
+              }
+            : item
+        ),
+      })
+    },
+    [commitState]
+  )
+
+  const archiveThread = useCallback(
+    (threadId: string) => {
+      const current = stateRef.current
+      const thread = current.threads.find((item) => item.id === threadId)
+      if (!thread || thread.archivedAt) {
+        return current.threads.find(
+          (item) => item.id === current.activeThreadId && !item.archivedAt
+        )
+      }
+
+      const archivedAt = Date.now()
+      const remainingThreads = current.threads.map((item) =>
+        item.id === threadId
+          ? { ...item, archivedAt, pinnedAt: undefined }
+          : item
+      )
+      const nextVisibleThread = remainingThreads.find(
+        (item) => !item.archivedAt
+      )
+
+      if (!nextVisibleThread) {
+        const nextThread = createEmptyThread()
+        commitState({
+          activeThreadId: nextThread.id,
+          threads: [nextThread, ...remainingThreads],
+        })
+        return nextThread
+      }
+
+      commitState({
+        activeThreadId:
+          current.activeThreadId === threadId
+            ? nextVisibleThread.id
+            : current.activeThreadId,
+        threads: remainingThreads,
+      })
+      return nextVisibleThread
+    },
+    [commitState]
+  )
+
+  const renameThread = useCallback(
+    (threadId: string, title: string) => {
+      const nextTitle = title.trim()
+      if (!nextTitle) return
+
+      const current = stateRef.current
+      commitState({
+        ...current,
+        threads: current.threads.map((thread) =>
+          thread.id === threadId ? { ...thread, title: nextTitle } : thread
+        ),
+      })
+    },
+    [commitState]
+  )
+
+  const regenerateThreadTitle = useCallback(
+    (threadId: string) => {
+      const current = stateRef.current
+      commitState({
+        ...current,
+        threads: current.threads.map((thread) =>
+          thread.id === threadId
+            ? { ...thread, title: titleFromMessages(thread.messages) }
+            : thread
+        ),
+      })
+    },
+    [commitState]
+  )
+
   return {
     activeThread,
     threads: sortedThreads,
@@ -159,5 +262,9 @@ export function useThreads(initialThreadId?: string) {
     deleteThread,
     updateThreadMessages,
     updateThreadGenerationStats,
+    toggleThreadPinned,
+    archiveThread,
+    renameThread,
+    regenerateThreadTitle,
   }
 }

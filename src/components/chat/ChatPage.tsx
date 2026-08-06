@@ -17,6 +17,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
     deleteThread,
     updateThreadMessages,
     updateThreadGenerationStats,
+    toggleThreadPinned,
+    archiveThread,
+    renameThread,
+    regenerateThreadTitle,
   } = useThreads(threadId)
 
   if (activeThread.id !== threadId) {
@@ -56,15 +60,32 @@ export function ChatPage({ threadId }: { threadId: string }) {
     })
   }
 
+  function archiveChat(archivedThreadId: string) {
+    const nextThread = archiveThread(archivedThreadId)
+    if (archivedThreadId !== activeThread.id || !nextThread) return
+
+    void navigate({
+      to: "/chat/$threadId",
+      params: { threadId: nextThread.id },
+      replace: true,
+    })
+  }
+
   return (
     <LazyMotion features={domAnimation}>
       <SidebarProvider defaultOpen className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
           threads={threads}
           activeThreadId={activeThread.id}
-          onSelectThread={openThread}
-          onCreateThread={createNewThread}
-          onDeleteThread={removeThread}
+          actions={{
+            select: openThread,
+            create: createNewThread,
+            delete: removeThread,
+            togglePinned: toggleThreadPinned,
+            archive: archiveChat,
+            rename: renameThread,
+            regenerateTitle: regenerateThreadTitle,
+          }}
         />
         <ChatHeaderActions />
         <ChatShell>

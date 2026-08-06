@@ -15,6 +15,8 @@ export type ChatThread = {
   updatedAt: number
   messages: UIMessage[]
   generationStats?: Record<string, AssistantGenerationStats>
+  pinnedAt?: number
+  archivedAt?: number
 }
 
 const STORAGE_KEY = "t3chat.threads.v1"
