@@ -7,7 +7,7 @@ import {
   saveThreadState,
   titleFromMessages,
 } from "@/lib/threads"
-import type { ChatThread } from "@/lib/threads"
+import type { AssistantGenerationStats, ChatThread } from "@/lib/threads"
 
 export function useThreads(initialThreadId?: string) {
   const [state, setState] = useState(() => loadThreadState())
@@ -123,6 +123,34 @@ export function useThreads(initialThreadId?: string) {
     [commitState]
   )
 
+  const updateThreadGenerationStats = useCallback(
+    (
+      threadId: string,
+      messageId: string,
+      generationStats: AssistantGenerationStats
+    ) => {
+      const current = stateRef.current
+      const thread = current.threads.find((item) => item.id === threadId)
+      if (!thread) return
+
+      const nextThread: ChatThread = {
+        ...thread,
+        generationStats: {
+          ...thread.generationStats,
+          [messageId]: generationStats,
+        },
+      }
+
+      commitState({
+        ...current,
+        threads: current.threads.map((item) =>
+          item.id === nextThread.id ? nextThread : item
+        ),
+      })
+    },
+    [commitState]
+  )
+
   return {
     activeThread,
     threads: sortedThreads,
@@ -130,5 +158,6 @@ export function useThreads(initialThreadId?: string) {
     createThread,
     deleteThread,
     updateThreadMessages,
+    updateThreadGenerationStats,
   }
 }

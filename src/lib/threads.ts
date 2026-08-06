@@ -1,11 +1,20 @@
 import type { UIMessage } from "@tanstack/ai-react"
 
+export type AssistantGenerationStats = {
+  modelName: string
+  mode: string
+  outputTokens: number
+  tokensPerSecond: number
+  timeToFirstTokenSeconds: number
+}
+
 export type ChatThread = {
   id: string
   title: string
   createdAt: number
   updatedAt: number
   messages: UIMessage[]
+  generationStats?: Record<string, AssistantGenerationStats>
 }
 
 const STORAGE_KEY = "t3chat.threads.v1"
@@ -29,6 +38,7 @@ export function createEmptyThread(partial?: Partial<ChatThread>): ChatThread {
     createdAt: now,
     updatedAt: now,
     messages: [],
+    generationStats: {},
     ...partial,
   }
 }

@@ -16,6 +16,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     createThread,
     deleteThread,
     updateThreadMessages,
+    updateThreadGenerationStats,
   } = useThreads(threadId)
 
   if (activeThread.id !== threadId) {
@@ -72,8 +73,16 @@ export function ChatPage({ threadId }: { threadId: string }) {
               key={activeThread.id}
               threadId={activeThread.id}
               initialMessages={activeThread.messages}
+              generationStats={activeThread.generationStats ?? {}}
               onMessagesChange={(messages) =>
                 updateThreadMessages(activeThread.id, messages)
+              }
+              onGenerationStatsChange={(messageId, generationStats) =>
+                updateThreadGenerationStats(
+                  activeThread.id,
+                  messageId,
+                  generationStats
+                )
               }
               onCreateThread={createNewThread}
             />

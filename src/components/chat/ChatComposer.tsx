@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 interface ChatComposerProps {
   value: string
   onChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit: (reasoningEffort: ReasoningEffort) => void
   onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
@@ -45,13 +45,13 @@ export function ChatComposer({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSend) return
-    onSubmit()
+    onSubmit(reasoningEffort)
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
-      if (canSend) onSubmit()
+      if (canSend) onSubmit(reasoningEffort)
     }
   }
 

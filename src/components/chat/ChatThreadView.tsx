@@ -1,9 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
 import type { UIMessage } from "@tanstack/ai-react";
+import type { StreamChunk } from "@tanstack/ai/client";
 
 import { BouncingDots } from "@/components/chat/BouncingDots";
 import { ChatComposer } from "@/components/chat/ChatComposer";
+import type { ReasoningEffort } from "@/components/chat/ReasoningEffortSelect";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { SidebarControl } from "@/components/chat/chatShellChrome";
@@ -25,7 +27,30 @@ import {
   useMessageScroller,
 } from "@/components/ui/message-scroller";
 import { useMountEffect, useValueEffect } from "@/hooks/useMountEffect";
+import { getModelById, getModelStoreState } from "@/lib/model-store";
+import type { AssistantGenerationStats } from "@/lib/threads";
 import { cn } from "@/lib/utils";
+
+type ActiveGeneration = {
+  startedAt: number;
+  firstTokenAt: number | null;
+  finishedAt: number | null;
+  outputTokens: number | null;
+  modelName: string;
+  mode: string;
+};
+
+function formatReasoningEffort(reasoningEffort: ReasoningEffort) {
+  return `${reasoningEffort.charAt(0).toUpperCase()}${reasoningEffort.slice(1)}`;
+}
+
+function isContentChunk(chunk: StreamChunk) {
+  return (
+    chunk.type === "TEXT_MESSAGE_CONTENT" ||
+    String(chunk.type) === "THINKING_TEXT_MESSAGE_CONTENT" ||
+    chunk.type === "REASONING_MESSAGE_CONTENT"
+  );
+}
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
@@ -89,23 +114,75 @@ function ChatTimelineMinimap({
 export function ChatThreadView({
   threadId,
   initialMessages,
+  generationStats,
   onMessagesChange,
+  onGenerationStatsChange,
   onCreateThread,
 }: {
   threadId: string;
   initialMessages: UIMessage[];
+  generationStats: Record<string, AssistantGenerationStats>;
   onMessagesChange: (messages: UIMessage[]) => void;
+  onGenerationStatsChange: (
+    messageId: string,
+    generationStats: AssistantGenerationStats,
+  ) => void;
   onCreateThread: () => void;
 }) {
   const [input, setInput] = useState("");
   const [composerHeight, setComposerHeight] = useState(148);
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null);
   const composerOverlayRef = useRef<HTMLDivElement | null>(null);
+  const activeGenerationRef = useRef<ActiveGeneration | null>(null);
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     id: threadId,
     initialMessages,
     connection: fetchServerSentEvents("/api/chat"),
+    onChunk(chunk) {
+      const activeGeneration = activeGenerationRef.current;
+      if (!activeGeneration) return;
+
+      const now = performance.now();
+      if (activeGeneration.firstTokenAt == null && isContentChunk(chunk)) {
+        activeGeneration.firstTokenAt = now;
+      }
+
+      if (chunk.type === "RUN_FINISHED") {
+        activeGeneration.finishedAt = now;
+        activeGeneration.outputTokens =
+          chunk.usage?.completionTokens ?? null;
+      }
+    },
+    onFinish(message) {
+      const activeGeneration = activeGenerationRef.current;
+      activeGenerationRef.current = null;
+      if (
+        !activeGeneration ||
+        activeGeneration.firstTokenAt == null ||
+        activeGeneration.outputTokens == null
+      ) {
+        return;
+      }
+
+      const finishedAt = activeGeneration.finishedAt ?? performance.now();
+      const generationSeconds = Math.max(
+        (finishedAt - activeGeneration.firstTokenAt) / 1000,
+        0.001,
+      );
+
+      onGenerationStatsChange(message.id, {
+        modelName: activeGeneration.modelName,
+        mode: activeGeneration.mode,
+        outputTokens: activeGeneration.outputTokens,
+        tokensPerSecond: activeGeneration.outputTokens / generationSeconds,
+        timeToFirstTokenSeconds:
+          (activeGeneration.firstTokenAt - activeGeneration.startedAt) / 1000,
+      });
+    },
+    onError() {
+      activeGenerationRef.current = null;
+    },
   });
 
   useValueEffect(messages, onMessagesChange);
@@ -137,9 +214,22 @@ export function ChatThreadView({
 
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(messages), [messages]);
 
-  function submitMessage(content = input.trim()) {
+  function submitMessage(
+    content = input.trim(),
+    reasoningEffort: ReasoningEffort = "instant",
+  ) {
     if (!content || isLoading) return;
 
+    const modelState = getModelStoreState();
+    const selectedModel = getModelById(modelState.selectedModelId);
+    activeGenerationRef.current = {
+      startedAt: performance.now(),
+      firstTokenAt: null,
+      finishedAt: null,
+      outputTokens: null,
+      modelName: selectedModel?.name ?? modelState.selectedModelId,
+      mode: formatReasoningEffort(reasoningEffort),
+    };
     setWorkStartedAt(Date.now());
     setInput("");
     void sendMessage(content);
@@ -198,6 +288,7 @@ export function ChatThreadView({
                           isStreaming={isStreaming}
                           previousUserCreatedAt={previousUserCreatedAt}
                           workedMs={isStreaming ? activeWorkedMs : null}
+                          generationStats={generationStats[message.id]}
                         />
                       </MessageScrollerItem>
                     );
@@ -231,7 +322,9 @@ export function ChatThreadView({
             <ChatComposer
               value={input}
               onChange={setInput}
-              onSubmit={() => submitMessage()}
+              onSubmit={(reasoningEffort) =>
+                submitMessage(input.trim(), reasoningEffort)
+              }
               onStop={stop}
               isLoading={isLoading}
               placeholder={

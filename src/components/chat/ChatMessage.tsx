@@ -4,8 +4,11 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  Clock3Icon,
   CopyIcon,
+  CpuIcon,
   Undo2Icon,
+  ZapIcon,
 } from "lucide-react"
 import { Streamdown } from "streamdown"
 import { createCodePlugin } from "@streamdown/code"
@@ -13,6 +16,7 @@ import { createCodePlugin } from "@streamdown/code"
 import { BouncingDots } from "@/components/chat/BouncingDots"
 import { Button } from "@/components/ui/button"
 import { formatShortTimestamp } from "@/lib/threads"
+import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
 const streamdownPlugins = {
@@ -94,6 +98,7 @@ type ChatMessageProps = {
   isStreaming?: boolean
   workedMs?: number | null
   previousUserCreatedAt?: Date | number | string | null
+  generationStats?: AssistantGenerationStats
 }
 
 export function ChatMessage({
@@ -101,6 +106,7 @@ export function ChatMessage({
   isStreaming = false,
   workedMs = null,
   previousUserCreatedAt = null,
+  generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = getMessageText(message)
@@ -177,14 +183,40 @@ export function ChatMessage({
           <BouncingDots label="Assistant is thinking" />
         ) : null}
 
-        {(text || timestamp) && !isStreaming ? (
-          <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
-            {text ? <MessageCopyControl text={text} /> : null}
-            {timestamp ? (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {timestamp}
-              </p>
+        {(text || timestamp || generationStats) && !isStreaming ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
+            {generationStats ? (
+              <div
+                data-assistant-generation-stats="true"
+                aria-label="Response generation statistics"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              >
+                <span className="font-semibold text-foreground/75">
+                  {generationStats.modelName} ({generationStats.mode})
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ZapIcon aria-hidden="true" className="size-3.5" />
+                  {generationStats.tokensPerSecond.toFixed(2)} tok/sec
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <CpuIcon aria-hidden="true" className="size-3.5" />
+                  {generationStats.outputTokens.toLocaleString()} tokens
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock3Icon aria-hidden="true" className="size-3.5" />
+                  Time-to-First:{" "}
+                  {generationStats.timeToFirstTokenSeconds.toFixed(4)} sec
+                </span>
+              </div>
             ) : null}
+            <div className="flex items-center gap-2">
+              {text ? <MessageCopyControl text={text} /> : null}
+              {timestamp ? (
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {timestamp}
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
