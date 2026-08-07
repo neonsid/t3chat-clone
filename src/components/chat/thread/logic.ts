@@ -3,17 +3,6 @@ import type { UIMessage } from "@tanstack/ai-react"
 import { resolveTimelineMinimapPreviewText } from "@/components/chat/timeline/logic"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
 
-export function createChatPersistence(
-  initialMessages: UIMessage[],
-  onMessagesChange: (messages: UIMessage[]) => void
-) {
-  return {
-    getItem: () => initialMessages,
-    setItem: (_id: string, messages: UIMessage[]) => onMessagesChange(messages),
-    removeItem: () => onMessagesChange([]),
-  }
-}
-
 export function messageText(message: UIMessage) {
   let text = ""
   for (const part of message.parts) {

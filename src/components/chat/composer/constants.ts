@@ -23,5 +23,5 @@ export const REASONING_EFFORTS = [
   },
 ] as const
 
-export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]["value"]
+export type { ReasoningEffort } from "@/lib/chat-models"
 export type ReasoningEffortOption = (typeof REASONING_EFFORTS)[number]

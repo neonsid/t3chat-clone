@@ -8,12 +8,9 @@ import {
   ZapIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import {
-  MODEL_CAPABILITIES,
-  MODEL_CATALOG,
-  MODEL_PROVIDERS,
-} from "@t3chat/model-catalog"
+import { MODEL_CAPABILITIES, MODEL_PROVIDERS } from "@t3chat/model-catalog"
 import type { ModelCapability } from "@t3chat/model-catalog"
+import { CHAT_MODEL_CATALOG } from "@/lib/chat-models"
 
 type ModelCapabilityVisual = {
   readonly icon: LucideIcon
@@ -61,7 +58,7 @@ export const MODEL_CAPABILITY_LABELS = new Map(
 export const MAX_VISIBLE_MODEL_CAPABILITIES = 3
 
 const providerIdsWithModels = new Set(
-  MODEL_CATALOG.map((model) => model.providerId)
+  CHAT_MODEL_CATALOG.map((model) => model.providerId)
 )
 
 /** Providers without catalog entries are left off the rail. */

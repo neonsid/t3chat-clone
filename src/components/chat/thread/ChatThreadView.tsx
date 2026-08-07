@@ -1,16 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
-import type { StreamChunk } from "@tanstack/ai/client"
 
 import { ChatComposer } from "@/components/chat/composer/ChatComposer"
-import type { ReasoningEffort } from "@/components/chat/composer/ReasoningEffortSelect"
 import { SidebarControl } from "@/components/chat/shell/ChatShellChrome"
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
 import {
-  createChatPersistence,
   deriveTimelineMinimapItems,
   findLastUserMessageId,
   focusComposerInput,
@@ -28,30 +25,15 @@ import {
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
 import { useMountEffect } from "@/hooks/useMountEffect"
-import { getModelById, getModelStoreState } from "@/lib/model-store"
+import { useModelStore } from "@/hooks/useModelStore"
+import {
+  CHAT_MODEL_CONFIG,
+  DEFAULT_CHAT_MODEL_ID,
+  isChatModelId,
+} from "@/lib/chat-models"
+import type { ReasoningEffort } from "@/lib/chat-models"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
-
-type ActiveGeneration = {
-  startedAt: number
-  firstTokenAt: number | null
-  finishedAt: number | null
-  outputTokens: number | null
-  modelName: string
-  mode: string
-}
-
-function formatReasoningEffort(reasoningEffort: ReasoningEffort) {
-  return `${reasoningEffort.charAt(0).toUpperCase()}${reasoningEffort.slice(1)}`
-}
-
-function isContentChunk(chunk: StreamChunk) {
-  return (
-    chunk.type === "TEXT_MESSAGE_CONTENT" ||
-    String(chunk.type) === "THINKING_TEXT_MESSAGE_CONTENT" ||
-    chunk.type === "REASONING_MESSAGE_CONTENT"
-  )
-}
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
@@ -116,76 +98,55 @@ export function ChatThreadView({
   threadId,
   initialMessages,
   generationStats,
-  onMessagesChange,
-  onGenerationStatsChange,
   onCreateThread,
+  isAuthenticated,
+  userName,
+  onRequireAuthentication,
+  onThreadStarted,
 }: {
   threadId: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
-  onMessagesChange: (messages: UIMessage[]) => void
-  onGenerationStatsChange: (
-    messageId: string,
-    generationStats: AssistantGenerationStats
-  ) => void
   onCreateThread: () => void
+  isAuthenticated: boolean
+  userName: string
+  onRequireAuthentication: () => void
+  onThreadStarted?: () => void
 }) {
   const [input, setInput] = useState("")
+  const [reasoningEffort, setReasoningEffort] =
+    useState<ReasoningEffort>("instant")
   const [composerHeight, setComposerHeight] = useState(148)
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
-  const activeGenerationRef = useRef<ActiveGeneration | null>(null)
-  const [chatPersistence] = useState(() =>
-    createChatPersistence(initialMessages, onMessagesChange)
+  const modelState = useModelStore()
+  const modelConfig = isChatModelId(modelState.selectedModelId)
+    ? CHAT_MODEL_CONFIG[modelState.selectedModelId]
+    : CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
+  const effectiveReasoningEffort = modelConfig.supportedReasoningEfforts.some(
+    (effort) => effort === reasoningEffort
+  )
+    ? reasoningEffort
+    : modelConfig.supportedReasoningEfforts[0]
+  const forwardedProps = useMemo(
+    () => ({
+      modelId: modelState.selectedModelId,
+      reasoningEffort: effectiveReasoningEffort,
+    }),
+    [effectiveReasoningEffort, modelState.selectedModelId]
   )
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     id: threadId,
+    threadId,
     initialMessages,
-    persistence: chatPersistence,
+    forwardedProps,
     connection: fetchServerSentEvents("/api/chat"),
-    onChunk(chunk) {
-      const activeGeneration = activeGenerationRef.current
-      if (!activeGeneration) return
-
-      const now = performance.now()
-      if (activeGeneration.firstTokenAt == null && isContentChunk(chunk)) {
-        activeGeneration.firstTokenAt = now
-      }
-
-      if (chunk.type === "RUN_FINISHED") {
-        activeGeneration.finishedAt = now
-        activeGeneration.outputTokens = chunk.usage?.completionTokens ?? null
-      }
-    },
-    onFinish(message) {
-      const activeGeneration = activeGenerationRef.current
-      activeGenerationRef.current = null
-      if (
-        !activeGeneration ||
-        activeGeneration.firstTokenAt == null ||
-        activeGeneration.outputTokens == null
-      ) {
-        return
-      }
-
-      const finishedAt = activeGeneration.finishedAt ?? performance.now()
-      const generationSeconds = Math.max(
-        (finishedAt - activeGeneration.firstTokenAt) / 1000,
-        0.001
-      )
-
-      onGenerationStatsChange(message.id, {
-        modelName: activeGeneration.modelName,
-        mode: activeGeneration.mode,
-        outputTokens: activeGeneration.outputTokens,
-        tokensPerSecond: activeGeneration.outputTokens / generationSeconds,
-        timeToFirstTokenSeconds:
-          (activeGeneration.firstTokenAt - activeGeneration.startedAt) / 1000,
-      })
+    onFinish() {
+      onThreadStarted?.()
     },
     onError() {
-      activeGenerationRef.current = null
+      onThreadStarted?.()
     },
   })
 
@@ -221,30 +182,29 @@ export function ChatThreadView({
     [messages]
   )
 
-  function submitMessage(
-    content = input.trim(),
-    reasoningEffort: ReasoningEffort = "instant"
-  ) {
+  function submitMessage(content = input.trim()) {
     if (!content || isLoading) return
-
-    const modelState = getModelStoreState()
-    const selectedModel = getModelById(modelState.selectedModelId)
-    activeGenerationRef.current = {
-      startedAt: performance.now(),
-      firstTokenAt: null,
-      finishedAt: null,
-      outputTokens: null,
-      modelName: selectedModel?.name ?? modelState.selectedModelId,
-      mode: formatReasoningEffort(reasoningEffort),
+    if (!isAuthenticated) {
+      onRequireAuthentication()
+      return
     }
+
     setWorkStartedAt(Date.now())
     setInput("")
-    void sendMessage(content)
+    void sendMessage({
+      id: crypto.randomUUID(),
+      content: [{ type: "text", content }],
+    })
   }
 
   function fillPrompt(prompt: string) {
     setInput(prompt)
     queueMicrotask(focusComposerInput)
+  }
+
+  function stopGeneration() {
+    stop()
+    onThreadStarted?.()
   }
 
   const activeWorkedMs =
@@ -281,6 +241,7 @@ export function ChatThreadView({
                   its top on short viewports instead of overflowing out of reach. */}
               <ChatEmptyState
                 className="mt-auto pt-20 pb-4"
+                userName={userName}
                 onSelectPrompt={fillPrompt}
               />
             </div>
@@ -347,10 +308,10 @@ export function ChatThreadView({
             <ChatComposer
               value={input}
               onChange={setInput}
-              onSubmit={(reasoningEffort) =>
-                submitMessage(input.trim(), reasoningEffort)
-              }
-              onStop={stop}
+              onSubmit={() => submitMessage()}
+              reasoningEffort={effectiveReasoningEffort}
+              onReasoningEffortChange={setReasoningEffort}
+              onStop={stopGeneration}
               isLoading={isLoading}
               placeholder={
                 isEmptyThread

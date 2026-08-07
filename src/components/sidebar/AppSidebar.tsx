@@ -10,12 +10,11 @@ import {
 import * as m from "motion/react-m"
 
 import { ThreadContextMenu } from "@/components/sidebar/ThreadContextMenu"
+import { SidebarAccount } from "@/components/sidebar/SidebarAccount"
 import {
-  SIDEBAR_LOAD_MORE_DELAY_MS,
   SIDEBAR_LOAD_MORE_THRESHOLD_PX,
   SIDEBAR_SEARCH_FOCUS_DELAY_MS,
   SIDEBAR_SEARCH_SHORTCUT,
-  SIDEBAR_THREAD_PAGE_SIZE,
 } from "@/components/sidebar/constants"
 import { groupSidebarThreads } from "@/components/sidebar/logic"
 import { Tooltip } from "@/components/shared/motion/tooltip"
@@ -23,6 +22,7 @@ import { Separator } from "@/components/shared/ui/separator"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -31,7 +31,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/shared/ui/sidebar"
-import { useMountEffect } from "@/hooks/useMountEffect"
 import { useWindowEvent } from "@/hooks/useWindowEvent"
 import type { ChatThread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
@@ -39,6 +38,11 @@ import { cn } from "@/lib/utils"
 type AppSidebarProps = {
   threads: ChatThread[]
   activeThreadId: string
+  query: string
+  onQueryChange: (query: string) => void
+  paginationStatus:
+    "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted"
+  onLoadMore: () => void
   actions: {
     select: (threadId: string) => void
     create: () => void
@@ -53,15 +57,15 @@ type AppSidebarProps = {
 export function AppSidebar({
   threads,
   activeThreadId,
+  query,
+  onQueryChange,
+  paginationStatus,
+  onLoadMore,
   actions,
 }: AppSidebarProps) {
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
-  const [query, setQuery] = useState("")
   const [pinnedOpen, setPinnedOpen] = useState(true)
-  const [visibleCount, setVisibleCount] = useState(SIDEBAR_THREAD_PAGE_SIZE)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const loadMoreTimerRef = useRef<number | null>(null)
 
   useWindowEvent("keydown", (event) => {
     if (
@@ -82,38 +86,25 @@ export function AppSidebar({
     )
   })
 
-  useMountEffect(() => () => {
-    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current)
-  })
-
-  const filteredThreads = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    const conversationThreads = threads.filter(
-      (thread) => thread.messages.length > 0 && !thread.archivedAt
-    )
-    if (!normalized) return conversationThreads
-    return conversationThreads.filter((thread) =>
-      thread.title.toLowerCase().includes(normalized)
-    )
-  }, [query, threads])
-
   const orderedThreads = useMemo(
     () => [
-      ...filteredThreads
+      ...threads
         .filter((thread) => thread.pinnedAt != null)
         .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0)),
-      ...filteredThreads.filter((thread) => thread.pinnedAt == null),
+      ...threads.filter((thread) => thread.pinnedAt == null),
     ],
-    [filteredThreads]
+    [threads]
   )
-  const visibleThreads = orderedThreads.slice(0, visibleCount)
-  const pinnedThreads = visibleThreads
+  const pinnedThreads = orderedThreads
     .filter((thread) => thread.pinnedAt)
     .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0))
   const regularSections = groupSidebarThreads(
-    visibleThreads.filter((thread) => !thread.pinnedAt)
+    orderedThreads.filter((thread) => !thread.pinnedAt)
   )
-  const hasMoreThreads = visibleCount < orderedThreads.length
+  const hasMoreThreads = paginationStatus === "CanLoadMore"
+  const isLoadingMore =
+    paginationStatus === "LoadingMore" ||
+    paginationStatus === "LoadingFirstPage"
 
   function handleSelect(threadId: string) {
     actions.select(threadId)
@@ -122,12 +113,7 @@ export function AppSidebar({
 
   function loadMoreThreads() {
     if (!hasMoreThreads || isLoadingMore) return
-    setIsLoadingMore(true)
-    loadMoreTimerRef.current = window.setTimeout(() => {
-      setVisibleCount((count) => count + SIDEBAR_THREAD_PAGE_SIZE)
-      setIsLoadingMore(false)
-      loadMoreTimerRef.current = null
-    }, SIDEBAR_LOAD_MORE_DELAY_MS)
+    onLoadMore()
   }
 
   function handleListScroll(event: UIEvent<HTMLDivElement>) {
@@ -249,8 +235,7 @@ export function AppSidebar({
                 data-sidebar-search=""
                 value={query}
                 onChange={(event) => {
-                  setQuery(event.target.value)
-                  setVisibleCount(SIDEBAR_THREAD_PAGE_SIZE)
+                  onQueryChange(event.target.value)
                 }}
                 placeholder="Search your threads..."
                 className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
@@ -264,7 +249,7 @@ export function AppSidebar({
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <SidebarContent className="gap-0" onScroll={handleListScroll}>
-          {filteredThreads.length === 0 ? (
+          {threads.length === 0 ? (
             <p className="px-4 py-2 text-xs text-sidebar-muted-foreground">
               {query.trim() ? "No matching chats" : "No chats yet"}
             </p>
@@ -339,6 +324,9 @@ export function AppSidebar({
           )}
         </SidebarContent>
       </div>
+      <SidebarFooter className="shrink-0 border-t border-sidebar-border p-2">
+        <SidebarAccount />
+      </SidebarFooter>
     </Sidebar>
   )
 }

@@ -61,7 +61,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
   }
 
   function handleSelect(modelId: string) {
-    modelStore.selectModel(modelId)
+    state.selectModel(modelId)
     handleOpenChange(false)
   }
 
@@ -124,7 +124,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
               state.search.trim().length > 0 || state.capabilities.length > 0
             }
             onToggleCapability={modelStore.toggleCapability}
-            onCombineResultsChange={modelStore.setCombineResults}
+            onCombineResultsChange={state.setCombineResults}
             onClearFilters={modelStore.clearFilters}
           />
           <Separator className="absolute right-[3.25rem] bottom-1.5 left-3 w-auto! bg-border/60" />
@@ -143,7 +143,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
             favoriteIds={favoriteIds}
             emptyMessage={resolveEmptyMessage(query)}
             onSelect={handleSelect}
-            onToggleFavorite={modelStore.toggleFavorite}
+            onToggleFavorite={state.toggleFavorite}
           />
         </div>
       </PopoverContent>

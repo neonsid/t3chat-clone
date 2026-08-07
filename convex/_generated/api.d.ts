@@ -8,7 +8,13 @@
  * @module
  */
 
-import type * as todos from "../todos.js";
+import type * as chatRuns from "../chatRuns.js";
+import type * as constants from "../constants.js";
+import type * as helpers_functions from "../helpers/functions.js";
+import type * as helpers_threads from "../helpers/threads.js";
+import type * as messages from "../messages.js";
+import type * as preferences from "../preferences.js";
+import type * as threads from "../threads.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  todos: typeof todos;
+  chatRuns: typeof chatRuns;
+  constants: typeof constants;
+  "helpers/functions": typeof helpers_functions;
+  "helpers/threads": typeof helpers_threads;
+  messages: typeof messages;
+  preferences: typeof preferences;
+  threads: typeof threads;
 }>;
 
 /**

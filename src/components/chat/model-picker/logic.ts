@@ -1,9 +1,10 @@
-import { MODEL_CATALOG, MODEL_PROVIDERS } from "@t3chat/model-catalog"
+import { MODEL_PROVIDERS } from "@t3chat/model-catalog"
 import type {
   ModelCapability,
   ModelCatalogEntry,
   ModelProviderId,
 } from "@t3chat/model-catalog"
+import { CHAT_MODEL_CATALOG } from "@/lib/chat-models"
 
 export type ModelQuery = {
   readonly search: string
@@ -22,7 +23,7 @@ function normalize(value: string): string {
 }
 
 const searchableTextById = new Map(
-  MODEL_CATALOG.map((model) => [
+  CHAT_MODEL_CATALOG.map((model) => [
     model.id,
     normalize(
       `${model.name} ${model.modelId} ${
@@ -33,10 +34,10 @@ const searchableTextById = new Map(
 )
 
 const capabilitiesByModelId = new Map(
-  MODEL_CATALOG.map((model) => [model.id, new Set(model.capabilities)])
+  CHAT_MODEL_CATALOG.map((model) => [model.id, new Set(model.capabilities)])
 )
 
-const modelsByRecency = [...MODEL_CATALOG].sort(
+const modelsByRecency = [...CHAT_MODEL_CATALOG].sort(
   (a, b) =>
     (b.lastUpdated ?? "").localeCompare(a.lastUpdated ?? "") ||
     a.name.localeCompare(b.name)

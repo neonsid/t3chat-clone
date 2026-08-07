@@ -8,7 +8,9 @@ import {
   Share2Icon,
   Trash2Icon,
 } from "lucide-react"
+import { useConvex } from "convex/react"
 
+import { api } from "../../../convex/_generated/api"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,6 +19,7 @@ import {
 import type { ContextMenuTriggerProps } from "@/components/shared/motion/context-menu"
 import { ContextMenuItemList } from "@/components/shared/motion/context-menu-item-list"
 import type { ContextMenuItemData } from "@/components/shared/motion/context-menu-item-list"
+import { toChatMessages } from "@/lib/threads"
 import type { ChatThread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
@@ -52,10 +55,16 @@ function getThreadText(thread: ChatThread) {
   return sections.join("\n\n")
 }
 
-function exportThread(thread: ChatThread) {
-  const blob = new Blob([`# ${thread.title}\n\n${getThreadText(thread)}\n`], {
-    type: "text/markdown;charset=utf-8",
-  })
+async function exportThread(
+  thread: ChatThread,
+  loadMessages: () => Promise<ChatThread["messages"]>
+) {
+  const messages =
+    thread.messages.length > 0 ? thread.messages : await loadMessages()
+  const blob = new Blob(
+    [`# ${thread.title}\n\n${getThreadText({ ...thread, messages })}\n`],
+    { type: "text/markdown;charset=utf-8" }
+  )
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
@@ -81,7 +90,8 @@ async function shareThread(thread: ChatThread) {
 
 function createThreadContextMenuItems(
   thread: ChatThread,
-  actions: ThreadContextMenuActions
+  actions: ThreadContextMenuActions,
+  onExport: () => void
 ): ContextMenuItemData[] {
   const isPinned = Boolean(thread.pinnedAt)
 
@@ -124,7 +134,7 @@ function createThreadContextMenuItems(
       id: "export",
       label: "Export",
       icon: <DownloadIcon className="size-4" />,
-      onSelect: () => exportThread(thread),
+      onSelect: onExport,
     },
     {
       id: "archive",
@@ -147,7 +157,15 @@ export function ThreadContextMenu({
   actions,
   children,
 }: ThreadContextMenuProps) {
-  const menuItems = createThreadContextMenuItems(thread, actions)
+  const convex = useConvex()
+  const menuItems = createThreadContextMenuItems(thread, actions, () => {
+    void exportThread(thread, async () => {
+      const messages = await convex.query(api.messages.listForThread, {
+        threadId: thread.id,
+      })
+      return toChatMessages(messages)
+    })
+  })
 
   return (
     <ContextMenu>

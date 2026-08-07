@@ -1,4 +1,5 @@
-import { Navigate, useNavigate } from "@tanstack/react-router"
+import { useUser } from "@clerk/tanstack-react-start"
+import { Navigate, useLocation, useNavigate } from "@tanstack/react-router"
 import { LazyMotion, domAnimation } from "motion/react"
 
 import {
@@ -9,22 +10,53 @@ import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
 import { AppSidebar } from "@/components/sidebar/AppSidebar"
 import { SidebarInset, SidebarProvider } from "@/components/shared/ui/sidebar"
 import { useThreads } from "@/hooks/useThreads"
+import { SIGN_IN_PATH } from "@/lib/auth"
 
-export function ChatPage({ threadId }: { threadId: string }) {
+export function ChatPage({
+  threadId,
+  isDraft = false,
+  forceGuestThread = false,
+}: {
+  threadId: string
+  isDraft?: boolean
+  forceGuestThread?: boolean
+}) {
   const navigate = useNavigate()
+  const returnTo = useLocation({ select: (location) => location.href })
+  const { isSignedIn, user } = useUser()
   const {
     activeThread,
+    isAuthenticated,
+    isAuthLoading,
+    isThreadReady,
+    messagesLoading,
     threads,
-    selectThread,
-    createThread,
+    query,
+    setQuery,
+    paginationStatus,
+    loadMore,
     deleteThread,
-    updateThreadMessages,
-    updateThreadGenerationStats,
     toggleThreadPinned,
     archiveThread,
     renameThread,
     regenerateThreadTitle,
-  } = useThreads(threadId)
+  } = useThreads(threadId, { forceGuestThread })
+
+  if (activeThread === undefined || messagesLoading) {
+    return <div className="h-dvh bg-background" />
+  }
+
+  if (activeThread === null) {
+    return <Navigate to="/" replace />
+  }
+
+  if (!isDraft && isSignedIn && !isAuthLoading && !isAuthenticated) {
+    return <Navigate to="/" replace />
+  }
+
+  if (!isDraft && isAuthenticated && activeThread.messages.length === 0) {
+    return <Navigate to="/" replace />
+  }
 
   if (activeThread.id !== threadId) {
     return (
@@ -35,9 +67,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
       />
     )
   }
+  const activeThreadId = activeThread.id
 
   function openThread(nextThreadId: string) {
-    selectThread(nextThreadId)
     void navigate({
       to: "/chat/$threadId",
       params: { threadId: nextThreadId },
@@ -45,31 +77,47 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }
 
   function createNewThread() {
-    const thread = createThread()
+    void navigate({ to: "/" })
+  }
+
+  function requireAuthentication() {
+    if (isSignedIn) return
     void navigate({
-      to: "/chat/$threadId",
-      params: { threadId: thread.id },
+      to: SIGN_IN_PATH,
+      search: { redirect_url: returnTo },
     })
   }
 
-  function removeThread(removedThreadId: string) {
-    const nextThread = deleteThread(removedThreadId)
-    if (removedThreadId !== activeThread.id) return
+  const userName =
+    user?.firstName ?? user?.fullName ?? user?.username ?? "there"
 
+  function activateDraftThread() {
+    if (!isDraft || !isThreadReady) return
     void navigate({
       to: "/chat/$threadId",
-      params: { threadId: nextThread.id },
+      params: { threadId: activeThreadId },
       replace: true,
     })
   }
 
-  function archiveChat(archivedThreadId: string) {
-    const nextThread = archiveThread(archivedThreadId)
-    if (archivedThreadId !== activeThread.id || !nextThread) return
+  async function removeThread(removedThreadId: string) {
+    const nextThreadId = await deleteThread(removedThreadId)
+    if (removedThreadId !== activeThreadId) return
 
     void navigate({
       to: "/chat/$threadId",
-      params: { threadId: nextThread.id },
+      params: { threadId: nextThreadId },
+      replace: true,
+    })
+  }
+
+  async function archiveChat(archivedThreadId: string) {
+    const nextThreadId = await archiveThread(archivedThreadId)
+    if (archivedThreadId !== activeThreadId) return
+
+    void navigate({
+      to: "/chat/$threadId",
+      params: { threadId: nextThreadId },
       replace: true,
     })
   }
@@ -80,14 +128,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
         <AppSidebar
           threads={threads}
           activeThreadId={activeThread.id}
+          query={query}
+          onQueryChange={setQuery}
+          paginationStatus={paginationStatus}
+          onLoadMore={loadMore}
           actions={{
             select: openThread,
-            create: createNewThread,
-            delete: removeThread,
-            togglePinned: toggleThreadPinned,
-            archive: archiveChat,
-            rename: renameThread,
-            regenerateTitle: regenerateThreadTitle,
+            create: () => void createNewThread(),
+            delete: (id) => void removeThread(id),
+            togglePinned: (id) => void toggleThreadPinned(id),
+            archive: (id) => void archiveChat(id),
+            rename: (id, title) => void renameThread(id, title),
+            regenerateTitle: (id) => void regenerateThreadTitle(id),
           }}
         />
         <ChatHeaderActions />
@@ -97,18 +149,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
               key={activeThread.id}
               threadId={activeThread.id}
               initialMessages={activeThread.messages}
-              generationStats={activeThread.generationStats ?? {}}
-              onMessagesChange={(messages) =>
-                updateThreadMessages(activeThread.id, messages)
-              }
-              onGenerationStatsChange={(messageId, generationStats) =>
-                updateThreadGenerationStats(
-                  activeThread.id,
-                  messageId,
-                  generationStats
-                )
-              }
-              onCreateThread={createNewThread}
+              generationStats={activeThread.generationStats}
+              onCreateThread={() => void createNewThread()}
+              isAuthenticated={isAuthenticated && isThreadReady}
+              userName={userName}
+              onRequireAuthentication={requireAuthentication}
+              onThreadStarted={isDraft ? activateDraftThread : undefined}
             />
           </SidebarInset>
         </ChatShell>

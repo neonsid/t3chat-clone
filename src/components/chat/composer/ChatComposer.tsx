@@ -12,6 +12,8 @@ interface ChatComposerProps {
   value: string
   onChange: (value: string) => void
   onSubmit: (reasoningEffort: ReasoningEffort) => void
+  reasoningEffort: ReasoningEffort
+  onReasoningEffortChange: (reasoningEffort: ReasoningEffort) => void
   onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
@@ -23,6 +25,8 @@ export function ChatComposer({
   value,
   onChange,
   onSubmit,
+  reasoningEffort,
+  onReasoningEffortChange,
   onStop,
   isLoading = false,
   disabled = false,
@@ -30,8 +34,6 @@ export function ChatComposer({
   className,
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [reasoningEffort, setReasoningEffort] =
-    useState<ReasoningEffort>("instant")
   const [searchEnabled, setSearchEnabled] = useState(false)
   const canSend = value.trim().length > 0 && !isLoading && !disabled
   const canStop = isLoading && !disabled && Boolean(onStop)
@@ -88,7 +90,7 @@ export function ChatComposer({
 
             <ReasoningEffortSelect
               value={reasoningEffort}
-              onValueChange={setReasoningEffort}
+              onValueChange={onReasoningEffortChange}
               disabled={disabled || isLoading}
             />
 

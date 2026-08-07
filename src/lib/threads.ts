@@ -1,5 +1,7 @@
 import type { UIMessage } from "@tanstack/ai-react"
 
+import type { Doc } from "../../convex/_generated/dataModel"
+
 export type AssistantGenerationStats = {
   modelName: string
   mode: string
@@ -14,105 +16,65 @@ export type ChatThread = {
   createdAt: number
   updatedAt: number
   messages: UIMessage[]
-  generationStats?: Record<string, AssistantGenerationStats>
+  generationStats: Record<string, AssistantGenerationStats>
   pinnedAt?: number
-  archivedAt?: number
 }
 
-const STORAGE_KEY = "t3chat.threads.v1"
 const shortTimeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
 })
 
-function createId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID()
-  }
-  return `thread_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+export function toChatMessages(messages: Doc<"messages">[]): UIMessage[] {
+  return messages.map((message) => ({
+    id: message.messageId,
+    role: message.role,
+    parts: message.parts,
+    createdAt: new Date(message.createdAt),
+  }))
 }
 
-export function createEmptyThread(partial?: Partial<ChatThread>): ChatThread {
-  const now = Date.now()
-  return {
-    id: createId(),
-    title: "New chat",
-    createdAt: now,
-    updatedAt: now,
-    messages: [],
-    generationStats: {},
-    ...partial,
-  }
-}
-
-export function titleFromMessages(messages: UIMessage[]): string {
-  const firstUser = messages.find((message) => message.role === "user")
-  if (!firstUser) return "New chat"
-
-  let text = ""
-  for (const part of firstUser.parts) {
-    if (part.type !== "text") continue
-    text += `${text ? " " : ""}${part.content}`
-  }
-  text = text.trim()
-
-  if (!text) return "New chat"
-  return text.length > 48 ? `${text.slice(0, 48).trimEnd()}…` : text
-}
-
-type StoredState = {
-  activeThreadId: string
-  threads: ChatThread[]
-}
-
-function canUseStorage() {
-  return (
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+export function toGenerationStats(
+  messages: Doc<"messages">[]
+): Record<string, AssistantGenerationStats> {
+  return Object.fromEntries(
+    messages.flatMap((message) => {
+      const generation = message.generation
+      if (!generation) return []
+      const generationSeconds = Math.max(
+        (generation.durationMs - generation.timeToFirstTokenMs) / 1000,
+        0.001
+      )
+      return [
+        [
+          message.messageId,
+          {
+            modelName: generation.modelName,
+            mode: `${generation.reasoningEffort.charAt(0).toUpperCase()}${generation.reasoningEffort.slice(1)}`,
+            outputTokens: generation.outputTokens,
+            tokensPerSecond: generation.outputTokens / generationSeconds,
+            timeToFirstTokenSeconds: generation.timeToFirstTokenMs / 1000,
+          },
+        ],
+      ]
+    })
   )
 }
 
-export function loadThreadState(): StoredState {
-  const fallback = createEmptyThread()
-  if (!canUseStorage()) {
-    return { activeThreadId: fallback.id, threads: [fallback] }
+export function toChatThread(
+  thread: Doc<"threads">,
+  messages: UIMessage[] = [],
+  generationStats: Record<string, AssistantGenerationStats> = {}
+): ChatThread {
+  return {
+    id: thread._id,
+    title: thread.title,
+    createdAt: thread._creationTime,
+    updatedAt: thread.updatedAt,
+    messages,
+    generationStats,
+    pinnedAt: thread.pinnedAt,
   }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return { activeThreadId: fallback.id, threads: [fallback] }
-    }
-
-    const parsed = JSON.parse(raw) as Partial<StoredState>
-    const threads = Array.isArray(parsed.threads)
-      ? parsed.threads.filter(
-          (thread): thread is ChatThread =>
-            Boolean(thread) &&
-            typeof thread.id === "string" &&
-            typeof thread.title === "string" &&
-            Array.isArray(thread.messages)
-        )
-      : []
-
-    if (threads.length === 0) {
-      return { activeThreadId: fallback.id, threads: [fallback] }
-    }
-
-    const activeThreadId =
-      typeof parsed.activeThreadId === "string" &&
-      threads.some((thread) => thread.id === parsed.activeThreadId)
-        ? parsed.activeThreadId
-        : threads[0].id
-
-    return { activeThreadId, threads }
-  } catch {
-    return { activeThreadId: fallback.id, threads: [fallback] }
-  }
-}
-
-export function saveThreadState(state: StoredState) {
-  if (!canUseStorage()) return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
 export function formatShortTimestamp(

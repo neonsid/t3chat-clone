@@ -1,0 +1,19 @@
+import {
+  DEFAULT_CHAT_MODEL_ID,
+  DEFAULT_FAVORITE_MODEL_IDS,
+} from "../src/lib/chat-models"
+
+export const DEFAULT_THREAD_TITLE = "New chat"
+export const MAX_THREAD_TITLE_LENGTH = 48
+export const MAX_THREAD_MESSAGES = 200
+export const MAX_MESSAGE_CONTENT_LENGTH = 100_000
+export const MAX_CHAT_IDENTIFIER_LENGTH = 200
+export const MAX_MODEL_CONTEXT_MESSAGES = 80
+export const MAX_PINNED_THREADS = 100
+export const MAX_SEARCH_RESULTS = 50
+export const MAX_SEARCH_LENGTH = 100
+export const THREAD_DELETE_BATCH_SIZE = 64
+export const RUN_LEASE_DURATION_MS = 15 * 60 * 1000
+
+export const DEFAULT_SELECTED_MODEL_ID = DEFAULT_CHAT_MODEL_ID
+export { DEFAULT_FAVORITE_MODEL_IDS }

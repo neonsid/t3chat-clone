@@ -1,22 +1,41 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useState } from "react"
+import { createFileRoute } from "@tanstack/react-router"
+import { useConvexAuth, useMutation } from "convex/react"
 
+import { api } from "../../convex/_generated/api"
+import { ChatPage } from "@/components/chat/ChatPage"
 import { useMountEffect } from "@/hooks/useMountEffect"
-import { useThreads } from "@/hooks/useThreads"
 
 export const Route = createFileRoute("/")({ component: NewChatRoute })
 
 function NewChatRoute() {
-  const navigate = useNavigate()
-  const { createThread } = useThreads()
+  const { isAuthenticated } = useConvexAuth()
+
+  if (!isAuthenticated) return <ChatPage threadId="guest" isDraft />
+
+  return <AuthenticatedNewChatRoute />
+}
+
+function AuthenticatedNewChatRoute() {
+  const [threadId, setThreadId] = useState<string | null>(null)
+  const createThread = useMutation(api.threads.createOrReuseEmpty)
 
   useMountEffect(() => {
-    const thread = createThread()
-    void navigate({
-      to: "/chat/$threadId",
-      params: { threadId: thread.id },
-      replace: true,
+    let mounted = true
+    void createThread({}).then((createdThreadId) => {
+      if (mounted) setThreadId(createdThreadId)
     })
+
+    return () => {
+      mounted = false
+    }
   })
 
-  return <div className="h-dvh bg-background" />
+  return (
+    <ChatPage
+      threadId={threadId ?? "guest"}
+      isDraft
+      forceGuestThread={threadId === null}
+    />
+  )
 }

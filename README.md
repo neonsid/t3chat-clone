@@ -48,3 +48,5 @@ To use the components in your app, import them as follows:
 import { Button } from "@/components/ui/button"
 ```
 - [] While copying keep the original without markdown text
+
+-[] Preserve the chat UI state always

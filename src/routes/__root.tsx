@@ -6,6 +6,7 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
+import type { ConvexReactClient } from "convex/react"
 
 import appCss from "../styles.css?url"
 
@@ -13,6 +14,7 @@ import { themeBootScript } from "../lib/theme"
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
+  convexClient: ConvexReactClient
 }>()({
   head: () => ({
     meta: [

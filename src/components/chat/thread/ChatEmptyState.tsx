@@ -16,7 +16,7 @@ interface ChatEmptyStateProps {
 }
 
 export function ChatEmptyState({
-  userName = "Siddharth",
+  userName = "there",
   onSelectPrompt,
   className,
 }: ChatEmptyStateProps) {
