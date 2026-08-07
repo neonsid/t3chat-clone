@@ -99,6 +99,7 @@ export function ChatThreadView({
   initialMessages,
   generationStats,
   onCreateThread,
+  isReady,
   isAuthenticated,
   userName,
   onRequireAuthentication,
@@ -108,6 +109,7 @@ export function ChatThreadView({
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
   onCreateThread: () => void
+  isReady: boolean
   isAuthenticated: boolean
   userName: string
   onRequireAuthentication: () => void
@@ -173,7 +175,7 @@ export function ChatThreadView({
   })
 
   const isEmptyThread = messages.length === 0
-  const showEmptyState = isEmptyThread && input.trim().length === 0
+  const showEmptyState = isReady && isEmptyThread && input.trim().length === 0
   const lastMessage = messages.at(-1)
   const showPendingDots = isLoading && lastMessage?.role === "user"
 
@@ -183,7 +185,7 @@ export function ChatThreadView({
   )
 
   function submitMessage(content = input.trim()) {
-    if (!content || isLoading) return
+    if (!isReady || !content || isLoading) return
     if (!isAuthenticated) {
       onRequireAuthentication()
       return
@@ -228,6 +230,7 @@ export function ChatThreadView({
           hasMessages={!isEmptyThread}
         />
         <div
+          aria-busy={!isReady || isLoading}
           className="absolute inset-0 z-0 overflow-hidden"
           style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
         >
@@ -249,7 +252,7 @@ export function ChatThreadView({
             <MessageScroller>
               <MessageScrollerViewport>
                 <MessageScrollerContent
-                  aria-busy={isLoading}
+                  aria-busy={!isReady || isLoading}
                   className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
                   {messagePairs.map(({ message, previousUserCreatedAt }) => {

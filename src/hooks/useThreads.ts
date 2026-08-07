@@ -85,6 +85,18 @@ export function useThreads(
       return [toChatThread(thread)]
     })
   }, [pinnedDocuments, query, recent.results, searchDocuments, useBackend])
+  const isThreadDataReady = Boolean(
+    !isAuthLoading &&
+    (!useBackend ||
+      (normalizedThreadId &&
+        activeThreadDocument !== undefined &&
+        messageDocuments !== undefined))
+  )
+  const isSidebarDataReady = Boolean(
+    !isAuthLoading &&
+    (!useBackend ||
+      (pinnedDocuments !== undefined && recent.status !== "LoadingFirstPage"))
+  )
 
   function requireThreadId(threadId: string): Id<"threads"> {
     return threadId as Id<"threads">
@@ -98,7 +110,9 @@ export function useThreads(
     activeThread,
     isAuthenticated,
     isAuthLoading,
-    isThreadReady: useBackend,
+    isThreadDataReady,
+    isSidebarDataReady,
+    canPersistThread: useBackend,
     messagesLoading: Boolean(
       useBackend && normalizedThreadId && messageDocuments === undefined
     ),

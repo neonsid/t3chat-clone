@@ -12,6 +12,7 @@ import {
   THREAD_DELETE_BATCH_SIZE,
 } from "./constants"
 import { authedMutation, authedQuery } from "./helpers/functions"
+import { getMessageContent } from "./helpers/messages"
 import { getOwnedThread, titleFromFirstMessage } from "./helpers/threads"
 import type { MutationCtx } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
@@ -175,9 +176,7 @@ export const regenerateTitle = authedMutation({
       .order("asc")
       .first()
 
-    const firstText = firstMessage?.parts.find(
-      (part) => part.type === "text"
-    )?.content
+    const firstText = firstMessage ? getMessageContent(firstMessage) : ""
 
     await ctx.db.patch("threads", thread._id, {
       title: firstText

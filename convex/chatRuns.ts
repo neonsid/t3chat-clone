@@ -8,11 +8,7 @@ import {
 } from "./constants"
 import { authedMutation } from "./helpers/functions"
 import { getOwnedThread, titleFromFirstMessage } from "./helpers/threads"
-import {
-  generationValidator,
-  messagePartValidator,
-  reasoningEffortValidator,
-} from "./schema"
+import { generationValidator, reasoningEffortValidator } from "./schema"
 import type { MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 
@@ -45,9 +41,8 @@ async function saveAssistantMessage(
   ctx: ViewerMutationCtx,
   thread: Doc<"threads">,
   messageId: string | undefined,
-  parts: Array<
-    { type: "text"; content: string } | { type: "thinking"; content: string }
-  >,
+  content: string,
+  thinking: string,
   status: "complete" | "stopped" | "failed",
   generation:
     | {
@@ -60,7 +55,7 @@ async function saveAssistantMessage(
       }
     | undefined
 ) {
-  if (!messageId || parts.every((part) => !part.content)) return
+  if (!messageId || (!content && !thinking)) return
 
   const existingMessage = await ctx.db
     .query("messages")
@@ -75,7 +70,8 @@ async function saveAssistantMessage(
     messageId,
     sequence: thread.nextSequence,
     role: "assistant",
-    parts,
+    content,
+    thinking: thinking || undefined,
     status,
     createdAt: Date.now(),
     generation,
@@ -94,9 +90,8 @@ async function finishRun(
     runId: string
     completionSecret: string
     assistantMessageId?: string
-    parts: Array<
-      { type: "text"; content: string } | { type: "thinking"; content: string }
-    >
+    content: string
+    thinking?: string
     generation?: {
       modelId: string
       modelName: string
@@ -122,7 +117,8 @@ async function finishRun(
     ctx,
     thread,
     args.assistantMessageId,
-    args.parts,
+    args.content,
+    args.thinking ?? "",
     status,
     args.generation
   )
@@ -210,7 +206,7 @@ export const start = authedMutation({
         messageId: args.userMessageId,
         sequence: nextSequence,
         role: "user",
-        parts: [{ type: "text", content }],
+        content,
         status: "complete",
         createdAt: now,
       })
@@ -248,7 +244,8 @@ const finishArgs = {
   runId: v.string(),
   completionSecret: v.string(),
   assistantMessageId: v.optional(v.string()),
-  parts: v.array(messagePartValidator),
+  content: v.string(),
+  thinking: v.optional(v.string()),
   generation: v.optional(generationValidator),
 }
 

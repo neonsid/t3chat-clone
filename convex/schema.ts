@@ -79,7 +79,10 @@ export default defineSchema({
     messageId: v.string(),
     sequence: v.number(),
     role: v.union(v.literal("user"), v.literal("assistant")),
-    parts: v.array(messagePartValidator),
+    content: v.optional(v.string()),
+    thinking: v.optional(v.string()),
+    // Deprecated migration field. New messages use the scalar text fields.
+    parts: v.optional(v.array(messagePartValidator)),
     status: v.union(
       v.literal("complete"),
       v.literal("stopped"),

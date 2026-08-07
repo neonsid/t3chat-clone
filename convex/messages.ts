@@ -2,6 +2,7 @@ import { v } from "convex/values"
 
 import { MAX_MODEL_CONTEXT_MESSAGES, MAX_THREAD_MESSAGES } from "./constants"
 import { authedQuery } from "./helpers/functions"
+import { getMessageContent } from "./helpers/messages"
 import { getOwnedThread } from "./helpers/threads"
 
 export const listForThread = authedQuery({
@@ -48,7 +49,7 @@ export const getContext = authedQuery({
     return messages.reverse().map((message) => ({
       id: message.messageId,
       role: message.role,
-      parts: message.parts,
+      content: getMessageContent(message),
       createdAt: message.createdAt,
     }))
   },

@@ -20,18 +20,50 @@ export type ChatThread = {
   pinnedAt?: number
 }
 
+export function createPendingChatThread(id: string): ChatThread {
+  return {
+    id,
+    title: "New Chat",
+    createdAt: 0,
+    updatedAt: 0,
+    messages: [],
+    generationStats: {},
+  }
+}
+
 const shortTimeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
 })
 
 export function toChatMessages(messages: Doc<"messages">[]): UIMessage[] {
-  return messages.map((message) => ({
-    id: message.messageId,
-    role: message.role,
-    parts: message.parts,
-    createdAt: new Date(message.createdAt),
-  }))
+  return messages.map((message) => {
+    const legacyParts = message.parts ?? []
+    const content =
+      message.content ??
+      legacyParts
+        .filter((part) => part.type === "text")
+        .map((part) => part.content)
+        .join("\n")
+        .trim()
+    const thinking =
+      message.thinking ??
+      legacyParts
+        .filter((part) => part.type === "thinking")
+        .map((part) => part.content)
+        .join("\n")
+        .trim()
+
+    return {
+      id: message.messageId,
+      role: message.role,
+      parts: [
+        ...(thinking ? [{ type: "thinking" as const, content: thinking }] : []),
+        ...(content ? [{ type: "text" as const, content }] : []),
+      ],
+      createdAt: new Date(message.createdAt),
+    }
+  })
 }
 
 export function toGenerationStats(

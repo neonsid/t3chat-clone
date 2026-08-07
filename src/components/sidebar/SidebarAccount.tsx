@@ -5,6 +5,7 @@ import {
   LogOutIcon,
   MessageSquareIcon,
   SettingsIcon,
+  UserRoundPlusIcon,
 } from "lucide-react"
 
 import {
@@ -49,11 +50,11 @@ export function SidebarAccount() {
           <button
             type="button"
             aria-label="Open account menu"
-            className="flex h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+            className="flex h-8 w-full cursor-pointer items-center justify-between px-1 text-left focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
           />
         }
       >
-        <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-medium text-primary-foreground ring-2 ring-primary/30">
+        <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-medium text-primary-foreground ring-2 ring-sidebar-ring/80 ring-offset-2 ring-offset-sidebar">
           {user.hasImage ? (
             <img
               src={user.imageUrl}
@@ -64,35 +65,39 @@ export function SidebarAccount() {
             initial
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {displayName}
-        </span>
+        <UserRoundPlusIcon
+          aria-hidden="true"
+          className="size-5 text-sidebar-foreground"
+        />
       </PopoverTrigger>
 
       <PopoverContent
         side="top"
         align="start"
+        alignOffset={4}
         sideOffset={8}
-        className="w-[calc(var(--sidebar-width)-1rem)] overflow-hidden p-0"
+        className="w-[calc(var(--anchor-width)-0.5rem)] min-w-[calc(var(--anchor-width)-0.5rem)] overflow-hidden rounded-xl p-0"
       >
-        <div className="space-y-3 px-4 py-4">
-          <p className="truncate text-sm font-semibold">{displayName}</p>
-          <span className="inline-flex rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+        <div className="space-y-2.5 px-4 py-3.5">
+          <p className="truncate text-sm font-semibold tracking-tight">
+            {displayName}
+          </p>
+          <span className="inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
             Pro
           </span>
         </div>
         <Separator />
-        <div className="p-1.5">
+        <div className="space-y-0.5 p-1.5">
           <button
             type="button"
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
             <SettingsIcon aria-hidden="true" className="size-4" />
             Settings
           </button>
           <button
             type="button"
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
             <MessageSquareIcon aria-hidden="true" className="size-4" />
             Feedback
@@ -107,7 +112,7 @@ export function SidebarAccount() {
                 redirectUrl: returnTo || DEFAULT_AUTH_REDIRECT,
               })
             }
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
             <LogOutIcon aria-hidden="true" className="size-4" />
             Sign out

@@ -63,9 +63,7 @@ function latestUserMessage(messages: Array<UIMessage | ModelMessage>) {
 function contextToModelMessages(
   messages: Array<{
     role: "user" | "assistant"
-    parts: Array<
-      { type: "text"; content: string } | { type: "thinking"; content: string }
-    >
+    content: string
   }>
 ): ModelMessage[] {
   const selected: ModelMessage[] = []
@@ -73,11 +71,7 @@ function contextToModelMessages(
 
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
-    const content = message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.content)
-      .join("\n")
-      .trim()
+    const content = message.content.trim()
     if (!content) continue
     if (
       selected.length > 0 &&
@@ -123,10 +117,6 @@ function collectAndPersistStream({
     let outputTokens = 0
     let finished = false
 
-    const parts = () => [
-      ...(thinking ? [{ type: "thinking" as const, content: thinking }] : []),
-      ...(text ? [{ type: "text" as const, content: text }] : []),
-    ]
     const generation = () => ({
       modelId,
       modelName,
@@ -157,7 +147,8 @@ function collectAndPersistStream({
         runId,
         completionSecret,
         assistantMessageId,
-        parts: parts(),
+        content: text,
+        thinking: thinking || undefined,
         generation: generation(),
       })
       finished = true
@@ -168,7 +159,8 @@ function collectAndPersistStream({
           runId,
           completionSecret,
           assistantMessageId,
-          parts: parts(),
+          content: text,
+          thinking: thinking || undefined,
           generation: generation(),
         })
       } else {
@@ -177,7 +169,8 @@ function collectAndPersistStream({
           runId,
           completionSecret,
           assistantMessageId,
-          parts: parts(),
+          content: text,
+          thinking: thinking || undefined,
           generation: generation(),
           errorMessage:
             error instanceof Error ? error.message : "Generation failed",
@@ -192,7 +185,8 @@ function collectAndPersistStream({
           runId,
           completionSecret,
           assistantMessageId,
-          parts: parts(),
+          content: text,
+          thinking: thinking || undefined,
           generation: generation(),
         })
       }
@@ -318,7 +312,7 @@ export const Route = createFileRoute("/api/chat")({
                 threadId,
                 runId: params.runId,
                 completionSecret,
-                parts: [],
+                content: "",
                 errorMessage:
                   error instanceof Error
                     ? error.message

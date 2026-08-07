@@ -9,7 +9,18 @@ import { useMountEffect } from "@/hooks/useMountEffect"
 export const Route = createFileRoute("/")({ component: NewChatRoute })
 
 function NewChatRoute() {
-  const { isAuthenticated } = useConvexAuth()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
+  if (isLoading) {
+    return (
+      <ChatPage
+        threadId="guest"
+        isDraft
+        forceGuestThread
+        isRouteDataReady={false}
+      />
+    )
+  }
 
   if (!isAuthenticated) return <ChatPage threadId="guest" isDraft />
 
@@ -36,6 +47,7 @@ function AuthenticatedNewChatRoute() {
       threadId={threadId ?? "guest"}
       isDraft
       forceGuestThread={threadId === null}
+      isRouteDataReady={threadId !== null}
     />
   )
 }

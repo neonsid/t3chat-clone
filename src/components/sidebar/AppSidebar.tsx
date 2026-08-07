@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils"
 type AppSidebarProps = {
   threads: ChatThread[]
   activeThreadId: string
+  isDataReady: boolean
   query: string
   onQueryChange: (query: string) => void
   paginationStatus:
@@ -57,6 +58,7 @@ type AppSidebarProps = {
 export function AppSidebar({
   threads,
   activeThreadId,
+  isDataReady,
   query,
   onQueryChange,
   paginationStatus,
@@ -248,8 +250,12 @@ export function AppSidebar({
       </SidebarHeader>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <SidebarContent className="gap-0" onScroll={handleListScroll}>
-          {threads.length === 0 ? (
+        <SidebarContent
+          aria-busy={!isDataReady}
+          className="gap-0"
+          onScroll={handleListScroll}
+        >
+          {!isDataReady ? null : threads.length === 0 ? (
             <p className="px-4 py-2 text-xs text-sidebar-muted-foreground">
               {query.trim() ? "No matching chats" : "No chats yet"}
             </p>
@@ -324,7 +330,7 @@ export function AppSidebar({
           )}
         </SidebarContent>
       </div>
-      <SidebarFooter className="shrink-0 border-t border-sidebar-border p-2">
+      <SidebarFooter className="shrink-0 border-sidebar-border p-1">
         <SidebarAccount />
       </SidebarFooter>
     </Sidebar>

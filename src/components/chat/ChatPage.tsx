@@ -1,7 +1,9 @@
 import { useUser } from "@clerk/tanstack-react-start"
 import { Navigate, useLocation, useNavigate } from "@tanstack/react-router"
+import { useConvex, useMutation } from "convex/react"
 import { LazyMotion, domAnimation } from "motion/react"
 
+import { api } from "../../../convex/_generated/api"
 import {
   ChatHeaderActions,
   ChatShell,
@@ -11,24 +13,31 @@ import { AppSidebar } from "@/components/sidebar/AppSidebar"
 import { SidebarInset, SidebarProvider } from "@/components/shared/ui/sidebar"
 import { useThreads } from "@/hooks/useThreads"
 import { SIGN_IN_PATH } from "@/lib/auth"
+import { createPendingChatThread } from "@/lib/threads"
 
 export function ChatPage({
   threadId,
   isDraft = false,
   forceGuestThread = false,
+  isRouteDataReady = true,
 }: {
   threadId: string
   isDraft?: boolean
   forceGuestThread?: boolean
+  isRouteDataReady?: boolean
 }) {
   const navigate = useNavigate()
+  const convex = useConvex()
+  const createThread = useMutation(api.threads.createOrReuseEmpty)
   const returnTo = useLocation({ select: (location) => location.href })
   const { isSignedIn, user } = useUser()
   const {
     activeThread,
     isAuthenticated,
     isAuthLoading,
-    isThreadReady,
+    isThreadDataReady,
+    isSidebarDataReady,
+    canPersistThread,
     messagesLoading,
     threads,
     query,
@@ -41,33 +50,36 @@ export function ChatPage({
     renameThread,
     regenerateThreadTitle,
   } = useThreads(threadId, { forceGuestThread })
+  const isChatDataReady = isRouteDataReady && isThreadDataReady
+  const renderedThread =
+    activeThread && !messagesLoading
+      ? activeThread
+      : createPendingChatThread(threadId)
 
-  if (activeThread === undefined || messagesLoading) {
-    return <div className="h-dvh bg-background" />
-  }
-
-  if (activeThread === null) {
+  if (isRouteDataReady && isThreadDataReady && activeThread === null) {
     return <Navigate to="/" replace />
   }
 
-  if (!isDraft && isSignedIn && !isAuthLoading && !isAuthenticated) {
+  if (
+    isRouteDataReady &&
+    !isDraft &&
+    isSignedIn &&
+    !isAuthLoading &&
+    !isAuthenticated
+  ) {
     return <Navigate to="/" replace />
   }
 
-  if (!isDraft && isAuthenticated && activeThread.messages.length === 0) {
-    return <Navigate to="/" replace />
-  }
-
-  if (activeThread.id !== threadId) {
+  if (isChatDataReady && renderedThread.id !== threadId) {
     return (
       <Navigate
         to="/chat/$threadId"
-        params={{ threadId: activeThread.id }}
+        params={{ threadId: renderedThread.id }}
         replace
       />
     )
   }
-  const activeThreadId = activeThread.id
+  const activeThreadId = renderedThread.id
 
   function openThread(nextThreadId: string) {
     void navigate({
@@ -76,8 +88,21 @@ export function ChatPage({
     })
   }
 
-  function createNewThread() {
-    void navigate({ to: "/" })
+  async function createNewThread() {
+    if (!canPersistThread) {
+      await navigate({ to: "/" })
+      return
+    }
+
+    const nextThreadId = await createThread({})
+    await Promise.all([
+      convex.query(api.threads.get, { threadId: nextThreadId }),
+      convex.query(api.messages.listForThread, { threadId: nextThreadId }),
+    ])
+    await navigate({
+      to: "/chat/$threadId",
+      params: { threadId: nextThreadId },
+    })
   }
 
   function requireAuthentication() {
@@ -92,7 +117,7 @@ export function ChatPage({
     user?.firstName ?? user?.fullName ?? user?.username ?? "there"
 
   function activateDraftThread() {
-    if (!isDraft || !isThreadReady) return
+    if (!isDraft || !canPersistThread) return
     void navigate({
       to: "/chat/$threadId",
       params: { threadId: activeThreadId },
@@ -127,7 +152,8 @@ export function ChatPage({
       <SidebarProvider defaultOpen className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
           threads={threads}
-          activeThreadId={activeThread.id}
+          activeThreadId={renderedThread.id}
+          isDataReady={isRouteDataReady && isSidebarDataReady}
           query={query}
           onQueryChange={setQuery}
           paginationStatus={paginationStatus}
@@ -146,12 +172,13 @@ export function ChatPage({
         <ChatShell>
           <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
             <ChatThreadView
-              key={activeThread.id}
-              threadId={activeThread.id}
-              initialMessages={activeThread.messages}
-              generationStats={activeThread.generationStats}
+              key={`${renderedThread.id}:${isChatDataReady ? "ready" : "pending"}`}
+              threadId={renderedThread.id}
+              initialMessages={renderedThread.messages}
+              generationStats={renderedThread.generationStats}
               onCreateThread={() => void createNewThread()}
-              isAuthenticated={isAuthenticated && isThreadReady}
+              isReady={isChatDataReady}
+              isAuthenticated={isAuthenticated && canPersistThread}
               userName={userName}
               onRequireAuthentication={requireAuthentication}
               onThreadStarted={isDraft ? activateDraftThread : undefined}
