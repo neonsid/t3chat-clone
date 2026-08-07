@@ -51,7 +51,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const stores = storesRef.current
 
   useMountEffect(() => {
-    void stores.chatUi.persist.rehydrate()
+    void Promise.resolve(stores.chatUi.persist.rehydrate()).finally(() => {
+      stores.chatUi.getState().markHydrated()
+    })
 
     const preferences = stores.preferences.getState()
     preferences.hydrateClientPreferences()
