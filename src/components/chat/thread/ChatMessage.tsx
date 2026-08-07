@@ -10,10 +10,8 @@ import {
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
-import { Streamdown } from "streamdown"
-
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
-import { STREAMDOWN_PLUGINS } from "@/components/chat/thread/constants"
+import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { Button } from "@/components/shared/ui/button"
 import { formatShortTimestamp } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
@@ -164,15 +162,7 @@ export function ChatMessage({
         )}
 
         {text ? (
-          <div className="text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0">
-            <Streamdown
-              lineNumbers={false}
-              mode="static"
-              plugins={STREAMDOWN_PLUGINS}
-            >
-              {text}
-            </Streamdown>
-          </div>
+          <StreamdownMarkdown text={text} isStreaming={isStreaming} />
         ) : isStreaming && !thinking ? (
           <BouncingDots label="Assistant is thinking" />
         ) : null}
