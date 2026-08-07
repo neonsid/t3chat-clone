@@ -13,15 +13,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/shared/ui/popover"
-import { useMountEffect } from "@/hooks/useMountEffect"
-import {
-  applyTheme,
-  isColorSchemePreference,
-  readColorSchemePreference,
-  storeColorSchemePreference,
-} from "@/lib/theme"
-import type { ColorSchemePreference } from "@/lib/theme"
+import { isColorSchemePreference } from "@/lib/theme"
 import { cn } from "@/lib/utils"
+import { usePreferencesStore } from "@/stores/AppStateProvider"
 
 export function SettingsMenu({
   triggerClassName,
@@ -29,29 +23,12 @@ export function SettingsMenu({
   triggerClassName?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [theme, setTheme] = useState<ColorSchemePreference>("system")
-
-  useMountEffect(() => {
-    const initialTheme = readColorSchemePreference()
-    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-    const handleSystemThemeChange = () => {
-      if (readColorSchemePreference() === "system") applyTheme("system")
-    }
-
-    setTheme(initialTheme)
-    applyTheme(initialTheme)
-    systemTheme.addEventListener("change", handleSystemThemeChange)
-
-    return () => {
-      systemTheme.removeEventListener("change", handleSystemThemeChange)
-    }
-  })
+  const theme = usePreferencesStore((state) => state.theme)
+  const setTheme = usePreferencesStore((state) => state.setTheme)
 
   function handleThemeChange(value: string) {
     if (!isColorSchemePreference(value)) return
     setTheme(value)
-    storeColorSchemePreference(value)
-    applyTheme(value)
   }
 
   return (

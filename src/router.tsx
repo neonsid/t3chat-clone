@@ -6,6 +6,7 @@ import { ClerkProvider, useAuth } from "@clerk/tanstack-react-start"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 
 import { routeTree } from "./routeTree.gen"
+import { AppStateProvider } from "./stores/AppStateProvider"
 
 export function getRouter() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL
@@ -44,7 +45,7 @@ export function getRouter() {
           client={convexQueryClient.convexClient}
           useAuth={useAuth}
         >
-          {children}
+          <AppStateProvider>{children}</AppStateProvider>
         </ConvexProviderWithClerk>
       </ClerkProvider>
     ),

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef } from "react"
 import type { UIEvent } from "react"
 import {
   ArchiveIcon,
@@ -8,6 +8,7 @@ import {
   SearchIcon,
 } from "lucide-react"
 import * as m from "motion/react-m"
+import { useShallow } from "zustand/react/shallow"
 
 import { ThreadContextMenu } from "@/components/sidebar/ThreadContextMenu"
 import { SidebarAccount } from "@/components/sidebar/SidebarAccount"
@@ -34,13 +35,12 @@ import {
 import { useWindowEvent } from "@/hooks/useWindowEvent"
 import type { ChatThread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
+import { useSidebarUiStore } from "@/stores/AppStateProvider"
 
 type AppSidebarProps = {
   threads: ChatThread[]
   activeThreadId: string
   isDataReady: boolean
-  query: string
-  onQueryChange: (query: string) => void
   paginationStatus:
     "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted"
   onLoadMore: () => void
@@ -59,14 +59,19 @@ export function AppSidebar({
   threads,
   activeThreadId,
   isDataReady,
-  query,
-  onQueryChange,
   paginationStatus,
   onLoadMore,
   actions,
 }: AppSidebarProps) {
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
-  const [pinnedOpen, setPinnedOpen] = useState(true)
+  const sidebar = useSidebarUiStore(
+    useShallow((state) => ({
+      searchQuery: state.searchQuery,
+      pinnedExpanded: state.pinnedExpanded,
+      setSearchQuery: state.setSearchQuery,
+      setPinnedExpanded: state.setPinnedExpanded,
+    }))
+  )
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useWindowEvent("keydown", (event) => {
@@ -235,9 +240,9 @@ export function AppSidebar({
               <input
                 ref={searchInputRef}
                 data-sidebar-search=""
-                value={query}
+                value={sidebar.searchQuery}
                 onChange={(event) => {
-                  onQueryChange(event.target.value)
+                  sidebar.setSearchQuery(event.target.value)
                 }}
                 placeholder="Search your threads..."
                 className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
@@ -257,7 +262,9 @@ export function AppSidebar({
         >
           {!isDataReady ? null : threads.length === 0 ? (
             <p className="px-4 py-2 text-xs text-sidebar-muted-foreground">
-              {query.trim() ? "No matching chats" : "No chats yet"}
+              {sidebar.searchQuery.trim()
+                ? "No matching chats"
+                : "No chats yet"}
             </p>
           ) : (
             <>
@@ -265,9 +272,11 @@ export function AppSidebar({
                 <SidebarGroup className="px-2 pb-1">
                   <button
                     type="button"
-                    aria-expanded={pinnedOpen}
+                    aria-expanded={sidebar.pinnedExpanded}
                     className="flex w-full cursor-pointer items-center gap-1.5 px-2 pb-1.5 text-xs font-semibold text-sidebar-foreground/70 transition-colors outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                    onClick={() => setPinnedOpen((open) => !open)}
+                    onClick={() =>
+                      sidebar.setPinnedExpanded(!sidebar.pinnedExpanded)
+                    }
                   >
                     <PinIcon className="size-3.5" aria-hidden="true" />
                     Pinned
@@ -275,11 +284,11 @@ export function AppSidebar({
                       aria-hidden="true"
                       className={cn(
                         "ml-auto size-3.5 transition-transform duration-200",
-                        !pinnedOpen && "rotate-180"
+                        !sidebar.pinnedExpanded && "rotate-180"
                       )}
                     />
                   </button>
-                  {pinnedOpen ? (
+                  {sidebar.pinnedExpanded ? (
                     <SidebarGroupContent>
                       <SidebarMenu>
                         {pinnedThreads.map(renderThread)}

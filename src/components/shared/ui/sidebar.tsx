@@ -23,8 +23,6 @@ import { Skeleton } from "@/components/shared/ui/skeleton"
 import { PanelLeftIcon } from "lucide-react"
 
 import {
-  SIDEBAR_COOKIE_MAX_AGE,
-  SIDEBAR_COOKIE_NAME,
   SIDEBAR_KEYBOARD_SHORTCUT,
   SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_ICON,
@@ -32,12 +30,14 @@ import {
 } from "@/components/shared/ui/constants"
 import { useWindowEvent } from "@/hooks/useWindowEvent"
 
+type SidebarOpenUpdater = boolean | ((open: boolean) => boolean)
+
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
-  setOpen: (open: boolean) => void
+  setOpen: (value: SidebarOpenUpdater) => void
   openMobile: boolean
-  setOpenMobile: (open: boolean) => void
+  setOpenMobile: (value: SidebarOpenUpdater) => void
   isMobile: boolean
   toggleSidebar: () => void
 }
@@ -57,6 +57,8 @@ function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
+  openMobile: openMobileProp,
+  onOpenMobileChange: setOpenMobileProp,
   className,
   style,
   children,
@@ -65,25 +67,33 @@ function SidebarProvider({
   defaultOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  openMobile?: boolean
+  onOpenMobileChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
-  const [openMobile, setOpenMobile] = React.useState(false)
+  const [_openMobile, _setOpenMobile] = React.useState(false)
+  const openMobile = openMobileProp ?? _openMobile
+  const setOpenMobile = React.useCallback(
+    (value: SidebarOpenUpdater) => {
+      const openState = typeof value === "function" ? value(openMobile) : value
+      if (setOpenMobileProp) setOpenMobileProp(openState)
+      else _setOpenMobile(openState)
+    },
+    [openMobile, setOpenMobileProp]
+  )
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
   const setOpen = React.useCallback(
-    (value: boolean | ((value: boolean) => boolean)) => {
+    (value: SidebarOpenUpdater) => {
       const openState = typeof value === "function" ? value(open) : value
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
         _setOpen(openState)
       }
-
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
     },
     [setOpenProp, open]
   )

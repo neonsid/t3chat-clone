@@ -25,13 +25,13 @@ import {
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
 import { useMountEffect } from "@/hooks/useMountEffect"
-import { useModelStore } from "@/hooks/useModelStore"
+import { useModelPreferences } from "@/hooks/useModelPreferences"
+import { useThreadSubmissionState } from "@/hooks/useThreadComposerState"
 import {
   CHAT_MODEL_CONFIG,
   DEFAULT_CHAT_MODEL_ID,
   isChatModelId,
 } from "@/lib/chat-models"
-import type { ReasoningEffort } from "@/lib/chat-models"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
@@ -96,6 +96,7 @@ function ChatTimelineMinimap({
 
 export function ChatThreadView({
   threadId,
+  threadStateKey,
   initialMessages,
   generationStats,
   onCreateThread,
@@ -106,6 +107,7 @@ export function ChatThreadView({
   onThreadStarted,
 }: {
   threadId: string
+  threadStateKey: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
   onCreateThread: () => void
@@ -115,27 +117,25 @@ export function ChatThreadView({
   onRequireAuthentication: () => void
   onThreadStarted?: () => void
 }) {
-  const [input, setInput] = useState("")
-  const [reasoningEffort, setReasoningEffort] =
-    useState<ReasoningEffort>("instant")
   const [composerHeight, setComposerHeight] = useState(148)
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
-  const modelState = useModelStore()
-  const modelConfig = isChatModelId(modelState.selectedModelId)
-    ? CHAT_MODEL_CONFIG[modelState.selectedModelId]
+  const composer = useThreadSubmissionState(threadStateKey)
+  const modelPreferences = useModelPreferences()
+  const modelConfig = isChatModelId(modelPreferences.selectedModelId)
+    ? CHAT_MODEL_CONFIG[modelPreferences.selectedModelId]
     : CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
   const effectiveReasoningEffort = modelConfig.supportedReasoningEfforts.some(
-    (effort) => effort === reasoningEffort
+    (effort) => effort === composer.reasoningEffort
   )
-    ? reasoningEffort
+    ? composer.reasoningEffort
     : modelConfig.supportedReasoningEfforts[0]
   const forwardedProps = useMemo(
     () => ({
-      modelId: modelState.selectedModelId,
+      modelId: modelPreferences.selectedModelId,
       reasoningEffort: effectiveReasoningEffort,
     }),
-    [effectiveReasoningEffort, modelState.selectedModelId]
+    [effectiveReasoningEffort, modelPreferences.selectedModelId]
   )
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
@@ -175,7 +175,8 @@ export function ChatThreadView({
   })
 
   const isEmptyThread = messages.length === 0
-  const showEmptyState = isReady && isEmptyThread && input.trim().length === 0
+  const showEmptyState =
+    isReady && isEmptyThread && composer.draft.trim().length === 0
   const lastMessage = messages.at(-1)
   const showPendingDots = isLoading && lastMessage?.role === "user"
 
@@ -184,7 +185,7 @@ export function ChatThreadView({
     [messages]
   )
 
-  function submitMessage(content = input.trim()) {
+  function submitMessage(content = composer.draft.trim()) {
     if (!isReady || !content || isLoading) return
     if (!isAuthenticated) {
       onRequireAuthentication()
@@ -192,7 +193,7 @@ export function ChatThreadView({
     }
 
     setWorkStartedAt(Date.now())
-    setInput("")
+    composer.clearDraft(threadStateKey)
     void sendMessage({
       id: crypto.randomUUID(),
       content: [{ type: "text", content }],
@@ -200,7 +201,7 @@ export function ChatThreadView({
   }
 
   function fillPrompt(prompt: string) {
-    setInput(prompt)
+    composer.setDraft(threadStateKey, prompt)
     queueMicrotask(focusComposerInput)
   }
 
@@ -309,11 +310,9 @@ export function ChatThreadView({
               </p>
             )}
             <ChatComposer
-              value={input}
-              onChange={setInput}
+              threadStateKey={threadStateKey}
+              effectiveReasoningEffort={effectiveReasoningEffort}
               onSubmit={() => submitMessage()}
-              reasoningEffort={effectiveReasoningEffort}
-              onReasoningEffortChange={setReasoningEffort}
               onStop={stopGeneration}
               isLoading={isLoading}
               placeholder={

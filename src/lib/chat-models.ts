@@ -58,8 +58,16 @@ export const DEFAULT_FAVORITE_MODEL_IDS: ReadonlyArray<ChatModelId> = [
 export const MAX_MODEL_OUTPUT_TOKENS = 16_384
 export const MAX_MODEL_CONTEXT_CHARACTERS = 500_000
 
+const chatModelsById = new Map<string, ModelCatalogEntry>(
+  CHAT_MODEL_CATALOG.map((model) => [model.id, model])
+)
+
 export function isChatModelId(value: string): value is ChatModelId {
   return value in CHAT_MODEL_CONFIG
+}
+
+export function getChatModelById(modelId: string): ModelCatalogEntry | null {
+  return chatModelsById.get(modelId) ?? null
 }
 
 export function resolveChatModel(

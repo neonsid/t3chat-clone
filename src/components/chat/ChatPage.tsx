@@ -10,10 +10,13 @@ import {
 } from "@/components/chat/shell/ChatShellChrome"
 import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
 import { AppSidebar } from "@/components/sidebar/AppSidebar"
-import { SidebarInset, SidebarProvider } from "@/components/shared/ui/sidebar"
+import { AppSidebarProvider } from "@/components/sidebar/AppSidebarProvider"
+import { SidebarInset } from "@/components/shared/ui/sidebar"
 import { useThreads } from "@/hooks/useThreads"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { createPendingChatThread } from "@/lib/threads"
+import { useChatUiStore, useSidebarUiStore } from "@/stores/AppStateProvider"
+import { createThreadStateKey } from "@/stores/chat-ui-store"
 
 export function ChatPage({
   threadId,
@@ -31,6 +34,8 @@ export function ChatPage({
   const createThread = useMutation(api.threads.createOrReuseEmpty)
   const returnTo = useLocation({ select: (location) => location.href })
   const { isSignedIn, user } = useUser()
+  const searchQuery = useSidebarUiStore((state) => state.searchQuery)
+  const removeThreadState = useChatUiStore((state) => state.removeThreadState)
   const {
     activeThread,
     isAuthenticated,
@@ -40,8 +45,6 @@ export function ChatPage({
     canPersistThread,
     messagesLoading,
     threads,
-    query,
-    setQuery,
     paginationStatus,
     loadMore,
     deleteThread,
@@ -49,7 +52,7 @@ export function ChatPage({
     archiveThread,
     renameThread,
     regenerateThreadTitle,
-  } = useThreads(threadId, { forceGuestThread })
+  } = useThreads(threadId, { forceGuestThread, searchQuery })
   const isChatDataReady = isRouteDataReady && isThreadDataReady
   const renderedThread =
     activeThread && !messagesLoading
@@ -80,6 +83,7 @@ export function ChatPage({
     )
   }
   const activeThreadId = renderedThread.id
+  const threadStateKey = createThreadStateKey(user?.id, activeThreadId)
 
   function openThread(nextThreadId: string) {
     void navigate({
@@ -127,6 +131,7 @@ export function ChatPage({
 
   async function removeThread(removedThreadId: string) {
     const nextThreadId = await deleteThread(removedThreadId)
+    removeThreadState(createThreadStateKey(user?.id, removedThreadId))
     if (removedThreadId !== activeThreadId) return
 
     void navigate({
@@ -149,13 +154,11 @@ export function ChatPage({
 
   return (
     <LazyMotion features={domAnimation}>
-      <SidebarProvider defaultOpen className="h-dvh min-h-0! overflow-hidden">
+      <AppSidebarProvider className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
           threads={threads}
           activeThreadId={renderedThread.id}
           isDataReady={isRouteDataReady && isSidebarDataReady}
-          query={query}
-          onQueryChange={setQuery}
           paginationStatus={paginationStatus}
           onLoadMore={loadMore}
           actions={{
@@ -174,6 +177,7 @@ export function ChatPage({
             <ChatThreadView
               key={`${renderedThread.id}:${isChatDataReady ? "ready" : "pending"}`}
               threadId={renderedThread.id}
+              threadStateKey={threadStateKey}
               initialMessages={renderedThread.messages}
               generationStats={renderedThread.generationStats}
               onCreateThread={() => void createNewThread()}
@@ -185,7 +189,7 @@ export function ChatPage({
             />
           </SidebarInset>
         </ChatShell>
-      </SidebarProvider>
+      </AppSidebarProvider>
     </LazyMotion>
   )
 }

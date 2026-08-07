@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { ChevronDownIcon, SearchIcon } from "lucide-react"
+import { useShallow } from "zustand/react/shallow"
 
 import { MODEL_PICKER_RAIL_PROVIDERS } from "@/components/chat/model-picker/constants"
 import { ModelPickerFilterMenu } from "@/components/chat/model-picker/ModelPickerFilterMenu"
@@ -17,8 +18,9 @@ import {
   PopoverTrigger,
 } from "@/components/shared/ui/popover"
 import { Separator } from "@/components/shared/ui/separator"
-import { useModelStore } from "@/hooks/useModelStore"
-import { getModelById, modelStore } from "@/lib/model-store"
+import { useModelPreferences } from "@/hooks/useModelPreferences"
+import { getChatModelById } from "@/lib/chat-models"
+import { useModelPickerStore } from "@/stores/AppStateProvider"
 import { cn } from "@/lib/utils"
 
 type ModelPickerProps = {
@@ -26,24 +28,40 @@ type ModelPickerProps = {
 }
 
 export function ModelPicker({ className }: ModelPickerProps) {
-  const state = useModelStore()
+  const preferences = useModelPreferences()
+  const picker = useModelPickerStore(
+    useShallow((state) => ({
+      search: state.search,
+      capabilities: state.capabilities,
+      railTab: state.railTab,
+      setSearch: state.setSearch,
+      setRailTab: state.setRailTab,
+      toggleCapability: state.toggleCapability,
+      clearFilters: state.clearFilters,
+    }))
+  )
   const [open, setOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const favoriteIds = useMemo(
-    () => new Set(state.favoriteModelIds),
-    [state.favoriteModelIds]
+    () => new Set(preferences.favoriteModelIds),
+    [preferences.favoriteModelIds]
   )
 
   const query = useMemo<ModelQuery>(
     () => ({
-      search: state.search,
-      capabilities: state.capabilities,
-      providerId: state.railTab === "favorites" ? null : state.railTab,
-      favoritesOnly: state.railTab === "favorites",
-      combineResults: state.combineResults,
+      search: picker.search,
+      capabilities: picker.capabilities,
+      providerId: picker.railTab === "favorites" ? null : picker.railTab,
+      favoritesOnly: picker.railTab === "favorites",
+      combineResults: preferences.combineResults,
     }),
-    [state.capabilities, state.combineResults, state.railTab, state.search]
+    [
+      picker.capabilities,
+      picker.railTab,
+      picker.search,
+      preferences.combineResults,
+    ]
   )
 
   const visibleModels = useMemo(
@@ -51,17 +69,17 @@ export function ModelPicker({ className }: ModelPickerProps) {
     [favoriteIds, query]
   )
 
-  const selectedModel = getModelById(state.selectedModelId)
+  const selectedModel = getChatModelById(preferences.selectedModelId)
   const railHidden = ignoresRailScope(query)
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
     // A stale query would otherwise greet the user on the next open.
-    if (!nextOpen) modelStore.setSearch("")
+    if (!nextOpen) picker.setSearch("")
   }
 
   function handleSelect(modelId: string) {
-    state.selectModel(modelId)
+    preferences.selectModel(modelId)
     handleOpenChange(false)
   }
 
@@ -111,21 +129,21 @@ export function ModelPicker({ className }: ModelPickerProps) {
           />
           <input
             ref={searchInputRef}
-            value={state.search}
-            onChange={(event) => modelStore.setSearch(event.target.value)}
+            value={picker.search}
+            onChange={(event) => picker.setSearch(event.target.value)}
             placeholder="Search models..."
             aria-label="Search models"
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
           <ModelPickerFilterMenu
-            activeCapabilities={state.capabilities}
-            combineResults={state.combineResults}
+            activeCapabilities={picker.capabilities}
+            combineResults={preferences.combineResults}
             hasActiveFilters={
-              state.search.trim().length > 0 || state.capabilities.length > 0
+              picker.search.trim().length > 0 || picker.capabilities.length > 0
             }
-            onToggleCapability={modelStore.toggleCapability}
-            onCombineResultsChange={state.setCombineResults}
-            onClearFilters={modelStore.clearFilters}
+            onToggleCapability={picker.toggleCapability}
+            onCombineResultsChange={preferences.setCombineResults}
+            onClearFilters={picker.clearFilters}
           />
           <Separator className="absolute right-[3.25rem] bottom-1.5 left-3 w-auto! bg-border/60" />
         </div>
@@ -133,17 +151,17 @@ export function ModelPicker({ className }: ModelPickerProps) {
         <div className="mt-1 flex min-h-0 flex-1">
           <ModelPickerRail
             providers={MODEL_PICKER_RAIL_PROVIDERS}
-            activeTab={state.railTab}
-            onSelectTab={modelStore.setRailTab}
+            activeTab={picker.railTab}
+            onSelectTab={picker.setRailTab}
             hidden={railHidden}
           />
           <ModelPickerList
             models={visibleModels}
-            selectedModelId={state.selectedModelId}
+            selectedModelId={preferences.selectedModelId}
             favoriteIds={favoriteIds}
             emptyMessage={resolveEmptyMessage(query)}
             onSelect={handleSelect}
-            onToggleFavorite={state.toggleFavorite}
+            onToggleFavorite={preferences.toggleFavorite}
           />
         </div>
       </PopoverContent>

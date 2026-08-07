@@ -10,7 +10,7 @@ import {
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { Separator } from "@/components/shared/ui/separator"
-import type { ModelRailTab } from "@/lib/model-store"
+import type { ModelRailTab } from "@/stores/model-picker-store"
 import { cn } from "@/lib/utils"
 
 type ModelPickerRailProvider = {

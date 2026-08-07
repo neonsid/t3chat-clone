@@ -1,19 +1,18 @@
-import { useRef, useState } from "react"
+import { useRef } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
 import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
-import type { ReasoningEffort } from "@/components/chat/composer/ReasoningEffortSelect"
 import { Tooltip } from "@/components/shared/motion/tooltip"
+import { useThreadComposerControls } from "@/hooks/useThreadComposerState"
+import type { ReasoningEffort } from "@/lib/chat-models"
 import { cn } from "@/lib/utils"
 
 interface ChatComposerProps {
-  value: string
-  onChange: (value: string) => void
-  onSubmit: (reasoningEffort: ReasoningEffort) => void
-  reasoningEffort: ReasoningEffort
-  onReasoningEffortChange: (reasoningEffort: ReasoningEffort) => void
+  threadStateKey: string
+  onSubmit: () => void
+  effectiveReasoningEffort: ReasoningEffort
   onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
@@ -22,11 +21,9 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({
-  value,
-  onChange,
+  threadStateKey,
   onSubmit,
-  reasoningEffort,
-  onReasoningEffortChange,
+  effectiveReasoningEffort,
   onStop,
   isLoading = false,
   disabled = false,
@@ -34,8 +31,8 @@ export function ChatComposer({
   className,
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [searchEnabled, setSearchEnabled] = useState(false)
-  const canSend = value.trim().length > 0 && !isLoading && !disabled
+  const composer = useThreadComposerControls(threadStateKey)
+  const canSend = composer.draft.trim().length > 0 && !isLoading && !disabled
   const canStop = isLoading && !disabled && Boolean(onStop)
   const isActionDisabled = isLoading ? !canStop : !canSend
   const actionTooltip = isLoading
@@ -47,13 +44,13 @@ export function ChatComposer({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSend) return
-    onSubmit(reasoningEffort)
+    onSubmit()
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
-      if (canSend) onSubmit(reasoningEffort)
+      if (canSend) onSubmit()
     }
   }
 
@@ -77,11 +74,13 @@ export function ChatComposer({
               aria-label="Message"
               className="field-sizing-content max-h-50 min-h-12 w-full resize-none bg-transparent text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/55 disabled:opacity-60"
               disabled={disabled || isLoading}
-              onChange={(event) => onChange(event.target.value)}
+              onChange={(event) =>
+                composer.setDraft(threadStateKey, event.target.value)
+              }
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
               rows={1}
-              value={value}
+              value={composer.draft}
             />
           </div>
 
@@ -89,19 +88,25 @@ export function ChatComposer({
             <ModelPicker />
 
             <ReasoningEffortSelect
-              value={reasoningEffort}
-              onValueChange={onReasoningEffortChange}
+              value={effectiveReasoningEffort}
+              onValueChange={(reasoningEffort) =>
+                composer.setReasoningEffort(threadStateKey, reasoningEffort)
+              }
               disabled={disabled || isLoading}
             />
 
             <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               <ToolbarToggle
-                pressed={searchEnabled}
-                onPressedChange={setSearchEnabled}
+                pressed={composer.searchEnabled}
+                onPressedChange={(searchEnabled) =>
+                  composer.setSearchEnabled(threadStateKey, searchEnabled)
+                }
                 label="Search"
                 icon={<GlobeIcon className="size-3.5" />}
                 tooltip={
-                  searchEnabled ? "Disable web search" : "Search the web"
+                  composer.searchEnabled
+                    ? "Disable web search"
+                    : "Search the web"
                 }
               />
               <Tooltip content="Attach files">

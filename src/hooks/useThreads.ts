@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import {
   useConvexAuth,
   useMutation,
@@ -14,11 +14,11 @@ const THREAD_PAGE_SIZE = 20
 
 export function useThreads(
   initialThreadId?: string,
-  options: { forceGuestThread?: boolean } = {}
+  options: { forceGuestThread?: boolean; searchQuery?: string } = {}
 ) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const useBackend = isAuthenticated && !options.forceGuestThread
-  const [query, setQuery] = useState("")
+  const query = options.searchQuery ?? ""
   const normalizedThreadId = initialThreadId ?? null
   const activeThreadDocument = useQuery(
     api.threads.get,
@@ -117,8 +117,6 @@ export function useThreads(
       useBackend && normalizedThreadId && messageDocuments === undefined
     ),
     threads,
-    query,
-    setQuery,
     paginationStatus: !useBackend || query.trim() ? "Exhausted" : recent.status,
     loadMore: () => {
       if (useBackend) recent.loadMore(THREAD_PAGE_SIZE)
