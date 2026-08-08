@@ -6,6 +6,7 @@ import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useThreadComposerControls } from "@/hooks/useThreadComposerState"
+import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
 import { cn } from "@/lib/utils"
 
@@ -13,6 +14,7 @@ interface ChatComposerProps {
   threadStateKey: string
   onSubmit: () => void
   effectiveReasoningEffort: ReasoningEffort
+  supportedReasoningEfforts: ReadonlyArray<ReasoningEffort>
   onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
@@ -24,6 +26,7 @@ export function ChatComposer({
   threadStateKey,
   onSubmit,
   effectiveReasoningEffort,
+  supportedReasoningEfforts,
   onStop,
   isLoading = false,
   disabled = false,
@@ -72,7 +75,7 @@ export function ChatComposer({
               ref={textareaRef}
               data-chat-composer-input="true"
               aria-label="Message"
-              className="field-sizing-content max-h-50 min-h-12 w-full resize-none bg-transparent text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/55 disabled:opacity-60"
+              className="field-sizing-content max-h-50 min-h-12 w-full resize-none bg-transparent text-[15px] leading-6 text-foreground outline-none placeholder:text-[var(--placeholder,var(--muted-foreground))] disabled:opacity-60"
               disabled={disabled || isLoading}
               onChange={(event) =>
                 composer.setDraft(threadStateKey, event.target.value)
@@ -85,15 +88,26 @@ export function ChatComposer({
           </div>
 
           <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
-            <ModelPicker />
-
-            <ReasoningEffortSelect
-              value={effectiveReasoningEffort}
-              onValueChange={(reasoningEffort) =>
-                composer.setReasoningEffort(threadStateKey, reasoningEffort)
-              }
-              disabled={disabled || isLoading}
+            <ModelPicker
+              onSelectModel={(modelId) => {
+                if (!isChatModelId(modelId)) return
+                composer.setReasoningEffort(
+                  threadStateKey,
+                  CHAT_MODEL_CONFIG[modelId].defaultReasoningEffort
+                )
+              }}
             />
+
+            {supportedReasoningEfforts.length > 1 ? (
+              <ReasoningEffortSelect
+                value={effectiveReasoningEffort}
+                supportedEfforts={supportedReasoningEfforts}
+                onValueChange={(reasoningEffort) =>
+                  composer.setReasoningEffort(threadStateKey, reasoningEffort)
+                }
+                disabled={disabled || isLoading}
+              />
+            ) : null}
 
             <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               <ToolbarToggle

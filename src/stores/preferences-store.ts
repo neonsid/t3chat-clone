@@ -4,11 +4,14 @@ import { devtools } from "zustand/middleware"
 
 import { isChatModelId } from "@/lib/chat-models"
 import {
+  DEFAULT_COLOR_THEME_ID,
   applyTheme,
   readColorSchemePreference,
+  readColorThemePreference,
   storeColorSchemePreference,
+  storeColorThemePreference,
 } from "@/lib/theme"
-import type { ColorSchemePreference } from "@/lib/theme"
+import type { ColorSchemePreference, ColorThemePreference } from "@/lib/theme"
 import {
   DEFAULT_MODEL_PREFERENCES,
   GUEST_MODEL_PREFERENCES_STORAGE_KEY,
@@ -19,10 +22,12 @@ import type { ModelPreferences } from "@/stores/types"
 
 export type PreferencesState = {
   theme: ColorSchemePreference
+  colorTheme: ColorThemePreference
   guestModels: ModelPreferences
   hydrateClientPreferences: () => void
   syncSystemTheme: () => void
   setTheme: (theme: ColorSchemePreference) => void
+  setColorTheme: (colorTheme: ColorThemePreference) => void
   selectGuestModel: (modelId: string) => void
   toggleGuestFavorite: (modelId: string) => void
   setGuestCombineResults: (combineResults: boolean) => void
@@ -92,19 +97,26 @@ function storeGuestPreferences(preferences: ModelPreferences): void {
 export function createPreferencesStore() {
   const initializer: StateCreator<PreferencesState> = (set, get) => ({
     theme: "system",
+    colorTheme: DEFAULT_COLOR_THEME_ID,
     guestModels: DEFAULT_MODEL_PREFERENCES,
     hydrateClientPreferences() {
       const theme = readColorSchemePreference()
-      set({ theme, guestModels: readGuestPreferences() })
-      applyTheme(theme)
+      const colorTheme = readColorThemePreference()
+      set({ theme, colorTheme, guestModels: readGuestPreferences() })
+      applyTheme(theme, colorTheme)
     },
     syncSystemTheme() {
-      if (get().theme === "system") applyTheme("system")
+      if (get().theme === "system") applyTheme("system", get().colorTheme)
     },
     setTheme(theme) {
       set({ theme })
       storeColorSchemePreference(theme)
-      applyTheme(theme)
+      applyTheme(theme, get().colorTheme)
+    },
+    setColorTheme(colorTheme) {
+      set({ colorTheme })
+      storeColorThemePreference(colorTheme)
+      applyTheme(get().theme, colorTheme)
     },
     selectGuestModel(selectedModelId) {
       if (!isChatModelId(selectedModelId)) return

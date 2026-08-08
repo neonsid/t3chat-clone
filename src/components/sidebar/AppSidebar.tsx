@@ -151,7 +151,7 @@ export function AppSidebar({
                 isActive={isActive}
                 size="sm"
                 className={cn(
-                  "h-9 cursor-pointer rounded-md px-2 text-sidebar-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground"
+                  "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground"
                 )}
                 onClick={() => handleSelect(thread.id)}
               >

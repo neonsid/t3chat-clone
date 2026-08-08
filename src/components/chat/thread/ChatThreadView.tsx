@@ -137,7 +137,7 @@ export function ChatThreadView({
     (effort) => effort === composer.reasoningEffort
   )
     ? composer.reasoningEffort
-    : modelConfig.supportedReasoningEfforts[0]
+    : modelConfig.defaultReasoningEffort
   const forwardedProps = useMemo(
     () => ({
       modelId: modelPreferences.selectedModelId,
@@ -147,7 +147,6 @@ export function ChatThreadView({
   )
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
-    id: threadId,
     threadId,
     initialMessages,
     forwardedProps,
@@ -358,9 +357,11 @@ export function ChatThreadView({
             <ChatComposer
               threadStateKey={threadStateKey}
               effectiveReasoningEffort={effectiveReasoningEffort}
+              supportedReasoningEfforts={modelConfig.supportedReasoningEfforts}
               onSubmit={() => submitMessage()}
               onStop={stopGeneration}
               isLoading={isLoading}
+              disabled={modelPreferences.isLoading}
               placeholder={
                 isEmptyThread
                   ? "Type your message here..."

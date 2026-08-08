@@ -66,14 +66,20 @@ export function ChatPage({
       ? activeThread
       : createPendingChatThread(threadId)
 
-  // Both latches guard against `isChatDataReady` dipping (an auth token
-  // refresh re-resolves the Convex queries). Without them the thread view
-  // unmounts mid-turn and remounts, replaying the first-turn handoff, and the
-  // consumed submission would momentarily look like a dead empty thread.
-  const wasChatDataReadyRef = useRef(false)
-  if (isChatDataReady) wasChatDataReadyRef.current = true
-  const hadPendingSubmissionRef = useRef(false)
-  if (hasPendingSubmission) hadPendingSubmissionRef.current = true
+  // Keep a loaded thread mounted if an auth refresh briefly re-resolves its
+  // queries, but never carry that readiness into a different thread route.
+  // Mounting the next thread with placeholder messages would cause useChat to
+  // retain an empty initial message list after the real Convex data arrives.
+  const readyThreadIdRef = useRef<string | null>(null)
+  if (isChatDataReady) readyThreadIdRef.current = threadId
+  const wasCurrentThreadReady = readyThreadIdRef.current === threadId
+
+  // The draft handoff receives the same per-thread treatment so a submission
+  // from one conversation cannot suppress empty-thread handling in another.
+  const pendingThreadIdRef = useRef<string | null>(null)
+  if (hasPendingSubmission) pendingThreadIdRef.current = threadId
+  const currentThreadHadPendingSubmission =
+    pendingThreadIdRef.current === threadId
 
   if (isRouteDataReady && isThreadDataReady && activeThread === null) {
     return <Navigate to="/" replace />
@@ -86,7 +92,7 @@ export function ChatPage({
     isThreadDataReady &&
     activeThread != null &&
     activeThread.messages.length === 0 &&
-    !hadPendingSubmissionRef.current
+    !currentThreadHadPendingSubmission
   ) {
     return <Navigate to="/" replace />
   }
@@ -198,7 +204,7 @@ export function ChatPage({
         <ChatHeaderActions />
         <ChatShell>
           <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
-            {isDraft || isChatDataReady || wasChatDataReadyRef.current ? (
+            {isDraft || isChatDataReady || wasCurrentThreadReady ? (
               <ChatThreadView
                 key={
                   isDraft

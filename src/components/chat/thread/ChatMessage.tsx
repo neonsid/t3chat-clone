@@ -119,7 +119,7 @@ export function ChatMessage({
   if (isUser) {
     return (
       <div className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-accent p-3 text-[15px] leading-6 whitespace-pre-wrap text-foreground">
+        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 whitespace-pre-wrap text-[var(--message-foreground,var(--foreground))]">
           {text}
         </div>
         <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
