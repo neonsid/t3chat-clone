@@ -34,6 +34,7 @@ import {
 } from "@/lib/chat-models"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
+import { useChatUiStore } from "@/stores/AppStateProvider"
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
@@ -104,7 +105,7 @@ export function ChatThreadView({
   isAuthenticated,
   userName,
   onRequireAuthentication,
-  onThreadStarted,
+  onDraftSubmit,
 }: {
   threadId: string
   threadStateKey: string
@@ -115,12 +116,19 @@ export function ChatThreadView({
   isAuthenticated: boolean
   userName: string
   onRequireAuthentication: () => void
-  onThreadStarted?: () => void
+  onDraftSubmit?: (content: string) => void
 }) {
   const [composerHeight, setComposerHeight] = useState(148)
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
   const composer = useThreadSubmissionState(threadStateKey)
+  const pendingSubmission = useChatUiStore(
+    (state) => state.pendingSubmissions[threadId]
+  )
+  const takePendingSubmission = useChatUiStore(
+    (state) => state.takePendingSubmission
+  )
+  const hasPendingSubmission = Boolean(pendingSubmission)
   const modelPreferences = useModelPreferences()
   const modelConfig = isChatModelId(modelPreferences.selectedModelId)
     ? CHAT_MODEL_CONFIG[modelPreferences.selectedModelId]
@@ -129,7 +137,7 @@ export function ChatThreadView({
     (effort) => effort === composer.reasoningEffort
   )
     ? composer.reasoningEffort
-    : modelConfig.supportedReasoningEfforts[0]
+    : modelConfig.defaultReasoningEffort
   const forwardedProps = useMemo(
     () => ({
       modelId: modelPreferences.selectedModelId,
@@ -139,17 +147,39 @@ export function ChatThreadView({
   )
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
-    id: threadId,
     threadId,
     initialMessages,
     forwardedProps,
     connection: fetchServerSentEvents("/api/chat"),
-    onFinish() {
-      onThreadStarted?.()
-    },
-    onError() {
-      onThreadStarted?.()
-    },
+  })
+
+  // The draft page queues the submission and navigates here; this view only
+  // mounts once thread data is ready, so the handoff is a one-shot on mount.
+  // Sending from the draft page too would submit the same messageId twice.
+  useMountEffect(() => {
+    if (!isReady || !isAuthenticated || onDraftSubmit) return
+
+    // StrictMode runs mount effects as mount/cleanup/mount, and useChat's
+    // cleanup stops and disposes the client. Sending straight away would fire a
+    // request the cleanup immediately aborts, then send again on the second
+    // run — same id, same client, so the thread renders the turn twice. Defer
+    // past the cleanup so only the surviving run reaches the network.
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      const pending = takePendingSubmission(threadId)
+      if (!pending) return
+
+      setWorkStartedAt(Date.now())
+      void sendMessage({
+        id: pending.messageId,
+        content: [{ type: "text", content: pending.content }],
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
   })
 
   useMountEffect(() => {
@@ -175,10 +205,20 @@ export function ChatThreadView({
   })
 
   const isEmptyThread = messages.length === 0
+  // A turn is underway from the moment it is dispatched, which is before the
+  // optimistic message lands. Without this the view flashes the empty state
+  // between consuming the queued submission and the first render with it.
+  const hasStartedTurn = workStartedAt != null
   const showEmptyState =
-    isReady && isEmptyThread && composer.draft.trim().length === 0
+    isReady &&
+    isEmptyThread &&
+    !hasPendingSubmission &&
+    !hasStartedTurn &&
+    composer.draft.trim().length === 0
   const lastMessage = messages.at(-1)
-  const showPendingDots = isLoading && lastMessage?.role === "user"
+  const showPendingDots =
+    (isLoading && lastMessage?.role === "user") ||
+    ((hasPendingSubmission || hasStartedTurn) && isEmptyThread)
 
   const minimapItems = useMemo(
     () => deriveTimelineMinimapItems(messages),
@@ -192,8 +232,14 @@ export function ChatThreadView({
       return
     }
 
-    setWorkStartedAt(Date.now())
     composer.clearDraft(threadStateKey)
+
+    if (onDraftSubmit) {
+      onDraftSubmit(content)
+      return
+    }
+
+    setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
       content: [{ type: "text", content }],
@@ -207,7 +253,6 @@ export function ChatThreadView({
 
   function stopGeneration() {
     stop()
-    onThreadStarted?.()
   }
 
   const activeWorkedMs =
@@ -312,9 +357,11 @@ export function ChatThreadView({
             <ChatComposer
               threadStateKey={threadStateKey}
               effectiveReasoningEffort={effectiveReasoningEffort}
+              supportedReasoningEfforts={modelConfig.supportedReasoningEfforts}
               onSubmit={() => submitMessage()}
               onStop={stopGeneration}
               isLoading={isLoading}
+              disabled={modelPreferences.isLoading}
               placeholder={
                 isEmptyThread
                   ? "Type your message here..."

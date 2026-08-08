@@ -72,8 +72,7 @@ export function ModelPickerRail({
       inert={hidden || undefined}
       className={cn(
         "relative flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-tr-3xl border-t border-r border-border transition-[width,opacity,transform,border-color] duration-200 ease-out motion-reduce:transition-none",
-        hidden &&
-          "pointer-events-none w-0 -translate-x-2 border-transparent opacity-0"
+        hidden && "pointer-events-none w-0 -translate-x-2 border-0 opacity-0"
       )}
       role="tablist"
       aria-label="Filter by provider"

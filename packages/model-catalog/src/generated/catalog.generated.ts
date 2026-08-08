@@ -1,6 +1,16 @@
 // This catalog is intentionally maintained by hand. Add providers and models
 // directly to the arrays below; there is no generation step.
-import type { ModelCatalogEntry, ModelProvider } from "../types"
+import type {
+  ModelActivity,
+  ModelCatalogEntry,
+  ModelModality,
+  ModelProvider,
+} from "../types"
+
+type CatalogSourceEntry = Omit<
+  ModelCatalogEntry,
+  "activity" | "inputModalities" | "outputModalities"
+>
 
 export const MODEL_PROVIDERS: ReadonlyArray<ModelProvider> = [
   {
@@ -51,13 +61,9 @@ export const MODEL_PROVIDERS: ReadonlyArray<ModelProvider> = [
     id: "cohere",
     name: "Cohere",
   },
-  {
-    id: "perplexity",
-    name: "Perplexity",
-  },
 ]
 
-export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
+const MODEL_CATALOG_SOURCE: ReadonlyArray<CatalogSourceEntry> = [
   {
     modelId: "gpt-5.6",
     id: "openai/gpt-5.6",
@@ -1991,3 +1997,60 @@ export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
     experimental: false,
   },
 ]
+
+const NON_CHAT_MODEL_ACTIVITIES = {
+  "openai/gpt-realtime-2.1": "realtime",
+  "openai/gpt-image-2": "image-generation",
+  "openai/gpt-5.3-codex": "agent",
+  "openai/gpt-5.3-codex-spark": "agent",
+  "google/gemini-omni-flash-preview": "video-generation",
+  "google/gemini-3.1-flash-lite-image": "image-generation",
+  "google/gemini-3.5-live-translate-preview": "realtime",
+  "google/gemini-3.1-flash-image": "image-generation",
+  "google/gemini-3-pro-image": "image-generation",
+  "google/gemini-embedding-2": "embedding",
+  "google/deep-research-max-preview-04-2026": "agent",
+  "google/deep-research-preview-04-2026": "agent",
+  "google/gemini-3.1-flash-tts-preview": "speech",
+  "google/gemini-robotics-er-1.6-preview": "agent",
+  "google/veo-3.1-lite-generate-preview": "video-generation",
+  "google/gemini-3.1-flash-live-preview": "realtime",
+  "google/lyria-3-clip-preview": "music",
+  "google/lyria-3-pro-preview": "music",
+  "google/gemini-3.1-flash-image-preview": "image-generation",
+  "xai/grok-imagine-video-1.5": "video-generation",
+  "xai/grok-imagine-image-quality": "image-generation",
+  "xai/grok-4.20-multi-agent-0309": "agent",
+} as const satisfies Record<string, Exclude<ModelActivity, "chat">>
+
+const nonChatModelActivities = new Map<string, Exclude<ModelActivity, "chat">>(
+  Object.entries(NON_CHAT_MODEL_ACTIVITIES)
+)
+
+function inputModalitiesFor(model: CatalogSourceEntry) {
+  const modalities: Array<ModelModality> = ["text"]
+  if (model.capabilities.includes("vision")) modalities.push("image")
+  if (model.capabilities.includes("pdf")) modalities.push("document")
+  return modalities
+}
+
+function outputModalitiesFor(activity: ModelActivity): Array<ModelModality> {
+  if (activity === "image-generation") return ["image"]
+  if (activity === "video-generation") return ["video"]
+  if (activity === "speech" || activity === "music") return ["audio"]
+  if (activity === "embedding") return ["embedding"]
+  return ["text"]
+}
+
+export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> =
+  MODEL_CATALOG_SOURCE.map((model) => {
+    const activity: ModelActivity =
+      nonChatModelActivities.get(model.id) ?? "chat"
+
+    return {
+      ...model,
+      activity,
+      inputModalities: inputModalitiesFor(model),
+      outputModalities: outputModalitiesFor(activity),
+    }
+  })

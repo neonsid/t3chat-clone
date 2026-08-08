@@ -1,7 +1,8 @@
 import { useUser } from "@clerk/tanstack-react-start"
 import { Navigate, useLocation, useNavigate } from "@tanstack/react-router"
-import { useConvex, useMutation } from "convex/react"
+import { useConvex } from "convex/react"
 import { LazyMotion, domAnimation } from "motion/react"
+import { useRef } from "react"
 
 import { api } from "../../../convex/_generated/api"
 import {
@@ -31,11 +32,17 @@ export function ChatPage({
 }) {
   const navigate = useNavigate()
   const convex = useConvex()
-  const createThread = useMutation(api.threads.createOrReuseEmpty)
   const returnTo = useLocation({ select: (location) => location.href })
   const { isSignedIn, user } = useUser()
   const searchQuery = useSidebarUiStore((state) => state.searchQuery)
   const removeThreadState = useChatUiStore((state) => state.removeThreadState)
+  const queuePendingSubmission = useChatUiStore(
+    (state) => state.queuePendingSubmission
+  )
+  const hasPendingSubmission = useChatUiStore((state) =>
+    Boolean(state.pendingSubmissions[threadId])
+  )
+  const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
   const {
     activeThread,
     isAuthenticated,
@@ -59,7 +66,34 @@ export function ChatPage({
       ? activeThread
       : createPendingChatThread(threadId)
 
+  // Keep a loaded thread mounted if an auth refresh briefly re-resolves its
+  // queries, but never carry that readiness into a different thread route.
+  // Mounting the next thread with placeholder messages would cause useChat to
+  // retain an empty initial message list after the real Convex data arrives.
+  const readyThreadIdRef = useRef<string | null>(null)
+  if (isChatDataReady) readyThreadIdRef.current = threadId
+  const wasCurrentThreadReady = readyThreadIdRef.current === threadId
+
+  // The draft handoff receives the same per-thread treatment so a submission
+  // from one conversation cannot suppress empty-thread handling in another.
+  const pendingThreadIdRef = useRef<string | null>(null)
+  if (hasPendingSubmission) pendingThreadIdRef.current = threadId
+  const currentThreadHadPendingSubmission =
+    pendingThreadIdRef.current === threadId
+
   if (isRouteDataReady && isThreadDataReady && activeThread === null) {
+    return <Navigate to="/" replace />
+  }
+
+  if (
+    isRouteDataReady &&
+    !isDraft &&
+    isChatUiHydrated &&
+    isThreadDataReady &&
+    activeThread != null &&
+    activeThread.messages.length === 0 &&
+    !currentThreadHadPendingSubmission
+  ) {
     return <Navigate to="/" replace />
   }
 
@@ -92,21 +126,8 @@ export function ChatPage({
     })
   }
 
-  async function createNewThread() {
-    if (!canPersistThread) {
-      await navigate({ to: "/" })
-      return
-    }
-
-    const nextThreadId = await createThread({})
-    await Promise.all([
-      convex.query(api.threads.get, { threadId: nextThreadId }),
-      convex.query(api.messages.listForThread, { threadId: nextThreadId }),
-    ])
-    await navigate({
-      to: "/chat/$threadId",
-      params: { threadId: nextThreadId },
-    })
+  function createNewThread() {
+    void navigate({ to: "/" })
   }
 
   function requireAuthentication() {
@@ -117,14 +138,31 @@ export function ChatPage({
     })
   }
 
-  const userName =
-    user?.firstName ?? user?.fullName ?? user?.username ?? "there"
-
-  function activateDraftThread() {
+  function activateDraftWithMessage(content: string) {
     if (!isDraft || !canPersistThread) return
+    queuePendingSubmission(activeThreadId, content)
     void navigate({
       to: "/chat/$threadId",
       params: { threadId: activeThreadId },
+      replace: true,
+    })
+  }
+
+  const userName =
+    user?.firstName ?? user?.fullName ?? user?.username ?? "there"
+
+  async function navigateAfterLeavingThread(nextThreadId: string) {
+    const nextThread = await convex.query(api.threads.get, {
+      threadId: nextThreadId,
+    })
+    if (!nextThread?.hasMessages) {
+      await navigate({ to: "/", replace: true })
+      return
+    }
+
+    await navigate({
+      to: "/chat/$threadId",
+      params: { threadId: nextThreadId },
       replace: true,
     })
   }
@@ -134,22 +172,14 @@ export function ChatPage({
     removeThreadState(createThreadStateKey(user?.id, removedThreadId))
     if (removedThreadId !== activeThreadId) return
 
-    void navigate({
-      to: "/chat/$threadId",
-      params: { threadId: nextThreadId },
-      replace: true,
-    })
+    await navigateAfterLeavingThread(nextThreadId)
   }
 
   async function archiveChat(archivedThreadId: string) {
     const nextThreadId = await archiveThread(archivedThreadId)
     if (archivedThreadId !== activeThreadId) return
 
-    void navigate({
-      to: "/chat/$threadId",
-      params: { threadId: nextThreadId },
-      replace: true,
-    })
+    await navigateAfterLeavingThread(nextThreadId)
   }
 
   return (
@@ -163,7 +193,7 @@ export function ChatPage({
           onLoadMore={loadMore}
           actions={{
             select: openThread,
-            create: () => void createNewThread(),
+            create: createNewThread,
             delete: (id) => void removeThread(id),
             togglePinned: (id) => void toggleThreadPinned(id),
             archive: (id) => void archiveChat(id),
@@ -174,19 +204,25 @@ export function ChatPage({
         <ChatHeaderActions />
         <ChatShell>
           <SidebarInset className="h-full min-h-0 overflow-hidden bg-background">
-            <ChatThreadView
-              key={`${renderedThread.id}:${isChatDataReady ? "ready" : "pending"}`}
-              threadId={renderedThread.id}
-              threadStateKey={threadStateKey}
-              initialMessages={renderedThread.messages}
-              generationStats={renderedThread.generationStats}
-              onCreateThread={() => void createNewThread()}
-              isReady={isChatDataReady}
-              isAuthenticated={isAuthenticated && canPersistThread}
-              userName={userName}
-              onRequireAuthentication={requireAuthentication}
-              onThreadStarted={isDraft ? activateDraftThread : undefined}
-            />
+            {isDraft || isChatDataReady || wasCurrentThreadReady ? (
+              <ChatThreadView
+                key={
+                  isDraft
+                    ? `${renderedThread.id}:${isChatDataReady ? "ready" : "pending"}`
+                    : renderedThread.id
+                }
+                threadId={renderedThread.id}
+                threadStateKey={threadStateKey}
+                initialMessages={renderedThread.messages}
+                generationStats={renderedThread.generationStats}
+                onCreateThread={createNewThread}
+                isReady={isChatDataReady}
+                isAuthenticated={isAuthenticated && canPersistThread}
+                userName={userName}
+                onRequireAuthentication={requireAuthentication}
+                onDraftSubmit={isDraft ? activateDraftWithMessage : undefined}
+              />
+            ) : null}
           </SidebarInset>
         </ChatShell>
       </AppSidebarProvider>

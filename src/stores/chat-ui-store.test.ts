@@ -69,4 +69,47 @@ describe("chat UI store", () => {
 
     expect(getThreadComposerState(secondStore.getState(), key).draft).toBe("")
   })
+
+  test("queues and peeks pending first-turn submissions", () => {
+    const store = createChatUiStore()
+
+    store.getState().queuePendingSubmission("thread-1", "  Hello  ")
+    const pending = store.getState().peekPendingSubmission("thread-1")
+
+    expect(pending).toMatchObject({ content: "Hello" })
+    expect(pending?.messageId).toEqual(expect.any(String))
+    expect(store.getState().peekPendingSubmission("thread-1")).toBe(pending)
+  })
+
+  test("takes a pending submission exactly once", () => {
+    const store = createChatUiStore()
+    store.getState().queuePendingSubmission("thread-1", "Hello")
+
+    expect(store.getState().takePendingSubmission("thread-1")).toMatchObject({
+      content: "Hello",
+    })
+    expect(store.getState().takePendingSubmission("thread-1")).toBeNull()
+    expect(store.getState().peekPendingSubmission("thread-1")).toBeNull()
+  })
+
+  test("does not persist in-memory pending submissions", async () => {
+    const firstStore = createChatUiStore()
+    firstStore.getState().queuePendingSubmission("thread-1", "Hello")
+
+    const secondStore = createChatUiStore()
+    await secondStore.persist.rehydrate()
+
+    expect(secondStore.getState().peekPendingSubmission("thread-1")).toBeNull()
+  })
+
+  test("marks hydration without persisting the hydration flag", async () => {
+    const firstStore = createChatUiStore()
+    firstStore.getState().markHydrated()
+
+    const secondStore = createChatUiStore()
+    await secondStore.persist.rehydrate()
+
+    expect(firstStore.getState().isHydrated).toBe(true)
+    expect(secondStore.getState().isHydrated).toBe(false)
+  })
 })

@@ -1,10 +1,5 @@
-import {
-  chat,
-  chatParamsFromRequest,
-  toServerSentEventsResponse,
-} from "@tanstack/ai"
+import { chatParamsFromRequest, toServerSentEventsResponse } from "@tanstack/ai"
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai"
-import { openaiText } from "@tanstack/ai-openai"
 import { auth } from "@clerk/tanstack-react-start/server"
 import { createFileRoute } from "@tanstack/react-router"
 import { ConvexHttpClient } from "convex/browser"
@@ -14,11 +9,14 @@ import type { Id } from "../../../convex/_generated/dataModel"
 import {
   CHAT_MODEL_CATALOG,
   MAX_MODEL_CONTEXT_CHARACTERS,
-  MAX_MODEL_OUTPUT_TOKENS,
   REASONING_EFFORTS,
   resolveChatModel,
 } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import {
+  getMissingRuntimeKey,
+  streamChatModel,
+} from "@/lib/server/chat-model-executors.server"
 
 const modelNames = new Map(
   CHAT_MODEL_CATALOG.map((model) => [model.id, model.name])
@@ -138,6 +136,8 @@ function collectAndPersistStream({
           thinking += chunk.delta
         } else if (chunk.type === "RUN_FINISHED") {
           outputTokens = chunk.usage?.completionTokens ?? 0
+        } else if (chunk.type === "RUN_ERROR") {
+          throw new Error(chunk.message || "Model generation failed")
         }
         yield chunk
       }
@@ -198,10 +198,6 @@ export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!process.env.OPENAI_API_KEY) {
-          return errorResponse("OPENAI_API_KEY not configured", 500)
-        }
-
         const clerkAuth = await auth()
         if (!clerkAuth.userId) return errorResponse("Unauthorized", 401)
         const audience = clerkAuth.sessionClaims.aud
@@ -234,6 +230,8 @@ export const Route = createFileRoute("/api/chat")({
         const model = resolveChatModel(modelId, reasoningEffort)
         if (!model)
           return errorResponse("Unsupported model or reasoning effort", 400)
+        const missingRuntimeKey = getMissingRuntimeKey(model.runtime)
+        if (missingRuntimeKey) return errorResponse(missingRuntimeKey, 500)
 
         const userMessage = latestUserMessage(params.messages)
         if (!userMessage)
@@ -273,13 +271,10 @@ export const Route = createFileRoute("/api/chat")({
             }
           )
           const startedAt = Date.now()
-          const stream = chat({
-            adapter: openaiText(model.adapterModelId),
+          const stream = streamChatModel({
+            runtime: model.runtime,
             messages: contextToModelMessages(context),
-            modelOptions: {
-              max_output_tokens: MAX_MODEL_OUTPUT_TOKENS,
-              reasoning: { effort: model.providerReasoningEffort },
-            },
+            providerReasoningEffort: model.providerReasoningEffort,
             abortController,
           })
 

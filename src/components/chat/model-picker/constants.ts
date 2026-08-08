@@ -76,7 +76,7 @@ export const MODEL_PRICE_TIER_LABELS = [
 ] as const
 
 export const MODEL_PICKER_RAIL_TAB_CLASS_NAME =
-  "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] hover:scale-105 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-active:text-white"
+  "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-foreground/70 transition-[color,background-color,transform] hover:scale-105 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-active:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] data-active:text-foreground"
 export const MODEL_PICKER_RAIL_END_CUE_FADE_DISTANCE = 48
 export const INITIAL_MODEL_PICKER_RAIL_SCROLL_STATE = {
   overflowing: false,

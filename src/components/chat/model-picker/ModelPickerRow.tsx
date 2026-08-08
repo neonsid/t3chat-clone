@@ -46,12 +46,16 @@ export function ModelPickerRow({
   return (
     <div
       data-selected={isSelected || undefined}
+      onClick={() => onSelect(model.id)}
       className="relative flex w-full cursor-pointer items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] data-selected:bg-[color-mix(in_srgb,var(--foreground)_9%,transparent)]"
     >
       <button
         type="button"
         aria-label={`Select ${model.name}`}
-        onClick={() => onSelect(model.id)}
+        onClick={(event) => {
+          event.stopPropagation()
+          onSelect(model.id)
+        }}
         className="absolute inset-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
       />
 

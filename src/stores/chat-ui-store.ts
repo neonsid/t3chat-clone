@@ -9,8 +9,16 @@ import {
 } from "@/stores/constants"
 import type { ThreadComposerState } from "@/stores/types"
 
+export type PendingSubmission = {
+  messageId: string
+  content: string
+}
+
 export type ChatUiState = {
   composers: Partial<Record<string, ThreadComposerState>>
+  pendingSubmissions: Partial<Record<string, PendingSubmission>>
+  isHydrated: boolean
+  markHydrated: () => void
   setDraft: (key: string, draft: string) => void
   setReasoningEffort: (
     key: string,
@@ -20,6 +28,9 @@ export type ChatUiState = {
   clearDraft: (key: string) => void
   moveThreadState: (fromKey: string, toKey: string) => void
   removeThreadState: (key: string) => void
+  queuePendingSubmission: (threadId: string, content: string) => void
+  peekPendingSubmission: (threadId: string) => PendingSubmission | null
+  takePendingSubmission: (threadId: string) => PendingSubmission | null
 }
 
 type PersistedChatUiState = Pick<ChatUiState, "composers">
@@ -112,6 +123,11 @@ export function createChatUiStore() {
   const initializer = persist<ChatUiState, [], [], PersistedChatUiState>(
     (set, get) => ({
       composers: {},
+      pendingSubmissions: {},
+      isHydrated: false,
+      markHydrated() {
+        set({ isHydrated: true })
+      },
       setDraft(key, draft) {
         set((state) => ({ composers: updateComposer(state, key, { draft }) }))
       },
@@ -146,6 +162,34 @@ export function createChatUiStore() {
           delete composers[key]
           return { composers }
         })
+      },
+      queuePendingSubmission(threadId, content) {
+        const trimmed = content.trim()
+        if (!trimmed) return
+        set((state) => ({
+          pendingSubmissions: {
+            ...state.pendingSubmissions,
+            [threadId]: {
+              messageId: crypto.randomUUID(),
+              content: trimmed,
+            },
+          },
+        }))
+      },
+      peekPendingSubmission(threadId) {
+        return get().pendingSubmissions[threadId] ?? null
+      },
+      // Read and remove in one step so a repeated mount can never dispatch the
+      // same first turn twice.
+      takePendingSubmission(threadId) {
+        const pending = get().pendingSubmissions[threadId]
+        if (!pending) return null
+        set((state) => {
+          const pendingSubmissions = { ...state.pendingSubmissions }
+          delete pendingSubmissions[threadId]
+          return { pendingSubmissions }
+        })
+        return pending
       },
     }),
     {

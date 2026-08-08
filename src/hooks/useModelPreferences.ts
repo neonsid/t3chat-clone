@@ -6,6 +6,7 @@ import {
   DEFAULT_MODEL_PREFERENCES,
   MAX_FAVORITE_MODELS,
 } from "@/stores/constants"
+import { isChatModelId } from "@/lib/chat-models"
 import { usePreferencesStore } from "@/stores/AppStateProvider"
 import type { ModelPreferences } from "@/stores/types"
 
@@ -15,9 +16,13 @@ type ModelPreferenceActions = {
   setCombineResults: (combineResults: boolean) => void
 }
 
-export function useModelPreferences(): ModelPreferences &
+type ModelPreferenceState = ModelPreferences & {
+  isLoading: boolean
+}
+
+export function useModelPreferences(): ModelPreferenceState &
   ModelPreferenceActions {
-  const { isAuthenticated } = useConvexAuth()
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const guest = usePreferencesStore(
     useShallow((state) => ({
       preferences: state.guestModels,
@@ -34,23 +39,35 @@ export function useModelPreferences(): ModelPreferences &
     api.preferences.update
   ).withOptimisticUpdate((localStore, next) => {
     const current = localStore.getQuery(api.preferences.get, {})
-    if (current === undefined) return
-    localStore.setQuery(api.preferences.get, {}, next)
+    if (current === undefined || !isChatModelId(next.selectedModelId)) return
+    localStore.setQuery(
+      api.preferences.get,
+      {},
+      {
+        ...next,
+        selectedModelId: next.selectedModelId,
+        favoriteModelIds: next.favoriteModelIds.filter(isChatModelId),
+      }
+    )
   })
   const preferences = isAuthenticated
     ? (storedPreferences ?? DEFAULT_MODEL_PREFERENCES)
     : guest.preferences
+  const isLoading =
+    isAuthLoading || (isAuthenticated && storedPreferences === undefined)
 
   function saveAuthenticated(next: ModelPreferences): void {
+    if (!isChatModelId(next.selectedModelId)) return
     void updatePreferences({
       selectedModelId: next.selectedModelId,
-      favoriteModelIds: [...next.favoriteModelIds],
+      favoriteModelIds: next.favoriteModelIds.filter(isChatModelId),
       combineResults: next.combineResults,
     })
   }
 
   return {
     ...preferences,
+    isLoading,
     selectModel(modelId) {
       if (isAuthenticated) {
         saveAuthenticated({ ...preferences, selectedModelId: modelId })
