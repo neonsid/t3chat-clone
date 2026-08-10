@@ -13,6 +13,17 @@ export function isReasoningEffort(value: unknown): value is ReasoningEffort {
 export type ProviderReasoningEffort =
   "none" | "minimal" | Exclude<ReasoningEffort, "instant">
 
+/** Gemini 3 `thinkingLevel` values — see https://ai.google.dev/gemini-api/docs/thinking */
+export const GEMINI_THINKING_LEVELS = {
+  minimal: "MINIMAL",
+  low: "LOW",
+  medium: "MEDIUM",
+  high: "HIGH",
+} as const satisfies Record<
+  Exclude<ProviderReasoningEffort, "none">,
+  "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"
+>
+
 export type ChatModelRuntime =
   | {
       readonly kind: "openai"
