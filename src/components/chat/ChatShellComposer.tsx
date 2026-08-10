@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import { ChatComposer } from "@/components/chat/composer/ChatComposer"
+import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
 import { useThreadComposerControls } from "@/hooks/useThreadComposerState"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
@@ -33,6 +34,7 @@ export function ChatShellComposer({
     error,
     isReady,
     isEmptyThread,
+    messagesLoading,
     effectiveReasoningEffort,
     supportedReasoningEfforts,
     modelLoading,
@@ -47,6 +49,7 @@ export function ChatShellComposer({
       error: state.error,
       isReady: state.isReady,
       isEmptyThread: state.isEmptyThread,
+      messagesLoading: state.messagesLoading,
       effectiveReasoningEffort: state.effectiveReasoningEffort,
       supportedReasoningEfforts: state.supportedReasoningEfforts,
       modelLoading: state.modelLoading,
@@ -131,11 +134,13 @@ export function ChatShellComposer({
             onSubmit={handleSubmit}
             onStop={stop ?? undefined}
             isLoading={isBusy}
-            disabled={modelLoading}
+            disabled={modelLoading || messagesLoading}
             placeholder={
-              isEmptyThread
-                ? "Type your message here..."
-                : "Ask for follow-up changes..."
+              messagesLoading
+                ? CHAT_COMPOSER_PLACEHOLDERS.loadingConversation
+                : isEmptyThread
+                  ? CHAT_COMPOSER_PLACEHOLDERS.newThread
+                  : CHAT_COMPOSER_PLACEHOLDERS.followUp
             }
           />
         </div>

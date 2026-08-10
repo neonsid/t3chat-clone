@@ -1,5 +1,11 @@
 import { ZapIcon } from "lucide-react"
 
+export const CHAT_COMPOSER_PLACEHOLDERS = {
+  newThread: "Type your message here...",
+  followUp: "Ask for follow-up changes...",
+  loadingConversation: "Loading conversation...",
+} as const
+
 export const REASONING_EFFORTS = [
   {
     value: "instant",

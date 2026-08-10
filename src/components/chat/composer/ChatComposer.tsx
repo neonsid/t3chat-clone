@@ -4,6 +4,7 @@ import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
+import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useThreadComposerControls } from "@/hooks/useThreadComposerState"
 import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
@@ -30,7 +31,7 @@ export function ChatComposer({
   onStop,
   isLoading = false,
   disabled = false,
-  placeholder = "Type your message here...",
+  placeholder = CHAT_COMPOSER_PLACEHOLDERS.newThread,
   className,
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)

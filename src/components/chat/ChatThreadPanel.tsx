@@ -1,7 +1,7 @@
 import { useUser } from "@clerk/tanstack-react-start"
 import { Navigate, useLocation, useNavigate } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
-import { useCallback, useRef } from "react"
+import { useCallback, useLayoutEffect, useRef } from "react"
 
 import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
@@ -9,6 +9,7 @@ import { useThreads } from "@/hooks/useThreads"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { createPendingChatThread } from "@/lib/threads"
 import { useChatUiStore } from "@/stores/AppStateProvider"
+import { chatRuntimeStore } from "@/stores/chat-runtime-store"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
 
 export function ChatThreadPanel() {
@@ -48,6 +49,10 @@ export function ChatThreadPanel() {
   if (hasPendingSubmission) pendingThreadIdRef.current = threadId
   const currentThreadHadPendingSubmission =
     pendingThreadIdRef.current === threadId
+
+  useLayoutEffect(() => {
+    chatRuntimeStore.getState().setPanelState({ messagesLoading })
+  }, [messagesLoading])
 
   const requireAuthentication = useCallback(() => {
     if (isSignedIn) return

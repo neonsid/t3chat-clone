@@ -12,6 +12,7 @@ export type ChatRuntimeState = {
   error: Error | null
   isReady: boolean
   isEmptyThread: boolean
+  messagesLoading: boolean
   // A turn is "active" from the synchronous click through the draft→thread
   // handoff (thread creation + navigation remounts the thread view). It bridges
   // that gap so the composer button and empty state don't flip back while the
@@ -39,6 +40,7 @@ export type ChatRuntimeState = {
         | "error"
         | "isReady"
         | "isEmptyThread"
+        | "messagesLoading"
         | "effectiveReasoningEffort"
         | "supportedReasoningEfforts"
         | "modelLoading"
@@ -74,6 +76,7 @@ const initialThreadState = {
   error: null,
   isReady: false,
   isEmptyThread: true,
+  messagesLoading: false,
   activeTurn: false,
   activeTurnContent: "",
   effectiveReasoningEffort: CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
