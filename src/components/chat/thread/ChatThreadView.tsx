@@ -2,8 +2,6 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 
-import { ChatComposer } from "@/components/chat/composer/ChatComposer"
-import { SidebarControl } from "@/components/chat/shell/ChatShellChrome"
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
@@ -24,7 +22,6 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
-import { useMountEffect } from "@/hooks/useMountEffect"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
 import { useThreadSubmissionState } from "@/hooks/useThreadComposerState"
 import {
@@ -34,6 +31,8 @@ import {
 } from "@/lib/chat-models"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
+import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
+import { useChatUiStore } from "@/stores/AppStateProvider"
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
@@ -41,6 +40,11 @@ import { cn } from "@/lib/utils"
  * painted. Re-scroll after layout settles so the last assistant message is visible
  * on thread load. Runs once per thread (or when a thread gains its first message),
  * not when streaming ends, so a user who scrolled up during a response stays put.
+ *
+ * Must render after the viewport: scrollToEnd is a no-op until the viewport has
+ * registered its scroll element, and layout effects run in tree order, so placing
+ * this earlier costs the pre-paint pass and leaves only the settle pass, which
+ * lands after the browser has already painted the top of the thread.
  */
 function MessageScrollerEnsureEnd({
   threadId,
@@ -99,28 +103,34 @@ export function ChatThreadView({
   threadStateKey,
   initialMessages,
   generationStats,
-  onCreateThread,
   isReady,
   isAuthenticated,
   userName,
   onRequireAuthentication,
-  onThreadStarted,
 }: {
   threadId: string
   threadStateKey: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
-  onCreateThread: () => void
   isReady: boolean
   isAuthenticated: boolean
   userName: string
   onRequireAuthentication: () => void
-  onThreadStarted?: () => void
 }) {
-  const [composerHeight, setComposerHeight] = useState(148)
+  const composerHeight = useChatRuntimeStore((state) => state.composerHeight)
+  const activeTurn = useChatRuntimeStore((state) => state.activeTurn)
+  const activeTurnContent = useChatRuntimeStore(
+    (state) => state.activeTurnContent
+  )
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
-  const composerOverlayRef = useRef<HTMLDivElement | null>(null)
   const composer = useThreadSubmissionState(threadStateKey)
+  const pendingSubmission = useChatUiStore(
+    (state) => state.pendingSubmissions[threadId]
+  )
+  const takePendingSubmission = useChatUiStore(
+    (state) => state.takePendingSubmission
+  )
+  const hasPendingSubmission = Boolean(pendingSubmission)
   const modelPreferences = useModelPreferences()
   const modelConfig = isChatModelId(modelPreferences.selectedModelId)
     ? CHAT_MODEL_CONFIG[modelPreferences.selectedModelId]
@@ -129,7 +139,7 @@ export function ChatThreadView({
     (effort) => effort === composer.reasoningEffort
   )
     ? composer.reasoningEffort
-    : modelConfig.supportedReasoningEfforts[0]
+    : modelConfig.defaultReasoningEffort
   const forwardedProps = useMemo(
     () => ({
       modelId: modelPreferences.selectedModelId,
@@ -139,46 +149,49 @@ export function ChatThreadView({
   )
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
-    id: threadId,
     threadId,
     initialMessages,
     forwardedProps,
     connection: fetchServerSentEvents("/api/chat"),
-    onFinish() {
-      onThreadStarted?.()
-    },
-    onError() {
-      onThreadStarted?.()
-    },
-  })
-
-  useMountEffect(() => {
-    const element = composerOverlayRef.current
-    if (!element) return
-
-    const updateHeight = () => {
-      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
-    }
-
-    updateHeight()
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateHeight)
-    observer?.observe(element)
-    window.addEventListener("resize", updateHeight)
-
-    return () => {
-      observer?.disconnect()
-      window.removeEventListener("resize", updateHeight)
-    }
   })
 
   const isEmptyThread = messages.length === 0
+  // A turn is underway from the moment it is dispatched, which is before the
+  // optimistic message lands. Without this the view flashes the empty state
+  // between consuming the queued submission and the first render with it.
+  const hasStartedTurn = workStartedAt != null
   const showEmptyState =
-    isReady && isEmptyThread && composer.draft.trim().length === 0
+    isReady &&
+    isEmptyThread &&
+    !hasPendingSubmission &&
+    !hasStartedTurn &&
+    !activeTurn &&
+    composer.draft.trim().length === 0
   const lastMessage = messages.at(-1)
-  const showPendingDots = isLoading && lastMessage?.role === "user"
+  const showPendingDots =
+    (isLoading && lastMessage?.role === "user") ||
+    ((hasPendingSubmission || hasStartedTurn || activeTurn) && isEmptyThread)
+
+  // During the draft→thread handoff the real user message isn't dispatched until
+  // after navigation, so paint an optimistic bubble from the in-flight text.
+  // Reusing the pending message id lets the real message replace it in place
+  // (same key) instead of appearing above the dots and pushing them down.
+  const optimisticUserContent =
+    isEmptyThread && (activeTurn || hasPendingSubmission)
+      ? activeTurnContent || pendingSubmission?.content || ""
+      : ""
+  const optimisticUserMessage = useMemo<UIMessage | null>(() => {
+    if (!optimisticUserContent) return null
+    return {
+      id: pendingSubmission?.messageId ?? "optimistic-user",
+      role: "user",
+      parts: [{ type: "text", content: optimisticUserContent }],
+      createdAt: new Date(),
+    }
+  }, [optimisticUserContent, pendingSubmission?.messageId])
+  const displayMessages = optimisticUserMessage
+    ? [optimisticUserMessage]
+    : messages
 
   const minimapItems = useMemo(
     () => deriveTimelineMinimapItems(messages),
@@ -192,8 +205,8 @@ export function ChatThreadView({
       return
     }
 
-    setWorkStartedAt(Date.now())
     composer.clearDraft(threadStateKey)
+    setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
       content: [{ type: "text", content }],
@@ -207,29 +220,88 @@ export function ChatThreadView({
 
   function stopGeneration() {
     stop()
-    onThreadStarted?.()
   }
+
+  const submitMessageRef = useRef(submitMessage)
+  submitMessageRef.current = submitMessage
+
+  const stopGenerationRef = useRef(stopGeneration)
+  stopGenerationRef.current = stopGeneration
+
+  const flushPendingSubmissionRef = useRef(() => {})
+  flushPendingSubmissionRef.current = () => {
+    if (!isReady || !isAuthenticated) return
+    const pending = takePendingSubmission(threadId)
+    if (!pending) return
+
+    setWorkStartedAt(Date.now())
+    void sendMessage({
+      id: pending.messageId,
+      content: [{ type: "text", content: pending.content }],
+    })
+  }
+
+  const messagePairs = pairMessagesWithPreviousUser(displayMessages)
+  const latestUserMessageId = findLastUserMessageId(displayMessages)
+
+  useLayoutEffect(() => {
+    return chatRuntimeStore.getState().bindActions({
+      submit: () => submitMessageRef.current(),
+      stop: () => stopGenerationRef.current(),
+    })
+  }, [threadId])
+
+  // Draft submit queues a pending message then navigates here and requests a
+  // flush. Registering the flusher (instead of sending on mount) keeps the
+  // handoff event-driven: only the surviving ready view sends, once.
+  useLayoutEffect(() => {
+    if (!isReady || !isAuthenticated) return
+    return chatRuntimeStore
+      .getState()
+      .registerPendingFlusher(threadId, () => flushPendingSubmissionRef.current())
+  }, [threadId, isReady, isAuthenticated])
+
+  useLayoutEffect(() => {
+    chatRuntimeStore.getState().setPanelState({
+      isLoading,
+      error: error ?? null,
+      isReady,
+      isEmptyThread,
+      effectiveReasoningEffort,
+      supportedReasoningEfforts: modelConfig.supportedReasoningEfforts,
+      modelLoading: modelPreferences.isLoading,
+    })
+  }, [
+    effectiveReasoningEffort,
+    error,
+    isEmptyThread,
+    isLoading,
+    isReady,
+    modelConfig.supportedReasoningEfforts,
+    modelPreferences.isLoading,
+  ])
+
+  useLayoutEffect(() => {
+    return () => {
+      chatRuntimeStore.getState().reset()
+    }
+  }, [threadId])
+
+  // Hand the "sending" state off to the real stream: once this thread's turn is
+  // actually underway (or has failed), activeTurn has done its bridging job.
+  useLayoutEffect(() => {
+    if (isLoading || error) chatRuntimeStore.getState().setActiveTurn(false)
+  }, [isLoading, error])
 
   const activeWorkedMs =
     isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
-  const messagePairs = pairMessagesWithPreviousUser(messages)
-  const latestUserMessageId = findLastUserMessageId(messages)
 
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
-      <SidebarControl
-        hasConversation={messages.length > 0}
-        onCreateThread={onCreateThread}
-      />
-
       <MessageScrollerProvider
         autoScroll={!isLoading}
         defaultScrollPosition="end"
       >
-        <MessageScrollerEnsureEnd
-          threadId={threadId}
-          hasMessages={!isEmptyThread}
-        />
         <div
           aria-busy={!isReady || isLoading}
           className="absolute inset-0 z-0 overflow-hidden"
@@ -289,41 +361,14 @@ export function ChatThreadView({
                 </MessageScrollerContent>
               </MessageScrollerViewport>
               {!isEmptyThread && <MessageScrollerButton />}
+              <MessageScrollerEnsureEnd
+                threadId={threadId}
+                hasMessages={!isEmptyThread}
+              />
             </MessageScroller>
           )}
         </div>
       </MessageScrollerProvider>
-
-      <div
-        ref={composerOverlayRef}
-        data-chat-composer-overlay="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 translate-y-4 pt-2"
-      >
-        <div className="chat-composer-horizontal-inset w-full">
-          <div className="pointer-events-auto relative z-10">
-            {error && (
-              <p
-                className="mb-2 px-1 text-center text-sm text-destructive"
-                role="alert"
-              >
-                {error.message}
-              </p>
-            )}
-            <ChatComposer
-              threadStateKey={threadStateKey}
-              effectiveReasoningEffort={effectiveReasoningEffort}
-              onSubmit={() => submitMessage()}
-              onStop={stopGeneration}
-              isLoading={isLoading}
-              placeholder={
-                isEmptyThread
-                  ? "Type your message here..."
-                  : "Ask for follow-up changes..."
-              }
-            />
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

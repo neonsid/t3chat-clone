@@ -50,11 +50,6 @@ export default defineSchema({
       "state",
       "updatedAt",
     ])
-    .index("by_ownerId_and_state_and_hasMessages", [
-      "ownerId",
-      "state",
-      "hasMessages",
-    ])
     .index("by_ownerId_and_state_and_hasMessages_and_isPinned_and_updatedAt", [
       "ownerId",
       "state",

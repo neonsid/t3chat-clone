@@ -11,7 +11,6 @@ export type ModelProviderId =
   | "mistral"
   | "meta"
   | "cohere"
-  | "perplexity"
 
 export type ModelProvider = {
   readonly id: ModelProviderId

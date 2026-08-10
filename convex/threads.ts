@@ -57,11 +57,13 @@ export const createOrReuseEmpty = authedMutation({
   handler: async (ctx) => {
     const emptyThread = await ctx.db
       .query("threads")
-      .withIndex("by_ownerId_and_state_and_hasMessages", (query) =>
-        query
-          .eq("ownerId", ctx.viewerId)
-          .eq("state", "active")
-          .eq("hasMessages", false)
+      .withIndex(
+        "by_ownerId_and_state_and_hasMessages_and_isPinned_and_updatedAt",
+        (query) =>
+          query
+            .eq("ownerId", ctx.viewerId)
+            .eq("state", "active")
+            .eq("hasMessages", false)
       )
       .order("desc")
       .first()

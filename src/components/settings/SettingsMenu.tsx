@@ -13,7 +13,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/shared/ui/popover"
-import { isColorSchemePreference } from "@/lib/theme"
+import {
+  DEFAULT_COLOR_THEME_ID,
+  isColorSchemePreference,
+  T3_CHAT_COLOR_THEME_ID,
+} from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import { usePreferencesStore } from "@/stores/AppStateProvider"
 
@@ -25,9 +29,18 @@ export function SettingsMenu({
   const [open, setOpen] = useState(false)
   const theme = usePreferencesStore((state) => state.theme)
   const setTheme = usePreferencesStore((state) => state.setTheme)
+  const colorTheme = usePreferencesStore((state) => state.colorTheme)
+  const setColorTheme = usePreferencesStore((state) => state.setColorTheme)
 
-  function handleThemeChange(value: string) {
+  function handleDefaultThemeChange(value: string) {
     if (!isColorSchemePreference(value)) return
+    setColorTheme(DEFAULT_COLOR_THEME_ID)
+    setTheme(value)
+  }
+
+  function handleT3ChatThemeChange(value: string) {
+    if (!isColorSchemePreference(value)) return
+    setColorTheme(T3_CHAT_COLOR_THEME_ID)
     setTheme(value)
   }
 
@@ -58,8 +71,8 @@ export function SettingsMenu({
           <span className="shrink-0 text-sm font-medium">Theme</span>
 
           <Tabs
-            value={theme}
-            onValueChange={handleThemeChange}
+            value={colorTheme === DEFAULT_COLOR_THEME_ID ? theme : ""}
+            onValueChange={handleDefaultThemeChange}
             variant="segment"
             className="min-w-0 flex-1"
           >
@@ -90,6 +103,47 @@ export function SettingsMenu({
               >
                 <MoonIcon className="size-4" aria-hidden="true" />
                 <span className="sr-only">Dark theme</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="flex h-9 items-center gap-2 px-1.5">
+          <span className="shrink-0 text-sm font-medium">T3 Chat</span>
+
+          <Tabs
+            value={colorTheme === T3_CHAT_COLOR_THEME_ID ? theme : ""}
+            onValueChange={handleT3ChatThemeChange}
+            variant="segment"
+            className="min-w-0 flex-1"
+          >
+            <TabsList
+              aria-label="T3 Chat theme"
+              className="h-7 w-full gap-1 rounded-full bg-accent p-0.5 [&>div]:min-w-0 [&>div]:flex-1"
+            >
+              <TabsTrigger
+                value="light"
+                className="h-6 w-full rounded-md px-2 py-1 data-[state=active]:text-foreground"
+                indicatorClassName="bg-foreground/10 shadow-sm"
+              >
+                <SunIcon className="size-4" aria-hidden="true" />
+                <span className="sr-only">T3 Chat light theme</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="system"
+                className="h-6 w-full rounded-full px-2 py-2 data-[state=active]:text-foreground"
+                indicatorClassName="bg-foreground/10 shadow-sm"
+              >
+                <MonitorIcon className="size-4" aria-hidden="true" />
+                <span className="sr-only">T3 Chat system theme</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="dark"
+                className="h-6 w-full rounded-md px-2 py-1 data-[state=active]:text-foreground"
+                indicatorClassName="bg-foreground/10 shadow-sm"
+              >
+                <MoonIcon className="size-4" aria-hidden="true" />
+                <span className="sr-only">T3 Chat dark theme</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>

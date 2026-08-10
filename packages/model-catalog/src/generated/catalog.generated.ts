@@ -51,10 +51,6 @@ export const MODEL_PROVIDERS: ReadonlyArray<ModelProvider> = [
     id: "cohere",
     name: "Cohere",
   },
-  {
-    id: "perplexity",
-    name: "Perplexity",
-  },
 ]
 
 export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [

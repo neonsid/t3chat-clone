@@ -7,10 +7,7 @@ import { ModelPickerFilterMenu } from "@/components/chat/model-picker/ModelPicke
 import { ModelPickerList } from "@/components/chat/model-picker/ModelPickerList"
 import { ModelPickerRail } from "@/components/chat/model-picker/ModelPickerRail"
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
-import {
-  filterModels,
-  ignoresRailScope,
-} from "@/components/chat/model-picker/logic"
+import { filterModels } from "@/components/chat/model-picker/logic"
 import type { ModelQuery } from "@/components/chat/model-picker/logic"
 import {
   Popover,
@@ -24,10 +21,11 @@ import { useModelPickerStore } from "@/stores/AppStateProvider"
 import { cn } from "@/lib/utils"
 
 type ModelPickerProps = {
+  onSelectModel?: (modelId: string) => void
   className?: string
 }
 
-export function ModelPicker({ className }: ModelPickerProps) {
+export function ModelPicker({ onSelectModel, className }: ModelPickerProps) {
   const preferences = useModelPreferences()
   const picker = useModelPickerStore(
     useShallow((state) => ({
@@ -69,8 +67,9 @@ export function ModelPicker({ className }: ModelPickerProps) {
     [favoriteIds, query]
   )
 
-  const selectedModel = getChatModelById(preferences.selectedModelId)
-  const railHidden = ignoresRailScope(query)
+  const selectedModel = preferences.isLoading
+    ? null
+    : getChatModelById(preferences.selectedModelId)
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -80,7 +79,13 @@ export function ModelPicker({ className }: ModelPickerProps) {
 
   function handleSelect(modelId: string) {
     preferences.selectModel(modelId)
+    onSelectModel?.(modelId)
     handleOpenChange(false)
+  }
+
+  function handleSelectRailTab(tab: Parameters<typeof picker.setRailTab>[0]) {
+    picker.setRailTab(tab)
+    if (preferences.combineResults) preferences.setCombineResults(false)
   }
 
   return (
@@ -89,30 +94,42 @@ export function ModelPicker({ className }: ModelPickerProps) {
         render={
           <button
             type="button"
-            aria-label={`Model: ${selectedModel?.name ?? "none selected"}`}
+            aria-busy={preferences.isLoading}
+            aria-label={
+              preferences.isLoading
+                ? "Loading model"
+                : `Model: ${selectedModel?.name ?? "none selected"}`
+            }
+            disabled={preferences.isLoading}
             className={cn(
-              "inline-flex max-w-48 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none aria-expanded:bg-accent aria-expanded:text-foreground sm:max-w-56 sm:px-3",
+              "inline-flex max-w-48 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none disabled:cursor-wait disabled:opacity-70 aria-expanded:bg-accent aria-expanded:text-foreground sm:max-w-56 sm:px-3",
               className
             )}
           />
         }
       >
-        <span className="truncate">
-          {selectedModel?.name ?? "Select model"}
-        </span>
-        {selectedModel ? (
-          <ModelPriceMeter
-            inputCostPerMillion={selectedModel.inputCostPerMillion}
-            outputCostPerMillion={selectedModel.outputCostPerMillion}
-          />
-        ) : null}
-        <ChevronDownIcon
-          aria-hidden="true"
-          className={cn(
-            "size-3 shrink-0 opacity-60 transition-transform duration-200 ease-out motion-reduce:transition-none",
-            open && "rotate-180"
-          )}
-        />
+        {preferences.isLoading ? (
+          <span className="truncate">Loading...</span>
+        ) : (
+          <>
+            <span className="truncate">
+              {selectedModel?.name ?? "Select model"}
+            </span>
+            {selectedModel ? (
+              <ModelPriceMeter
+                inputCostPerMillion={selectedModel.inputCostPerMillion}
+                outputCostPerMillion={selectedModel.outputCostPerMillion}
+              />
+            ) : null}
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={cn(
+                "size-3 shrink-0 opacity-100 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                open && "rotate-180"
+              )}
+            />
+          </>
+        )}
       </PopoverTrigger>
 
       <PopoverContent
@@ -152,8 +169,8 @@ export function ModelPicker({ className }: ModelPickerProps) {
           <ModelPickerRail
             providers={MODEL_PICKER_RAIL_PROVIDERS}
             activeTab={picker.railTab}
-            onSelectTab={picker.setRailTab}
-            hidden={railHidden}
+            onSelectTab={handleSelectRailTab}
+            hidden={preferences.combineResults}
           />
           <ModelPickerList
             models={visibleModels}

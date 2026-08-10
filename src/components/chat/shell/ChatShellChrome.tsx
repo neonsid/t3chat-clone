@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { memo } from "react"
 import { ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
 import * as m from "motion/react-m"
 
@@ -20,7 +21,7 @@ import { cn } from "@/lib/utils"
  * both. The opaque `accent` the button variant defaults to sits only three
  * values above the chip and disappears against it.
  */
-export function SidebarControl({
+export const SidebarControl = memo(function SidebarControl({
   hasConversation,
   onCreateThread,
 }: {
@@ -78,7 +79,7 @@ export function SidebarControl({
       )}
     </div>
   )
-}
+})
 
 /**
  * The curve has to break just left of the header buttons, so the notch is

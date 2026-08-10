@@ -57,6 +57,7 @@ export type { ReasoningEffort } from "@/components/chat/composer/constants"
 
 type ReasoningEffortSelectProps = {
   value: ReasoningEffort
+  supportedEfforts: ReadonlyArray<ReasoningEffort>
   onValueChange: (value: ReasoningEffort) => void
   disabled?: boolean
   className?: string
@@ -64,6 +65,7 @@ type ReasoningEffortSelectProps = {
 
 export function ReasoningEffortSelect({
   value,
+  supportedEfforts,
   onValueChange,
   disabled = false,
   className,
@@ -76,11 +78,14 @@ export function ReasoningEffortSelect({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const focusMenuOnOpen = useRef(false)
   const listboxId = useId()
+  const availableOptions = REASONING_EFFORTS.filter((option) =>
+    supportedEfforts.includes(option.value)
+  )
   const selectedIndex = Math.max(
-    REASONING_EFFORTS.findIndex((option) => option.value === value),
+    availableOptions.findIndex((option) => option.value === value),
     0
   )
-  const selectedOption = REASONING_EFFORTS[selectedIndex]
+  const selectedOption = availableOptions[selectedIndex]
   useWindowEvent("pointerdown", (event) => {
     if (open && !rootRef.current?.contains(event.target as Node)) setOpen(false)
   })
@@ -102,21 +107,21 @@ export function ReasoningEffortSelect({
       openAndFocus(selectedIndex)
     } else if (event.key === "ArrowUp") {
       event.preventDefault()
-      openAndFocus(REASONING_EFFORTS.length - 1)
+      openAndFocus(availableOptions.length - 1)
     }
   }
 
   function handleListKeyDown(event: KeyboardEvent<HTMLUListElement>) {
     let nextIndex = focusedIndex
     if (event.key === "ArrowDown") {
-      nextIndex = (focusedIndex + 1) % REASONING_EFFORTS.length
+      nextIndex = (focusedIndex + 1) % availableOptions.length
     } else if (event.key === "ArrowUp") {
       nextIndex =
-        (focusedIndex - 1 + REASONING_EFFORTS.length) % REASONING_EFFORTS.length
+        (focusedIndex - 1 + availableOptions.length) % availableOptions.length
     } else if (event.key === "Home") {
       nextIndex = 0
     } else if (event.key === "End") {
-      nextIndex = REASONING_EFFORTS.length - 1
+      nextIndex = availableOptions.length - 1
     } else {
       return
     }
@@ -185,7 +190,7 @@ export function ReasoningEffortSelect({
               aria-label="Reasoning effort"
               onKeyDown={handleListKeyDown}
             >
-              {REASONING_EFFORTS.map((option, index) => {
+              {availableOptions.map((option, index) => {
                 const selected = option.value === value
 
                 return (

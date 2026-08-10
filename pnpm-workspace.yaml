@@ -6,3 +6,6 @@ allowBuilds:
   lightningcss: true
   unrs-resolver: true
   msw: false
+  "@google/genai": true
+  "@openrouter/sdk": true
+  protobufjs: true

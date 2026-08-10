@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.stubGlobal("document", {
     documentElement: {
       classList: { toggle: vi.fn() },
+      dataset: {},
     },
   })
 })
@@ -38,5 +39,16 @@ describe("preferences store", () => {
     store.getState().selectGuestModel("unknown/model")
 
     expect(store.getState().guestModels).toBe(initial)
+  })
+
+  test("persists the selected color theme", () => {
+    const firstStore = createPreferencesStore()
+    firstStore.getState().setColorTheme("t3-chat")
+
+    const secondStore = createPreferencesStore()
+    secondStore.getState().hydrateClientPreferences()
+
+    expect(secondStore.getState().colorTheme).toBe("t3-chat")
+    expect(document.documentElement.dataset.themeId).toBe("t3-chat")
   })
 })

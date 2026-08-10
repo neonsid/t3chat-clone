@@ -21,13 +21,23 @@ export const get = authedQuery({
       .withIndex("by_ownerId", (query) => query.eq("ownerId", ctx.viewerId))
       .unique()
 
-    return preferences
-      ? {
-          selectedModelId: preferences.selectedModelId,
-          favoriteModelIds: preferences.favoriteModelIds,
-          combineResults: preferences.combineResults,
-        }
-      : defaultPreferences
+    if (!preferences) return defaultPreferences
+
+    const selectedModelId = isChatModelId(preferences.selectedModelId)
+      ? preferences.selectedModelId
+      : DEFAULT_SELECTED_MODEL_ID
+    const favoriteModelIds = [...new Set(preferences.favoriteModelIds)]
+      .filter(isChatModelId)
+      .slice(0, 4)
+
+    return {
+      selectedModelId,
+      favoriteModelIds:
+        favoriteModelIds.length > 0
+          ? favoriteModelIds
+          : [...DEFAULT_FAVORITE_MODEL_IDS],
+      combineResults: preferences.combineResults,
+    }
   },
 })
 

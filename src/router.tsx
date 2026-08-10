@@ -5,8 +5,11 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { ClerkProvider, useAuth } from "@clerk/tanstack-react-start"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 
+import { installVitePreloadRecovery } from "./lib/vite-preload-recovery"
 import { routeTree } from "./routeTree.gen"
 import { AppStateProvider } from "./stores/AppStateProvider"
+
+installVitePreloadRecovery()
 
 export function getRouter() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL
