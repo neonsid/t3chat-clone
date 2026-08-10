@@ -3,6 +3,13 @@ import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 
 export const REASONING_EFFORTS = ["instant", "low", "medium", "high"] as const
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return (
+    typeof value === "string" &&
+    REASONING_EFFORTS.some((effort) => effort === value)
+  )
+}
 export type ProviderReasoningEffort =
   "none" | "minimal" | Exclude<ReasoningEffort, "instant">
 
@@ -254,7 +261,7 @@ const chatModelIds = new Set<string>(Object.keys(CHAT_MODEL_CONFIG))
 
 export const CHAT_MODEL_CATALOG = MODEL_CATALOG.filter(
   (model): model is ModelCatalogEntry & { id: ChatModelId } =>
-    model.activity === "chat" && chatModelIds.has(model.id)
+    chatModelIds.has(model.id)
 )
 
 export const DEFAULT_CHAT_MODEL_ID: ChatModelId = "openai/gpt-5.5"

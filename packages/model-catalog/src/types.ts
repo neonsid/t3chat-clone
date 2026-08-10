@@ -26,20 +26,6 @@ export type ModelCapability =
   | "image-generation"
   | "pdf"
 
-export type ModelActivity =
-  | "chat"
-  | "image-generation"
-  | "video-generation"
-  | "speech"
-  | "transcription"
-  | "realtime"
-  | "embedding"
-  | "agent"
-  | "music"
-
-export type ModelModality =
-  "text" | "image" | "audio" | "video" | "document" | "embedding"
-
 export type ModelCatalogEntry = {
   readonly id: string
   /** The provider's model id, without the provider prefix. */
@@ -47,9 +33,6 @@ export type ModelCatalogEntry = {
   readonly providerId: ModelProviderId
   readonly name: string
   readonly description: string | null
-  readonly activity: ModelActivity
-  readonly inputModalities: ReadonlyArray<ModelModality>
-  readonly outputModalities: ReadonlyArray<ModelModality>
   readonly capabilities: ReadonlyArray<ModelCapability>
   readonly contextTokens: number | null
   readonly outputTokens: number | null

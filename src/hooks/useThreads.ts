@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import {
   useConvexAuth,
   useMutation,
@@ -20,13 +20,15 @@ export function useThreads(
   const useBackend = isAuthenticated && !options.forceGuestThread
   const query = options.searchQuery ?? ""
   const normalizedThreadId = initialThreadId ?? null
+  const hasActiveThreadId =
+    normalizedThreadId != null && normalizedThreadId !== "guest"
   const activeThreadDocument = useQuery(
     api.threads.get,
-    useBackend && normalizedThreadId ? { threadId: normalizedThreadId } : "skip"
+    useBackend && hasActiveThreadId ? { threadId: normalizedThreadId } : "skip"
   )
   const messageDocuments = useQuery(
     api.messages.listForThread,
-    useBackend && normalizedThreadId ? { threadId: normalizedThreadId } : "skip"
+    useBackend && hasActiveThreadId ? { threadId: normalizedThreadId } : "skip"
   )
   const pinnedDocuments = useQuery(
     api.threads.listPinned,
@@ -69,9 +71,11 @@ export function useThreads(
   )
   const activeThread = !useBackend
     ? guestThread
-    : activeThreadDocument
-      ? toChatThread(activeThreadDocument, activeMessages, generationStats)
+    : !hasActiveThreadId
+      ? guestThread
       : activeThreadDocument
+        ? toChatThread(activeThreadDocument, activeMessages, generationStats)
+        : activeThreadDocument
 
   const threads = useMemo(() => {
     if (!useBackend) return []
@@ -88,8 +92,8 @@ export function useThreads(
   const isThreadDataReady = Boolean(
     !isAuthLoading &&
     (!useBackend ||
-      (normalizedThreadId &&
-        activeThreadDocument !== undefined &&
+      !hasActiveThreadId ||
+      (activeThreadDocument !== undefined &&
         messageDocuments !== undefined))
   )
   const isSidebarDataReady = Boolean(
@@ -98,13 +102,70 @@ export function useThreads(
       (pinnedDocuments !== undefined && recent.status !== "LoadingFirstPage"))
   )
 
-  function requireThreadId(threadId: string): Id<"threads"> {
+  const requireThreadId = useCallback((threadId: string): Id<"threads"> => {
     return threadId as Id<"threads">
-  }
+  }, [])
 
-  function requireAuthentication() {
+  const requireAuthentication = useCallback(() => {
     if (!isAuthenticated) throw new Error("Authentication required")
-  }
+  }, [isAuthenticated])
+
+  const loadMore = useCallback(() => {
+    if (useBackend) recent.loadMore(THREAD_PAGE_SIZE)
+  }, [recent, useBackend])
+
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      requireAuthentication()
+      return await deleteThreadMutation({
+        threadId: requireThreadId(threadId),
+      })
+    },
+    [deleteThreadMutation, requireAuthentication, requireThreadId]
+  )
+
+  const archiveThread = useCallback(
+    async (threadId: string) => {
+      requireAuthentication()
+      return await archiveThreadMutation({
+        threadId: requireThreadId(threadId),
+      })
+    },
+    [archiveThreadMutation, requireAuthentication, requireThreadId]
+  )
+
+  const toggleThreadPinned = useCallback(
+    async (threadId: string) => {
+      requireAuthentication()
+      const thread = threads.find((item) => item.id === threadId)
+      await setPinnedMutation({
+        threadId: requireThreadId(threadId),
+        pinned: !thread?.pinnedAt,
+      })
+    },
+    [requireAuthentication, requireThreadId, setPinnedMutation, threads]
+  )
+
+  const renameThread = useCallback(
+    async (threadId: string, title: string) => {
+      requireAuthentication()
+      return await renameThreadMutation({
+        threadId: requireThreadId(threadId),
+        title,
+      })
+    },
+    [renameThreadMutation, requireAuthentication, requireThreadId]
+  )
+
+  const regenerateThreadTitle = useCallback(
+    async (threadId: string) => {
+      requireAuthentication()
+      return await regenerateTitleMutation({
+        threadId: requireThreadId(threadId),
+      })
+    },
+    [regenerateTitleMutation, requireAuthentication, requireThreadId]
+  )
 
   return {
     activeThread,
@@ -114,45 +175,15 @@ export function useThreads(
     isSidebarDataReady,
     canPersistThread: useBackend,
     messagesLoading: Boolean(
-      useBackend && normalizedThreadId && messageDocuments === undefined
+      useBackend && hasActiveThreadId && messageDocuments === undefined
     ),
     threads,
     paginationStatus: !useBackend || query.trim() ? "Exhausted" : recent.status,
-    loadMore: () => {
-      if (useBackend) recent.loadMore(THREAD_PAGE_SIZE)
-    },
-    deleteThread: async (threadId: string) => {
-      requireAuthentication()
-      return await deleteThreadMutation({
-        threadId: requireThreadId(threadId),
-      })
-    },
-    archiveThread: async (threadId: string) => {
-      requireAuthentication()
-      return await archiveThreadMutation({
-        threadId: requireThreadId(threadId),
-      })
-    },
-    toggleThreadPinned: async (threadId: string) => {
-      requireAuthentication()
-      const thread = threads.find((item) => item.id === threadId)
-      await setPinnedMutation({
-        threadId: requireThreadId(threadId),
-        pinned: !thread?.pinnedAt,
-      })
-    },
-    renameThread: async (threadId: string, title: string) => {
-      requireAuthentication()
-      return await renameThreadMutation({
-        threadId: requireThreadId(threadId),
-        title,
-      })
-    },
-    regenerateThreadTitle: async (threadId: string) => {
-      requireAuthentication()
-      return await regenerateTitleMutation({
-        threadId: requireThreadId(threadId),
-      })
-    },
+    loadMore,
+    deleteThread,
+    archiveThread,
+    toggleThreadPinned,
+    renameThread,
+    regenerateThreadTitle,
   }
 }

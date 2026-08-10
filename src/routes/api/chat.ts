@@ -1,5 +1,5 @@
 import { chatParamsFromRequest, toServerSentEventsResponse } from "@tanstack/ai"
-import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai"
+import type { ModelMessage, StreamChunk } from "@tanstack/ai"
 import { auth } from "@clerk/tanstack-react-start/server"
 import { createFileRoute } from "@tanstack/react-router"
 import { ConvexHttpClient } from "convex/browser"
@@ -7,55 +7,20 @@ import { ConvexHttpClient } from "convex/browser"
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import {
-  CHAT_MODEL_CATALOG,
+  getChatModelById,
+  isReasoningEffort,
   MAX_MODEL_CONTEXT_CHARACTERS,
-  REASONING_EFFORTS,
   resolveChatModel,
 } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import { latestUserChatMessage } from "@/lib/chat-messages"
 import {
   getMissingRuntimeKey,
   streamChatModel,
 } from "@/lib/server/chat-model-executors.server"
 
-const modelNames = new Map(
-  CHAT_MODEL_CATALOG.map((model) => [model.id, model.name])
-)
-
 function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status })
-}
-
-function isReasoningEffort(value: unknown): value is ReasoningEffort {
-  return REASONING_EFFORTS.some((effort) => effort === value)
-}
-
-function textFromMessage(message: UIMessage | ModelMessage) {
-  if ("parts" in message && Array.isArray(message.parts)) {
-    return message.parts
-      .filter(
-        (part): part is { type: "text"; content: string } =>
-          part.type === "text" && typeof part.content === "string"
-      )
-      .map((part) => part.content)
-      .join("\n")
-      .trim()
-  }
-  return "content" in message && typeof message.content === "string"
-    ? message.content.trim()
-    : ""
-}
-
-function latestUserMessage(messages: Array<UIMessage | ModelMessage>) {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index]
-    if (message.role !== "user") continue
-    const content = textFromMessage(message)
-    const id =
-      "id" in message && typeof message.id === "string" ? message.id : null
-    if (content && id) return { id, content }
-  }
-  return null
 }
 
 function contextToModelMessages(
@@ -233,7 +198,7 @@ export const Route = createFileRoute("/api/chat")({
         const missingRuntimeKey = getMissingRuntimeKey(model.runtime)
         if (missingRuntimeKey) return errorResponse(missingRuntimeKey, 500)
 
-        const userMessage = latestUserMessage(params.messages)
+        const userMessage = latestUserChatMessage(params.messages)
         if (!userMessage)
           return errorResponse("A user message is required", 400)
 
@@ -286,7 +251,7 @@ export const Route = createFileRoute("/api/chat")({
               runId: params.runId,
               completionSecret,
               modelId,
-              modelName: modelNames.get(model.id) ?? model.id,
+              modelName: getChatModelById(model.id)?.name ?? model.id,
               reasoningEffort,
               startedAt,
               signal: abortController.signal,

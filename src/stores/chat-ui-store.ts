@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
 
-import { REASONING_EFFORTS } from "@/lib/chat-models"
+import { isReasoningEffort } from "@/lib/chat-models"
 import {
   CHAT_UI_STORAGE_KEY,
   CHAT_UI_STORAGE_VERSION,
@@ -40,15 +40,6 @@ function isDefaultComposerState(state: ThreadComposerState): boolean {
     state.draft === DEFAULT_THREAD_COMPOSER_STATE.draft &&
     state.reasoningEffort === DEFAULT_THREAD_COMPOSER_STATE.reasoningEffort &&
     state.searchEnabled === DEFAULT_THREAD_COMPOSER_STATE.searchEnabled
-  )
-}
-
-function isReasoningEffort(
-  value: unknown
-): value is ThreadComposerState["reasoningEffort"] {
-  return (
-    typeof value === "string" &&
-    REASONING_EFFORTS.some((effort) => effort === value)
   )
 }
 
