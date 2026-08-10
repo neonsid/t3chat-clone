@@ -12,8 +12,7 @@ import {
   THREAD_DELETE_BATCH_SIZE,
 } from "./constants"
 import { authedMutation, authedQuery } from "./helpers/functions"
-import { getMessageContent } from "./helpers/messages"
-import { getOwnedThread, titleFromFirstMessage } from "./helpers/threads"
+import { getOwnedThread } from "./helpers/threads"
 import type { MutationCtx } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
 
@@ -170,21 +169,14 @@ export const regenerateTitle = authedMutation({
   args: { threadId: v.id("threads") },
   handler: async (ctx, args) => {
     const thread = await getOwnedThread(ctx, args.threadId)
-    const firstMessage = await ctx.db
-      .query("messages")
-      .withIndex("by_threadId_and_sequence", (query) =>
-        query.eq("threadId", thread._id)
-      )
-      .order("asc")
-      .first()
-
-    const firstText = firstMessage ? getMessageContent(firstMessage) : ""
+    if (thread.state !== "active") throw new ConvexError("Thread not found")
 
     await ctx.db.patch("threads", thread._id, {
-      title: firstText
-        ? titleFromFirstMessage(firstText)
-        : DEFAULT_THREAD_TITLE,
-      titleSource: "derived",
+      title: DEFAULT_THREAD_TITLE,
+      titleSource: "pending",
+    })
+    await ctx.scheduler.runAfter(0, internal.threadTitles.generate, {
+      threadId: thread._id,
     })
     return null
   },

@@ -11,11 +11,13 @@
 import type * as chatRuns from "../chatRuns.js";
 import type * as constants from "../constants.js";
 import type * as helpers_functions from "../helpers/functions.js";
+import type * as helpers_generateThreadTitle from "../helpers/generateThreadTitle.js";
 import type * as helpers_messages from "../helpers/messages.js";
 import type * as helpers_threads from "../helpers/threads.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as preferences from "../preferences.js";
+import type * as threadTitles from "../threadTitles.js";
 import type * as threads from "../threads.js";
 
 import type {
@@ -28,11 +30,13 @@ declare const fullApi: ApiFromModules<{
   chatRuns: typeof chatRuns;
   constants: typeof constants;
   "helpers/functions": typeof helpers_functions;
+  "helpers/generateThreadTitle": typeof helpers_generateThreadTitle;
   "helpers/messages": typeof helpers_messages;
   "helpers/threads": typeof helpers_threads;
   messages: typeof messages;
   migrations: typeof migrations;
   preferences: typeof preferences;
+  threadTitles: typeof threadTitles;
   threads: typeof threads;
 }>;
 

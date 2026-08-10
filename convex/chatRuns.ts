@@ -1,13 +1,15 @@
 import { ConvexError, v } from "convex/values"
 
+import { internal } from "./_generated/api"
 import {
   MAX_CHAT_IDENTIFIER_LENGTH,
   MAX_MESSAGE_CONTENT_LENGTH,
+  MAX_RUNNING_THREAD_IDS,
   MAX_THREAD_MESSAGES,
   RUN_LEASE_DURATION_MS,
 } from "./constants"
-import { authedMutation } from "./helpers/functions"
-import { getOwnedThread, titleFromFirstMessage } from "./helpers/threads"
+import { authedMutation, authedQuery } from "./helpers/functions"
+import { getOwnedThread } from "./helpers/threads"
 import { generationValidator, reasoningEffortValidator } from "./schema"
 import type { MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
@@ -214,11 +216,12 @@ export const start = authedMutation({
       messageCount += 1
     }
 
+    const shouldGenerateTitle =
+      !thread.hasMessages &&
+      (thread.titleSource === "derived" || thread.titleSource === "pending")
+
     await ctx.db.patch("threads", thread._id, {
-      title:
-        !thread.hasMessages && thread.titleSource === "derived"
-          ? titleFromFirstMessage(content)
-          : thread.title,
+      ...(shouldGenerateTitle ? { titleSource: "pending" as const } : {}),
       updatedAt: now,
       hasMessages: true,
       messageCount,
@@ -235,6 +238,11 @@ export const start = authedMutation({
       status: "running",
       startedAt: now,
     })
+    if (shouldGenerateTitle) {
+      await ctx.scheduler.runAfter(0, internal.threadTitles.generate, {
+        threadId: thread._id,
+      })
+    }
     return { accepted: true, status: "running" as const }
   },
 })
@@ -262,4 +270,18 @@ export const stop = authedMutation({
 export const fail = authedMutation({
   args: { ...finishArgs, errorMessage: v.string() },
   handler: async (ctx, args) => await finishRun(ctx, args, "failed"),
+})
+
+export const listRunningThreadIds = authedQuery({
+  args: {},
+  handler: async (ctx) => {
+    const runs = await ctx.db
+      .query("chatRuns")
+      .withIndex("by_ownerId_and_status", (query) =>
+        query.eq("ownerId", ctx.viewerId).eq("status", "running")
+      )
+      .take(MAX_RUNNING_THREAD_IDS)
+
+    return [...new Set(runs.map((run) => run.threadId))]
+  },
 })

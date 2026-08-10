@@ -16,6 +16,7 @@ import {
   SIDEBAR_LOAD_MORE_THRESHOLD_PX,
   SIDEBAR_SEARCH_FOCUS_DELAY_MS,
   SIDEBAR_SEARCH_SHORTCUT,
+  SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS,
 } from "@/components/sidebar/constants"
 import { groupSidebarThreads } from "@/components/sidebar/logic"
 import { Tooltip } from "@/components/shared/motion/tooltip"
@@ -136,13 +137,20 @@ export function AppSidebar({
   function renderThread(thread: ChatThread) {
     const isActive = thread.id === activeThreadId
     const isPinned = Boolean(thread.pinnedAt)
+    const isTitlePending = thread.titleSource === "pending"
+    const isBusy = isTitlePending || thread.isStreaming
+    const tooltipContent = isTitlePending ? "Generating title…" : thread.title
 
     return (
-      <SidebarMenuItem key={thread.id} className="sidebar-thread-row">
+      <SidebarMenuItem
+        key={thread.id}
+        className="sidebar-thread-row"
+        data-thread-busy={isBusy ? "true" : undefined}
+      >
         <ThreadContextMenu thread={thread} actions={actions}>
           <div className="w-full">
             <Tooltip
-              content={thread.title}
+              content={tooltipContent}
               side="right"
               delay={450}
               wrapperClassName="w-full"
@@ -151,55 +159,80 @@ export function AppSidebar({
                 isActive={isActive}
                 size="sm"
                 className={cn(
-                  "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground"
+                  "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground",
+                  isBusy && "pe-9"
                 )}
                 onClick={() => handleSelect(thread.id)}
               >
-                <span className="sidebar-thread-title min-w-0 flex-1 truncate">
-                  {thread.title}
-                </span>
+                {isTitlePending ? (
+                  <span
+                    aria-label="Generating title"
+                    className={cn(
+                      "sidebar-thread-title-shimmer min-w-0 flex-1",
+                      SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS
+                    )}
+                  />
+                ) : (
+                  <span className="sidebar-thread-title min-w-0 flex-1 truncate">
+                    {thread.title}
+                  </span>
+                )}
               </SidebarMenuButton>
             </Tooltip>
           </div>
         </ThreadContextMenu>
 
-        <div className="sidebar-thread-actions absolute top-1 right-1 flex items-center gap-0.5 rounded-md">
-          <Tooltip
-            content={isPinned ? "Unpin chat" : "Pin chat"}
-            side="top"
-            delay={250}
-          >
-            <button
-              type="button"
-              aria-label={
-                isPinned ? `Unpin ${thread.title}` : `Pin ${thread.title}`
-              }
-              className="flex size-7 cursor-pointer items-center justify-center rounded-sm bg-transparent text-sidebar-muted-foreground transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-              onClick={(event) => {
-                event.stopPropagation()
-                actions.togglePinned(thread.id)
-              }}
+        {isBusy ? (
+          <div className="sidebar-thread-status absolute top-1 right-1 flex size-7 items-center justify-center">
+            <LoaderCircleIcon
+              aria-hidden="true"
+              className="size-3.5 animate-spin text-sidebar-foreground/80"
+            />
+            <span className="sr-only">
+              {isTitlePending
+                ? "Generating title"
+                : "Assistant is responding"}
+            </span>
+          </div>
+        ) : (
+          <div className="sidebar-thread-actions absolute top-1 right-1 flex items-center gap-0.5 rounded-md">
+            <Tooltip
+              content={isPinned ? "Unpin chat" : "Pin chat"}
+              side="top"
+              delay={250}
             >
-              <PinIcon
-                aria-hidden="true"
-                className={cn("size-3.5", isPinned && "fill-current")}
-              />
-            </button>
-          </Tooltip>
-          <Tooltip content="Archive chat" side="top" delay={250}>
-            <button
-              type="button"
-              aria-label={`Archive ${thread.title}`}
-              className="flex size-7 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-              onClick={(event) => {
-                event.stopPropagation()
-                actions.archive(thread.id)
-              }}
-            >
-              <ArchiveIcon aria-hidden="true" className="size-3.5" />
-            </button>
-          </Tooltip>
-        </div>
+              <button
+                type="button"
+                aria-label={
+                  isPinned ? `Unpin ${thread.title}` : `Pin ${thread.title}`
+                }
+                className="flex size-7 cursor-pointer items-center justify-center rounded-sm bg-transparent text-sidebar-muted-foreground transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  actions.togglePinned(thread.id)
+                }}
+              >
+                <PinIcon
+                  aria-hidden="true"
+                  className={cn("size-3.5", isPinned && "fill-current")}
+                />
+              </button>
+            </Tooltip>
+            <Tooltip content="Archive chat" side="top" delay={250}>
+              <button
+                type="button"
+                aria-label={`Archive ${thread.title}`}
+                className="flex size-7 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  actions.archive(thread.id)
+                }}
+              >
+                <ArchiveIcon aria-hidden="true" className="size-3.5" />
+              </button>
+            </Tooltip>
+          </div>
+        )}
       </SidebarMenuItem>
     )
   }
