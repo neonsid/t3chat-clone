@@ -20,7 +20,14 @@ export const streamOpenAIChat: ChatExecutor = ({
     modelOptions: {
       max_output_tokens: MAX_MODEL_OUTPUT_TOKENS,
       ...(providerReasoningEffort
-        ? { reasoning: { effort: providerReasoningEffort } }
+        ? {
+            reasoning: {
+              effort: providerReasoningEffort,
+              ...(providerReasoningEffort === "none"
+                ? {}
+                : { summary: "auto" as const }),
+            },
+          }
         : {}),
     },
     abortController,

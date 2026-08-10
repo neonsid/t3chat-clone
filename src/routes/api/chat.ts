@@ -1,18 +1,19 @@
 import { chatParamsFromRequest, toServerSentEventsResponse } from "@tanstack/ai"
-import type { ModelMessage, StreamChunk } from "@tanstack/ai"
+import type { StreamChunk } from "@tanstack/ai"
 import { auth } from "@clerk/tanstack-react-start/server"
 import { createFileRoute } from "@tanstack/react-router"
 import { ConvexHttpClient } from "convex/browser"
 
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
+import { MAX_MESSAGE_CONTENT_LENGTH } from "../../../convex/constants"
 import {
   getChatModelById,
   isReasoningEffort,
-  MAX_MODEL_CONTEXT_CHARACTERS,
   resolveChatModel,
 } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import { contextToModelMessages } from "@/lib/chat-context"
 import { latestUserChatMessage } from "@/lib/chat-messages"
 import {
   getMissingRuntimeKey,
@@ -23,30 +24,11 @@ function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status })
 }
 
-function contextToModelMessages(
-  messages: Array<{
-    role: "user" | "assistant"
-    content: string
-  }>
-): ModelMessage[] {
-  const selected: ModelMessage[] = []
-  let characterCount = 0
-
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index]
-    const content = message.content.trim()
-    if (!content) continue
-    if (
-      selected.length > 0 &&
-      characterCount + content.length > MAX_MODEL_CONTEXT_CHARACTERS
-    ) {
-      break
-    }
-    selected.push({ role: message.role, content })
-    characterCount += content.length
-  }
-
-  return selected.reverse()
+function appendThinking(current: string, delta: string) {
+  if (!delta) return current
+  const remaining = MAX_MESSAGE_CONTENT_LENGTH - current.length
+  if (remaining <= 0) return current
+  return current + delta.slice(0, remaining)
 }
 
 function collectAndPersistStream({
@@ -76,6 +58,7 @@ function collectAndPersistStream({
     let assistantMessageId: string | undefined
     let text = ""
     let thinking = ""
+    let hasSeenReasoningEvents = false
     let firstTokenAt: number | undefined
     let outputTokens = 0
     let finished = false
@@ -93,12 +76,27 @@ function collectAndPersistStream({
       for await (const chunk of stream) {
         if (chunk.type === "TEXT_MESSAGE_START") {
           assistantMessageId = chunk.messageId
+        } else if (
+          chunk.type === "REASONING_MESSAGE_START" ||
+          chunk.type === "REASONING_START"
+        ) {
+          assistantMessageId ??= chunk.messageId
         } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
           firstTokenAt ??= Date.now()
           text += chunk.delta
         } else if (chunk.type === "REASONING_MESSAGE_CONTENT") {
           firstTokenAt ??= Date.now()
-          thinking += chunk.delta
+          hasSeenReasoningEvents = true
+          thinking = appendThinking(thinking, chunk.delta)
+          assistantMessageId ??= chunk.messageId
+        } else if (chunk.type === "STEP_FINISHED") {
+          // Adapters may emit STEP_FINISHED alongside REASONING_MESSAGE_CONTENT
+          // with the same delta — prefer the AG-UI reasoning events when present.
+          if (!hasSeenReasoningEvents && chunk.delta) {
+            firstTokenAt ??= Date.now()
+            thinking = appendThinking(thinking, chunk.delta)
+            assistantMessageId ??= crypto.randomUUID()
+          }
         } else if (chunk.type === "RUN_FINISHED") {
           outputTokens = chunk.usage?.completionTokens ?? 0
         } else if (chunk.type === "RUN_ERROR") {
@@ -111,7 +109,9 @@ function collectAndPersistStream({
         threadId,
         runId,
         completionSecret,
-        assistantMessageId,
+        assistantMessageId:
+          assistantMessageId ??
+          (thinking || text ? crypto.randomUUID() : undefined),
         content: text,
         thinking: thinking || undefined,
         generation: generation(),
@@ -123,7 +123,9 @@ function collectAndPersistStream({
           threadId,
           runId,
           completionSecret,
-          assistantMessageId,
+          assistantMessageId:
+            assistantMessageId ??
+            (thinking || text ? crypto.randomUUID() : undefined),
           content: text,
           thinking: thinking || undefined,
           generation: generation(),
@@ -133,7 +135,9 @@ function collectAndPersistStream({
           threadId,
           runId,
           completionSecret,
-          assistantMessageId,
+          assistantMessageId:
+            assistantMessageId ??
+            (thinking || text ? crypto.randomUUID() : undefined),
           content: text,
           thinking: thinking || undefined,
           generation: generation(),
@@ -149,7 +153,9 @@ function collectAndPersistStream({
           threadId,
           runId,
           completionSecret,
-          assistantMessageId,
+          assistantMessageId:
+            assistantMessageId ??
+            (thinking || text ? crypto.randomUUID() : undefined),
           content: text,
           thinking: thinking || undefined,
           generation: generation(),

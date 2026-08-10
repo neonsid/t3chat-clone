@@ -49,6 +49,12 @@ export const CHAT_SUGGESTIONS: Record<SuggestionCategory, string[]> = {
 
 export const BOUNCING_DOT_INDICES = [0, 1, 2] as const
 
+export const REASONING_BLOCK = {
+  label: "Reasoning",
+  streamingLabel: "Reasoning…",
+  maxHeightClassName: "max-h-64",
+} as const
+
 export const STREAMDOWN_PLUGINS = {
   code: createCodePlugin({ themes: ["github-light", "min-dark"] }),
 }

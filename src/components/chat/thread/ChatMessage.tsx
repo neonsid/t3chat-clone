@@ -1,21 +1,18 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
 import {
   CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   Clock3Icon,
   CopyIcon,
   CpuIcon,
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
-import { BouncingDots } from "@/components/chat/thread/BouncingDots"
+import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { Button } from "@/components/shared/ui/button"
 import { formatShortTimestamp } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
-import { cn } from "@/lib/utils"
 
 function getMessageText(message: UIMessage) {
   let text = ""
@@ -31,27 +28,6 @@ function getThinkingText(message: UIMessage) {
     if (part.type === "thinking") parts.push(part.content)
   }
   return parts.join("\n").trim()
-}
-
-function formatWorkedDuration(elapsedMs: number | null | undefined) {
-  if (elapsedMs == null || elapsedMs < 0 || !Number.isFinite(elapsedMs)) {
-    return null
-  }
-
-  const totalSeconds = Math.max(1, Math.round(elapsedMs / 1000))
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`
-  }
-
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes < 60) {
-    return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
-  }
-
-  const hours = Math.floor(minutes / 60)
-  const remMinutes = minutes % 60
-  return remMinutes === 0 ? `${hours}h` : `${hours}h ${remMinutes}m`
 }
 
 async function copyText(text: string) {
@@ -96,25 +72,12 @@ type ChatMessageProps = {
 export function ChatMessage({
   message,
   isStreaming = false,
-  workedMs = null,
-  previousUserCreatedAt = null,
   generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = getMessageText(message)
   const thinking = getThinkingText(message)
   const timestamp = formatShortTimestamp(message.createdAt)
-
-  const derivedWorkedMs = useMemo(() => {
-    if (workedMs != null) return workedMs
-    if (!previousUserCreatedAt || !message.createdAt) return null
-    const start = new Date(previousUserCreatedAt).getTime()
-    const end = new Date(message.createdAt).getTime()
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
-      return null
-    }
-    return end - start
-  }, [message.createdAt, previousUserCreatedAt, workedMs])
 
   if (isUser) {
     return (
@@ -148,23 +111,21 @@ export function ChatMessage({
     )
   }
 
-  const showWorkFold = Boolean(thinking) || (isStreaming && !text)
+  const isStreamingThinking = isStreaming && !text
+  const showReasoning = Boolean(thinking) || isStreamingThinking
 
   return (
     <div className="group/assistant pb-2">
       <div className="relative min-w-0 px-1 py-0.5">
-        {showWorkFold && (
-          <WorkedForFold
+        {showReasoning ? (
+          <ReasoningBlock
             content={thinking}
-            isStreaming={isStreaming && !text}
-            workedMs={derivedWorkedMs}
+            isStreamingThinking={isStreamingThinking}
           />
-        )}
+        ) : null}
 
         {text ? (
           <StreamdownMarkdown text={text} isStreaming={isStreaming} />
-        ) : isStreaming && !thinking ? (
-          <BouncingDots label="Assistant is thinking" />
         ) : null}
 
         {(text || timestamp || generationStats) && !isStreaming ? (
@@ -204,78 +165,6 @@ export function ChatMessage({
           </div>
         ) : null}
       </div>
-    </div>
-  )
-}
-
-function WorkedForFold({
-  content,
-  isStreaming,
-  workedMs,
-}: {
-  content: string
-  isStreaming: boolean
-  workedMs: number | null
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const duration = formatWorkedDuration(workedMs)
-  const label = isStreaming
-    ? "Working…"
-    : duration
-      ? `Worked for ${duration}`
-      : content
-        ? "Worked"
-        : "Worked for a moment"
-  const Icon = expanded ? ChevronDownIcon : ChevronRightIcon
-  const preview = useMemo(() => {
-    if (!content) return null
-    const firstLine = content
-      .split("\n")
-      .find((line) => line.trim())
-      ?.trim()
-    if (!firstLine) return null
-    return firstLine.length > 72
-      ? `${firstLine.slice(0, 72).trimEnd()}…`
-      : firstLine
-  }, [content])
-
-  return (
-    <div className="mb-3">
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
-          expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="overflow-hidden">
-          {content ? (
-            <div className="mb-2 rounded-2xl border border-border/80 bg-accent p-4 sm:p-5">
-              {preview ? (
-                <p className="truncate text-sm font-medium text-foreground">
-                  {preview}
-                </p>
-              ) : null}
-              <p className="mt-1.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
-                {content}
-              </p>
-            </div>
-          ) : isStreaming ? (
-            <div className="mb-2 rounded-2xl border border-border/80 bg-accent p-4 sm:p-5">
-              <BouncingDots label="Working" />
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <button
-        type="button"
-        aria-expanded={expanded}
-        className="flex cursor-pointer items-center gap-1 rounded-md px-1 text-xs text-muted-foreground tabular-nums transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none"
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <span>{label}</span>
-        <Icon className="size-3.5" />
-      </button>
     </div>
   )
 }

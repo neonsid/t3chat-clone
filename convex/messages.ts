@@ -2,7 +2,7 @@ import { v } from "convex/values"
 
 import { MAX_MODEL_CONTEXT_MESSAGES, MAX_THREAD_MESSAGES } from "./constants"
 import { authedQuery } from "./helpers/functions"
-import { getMessageContent } from "./helpers/messages"
+import { getMessageContent, getMessageThinking } from "./helpers/messages"
 import { getOwnedThread } from "./helpers/threads"
 
 export const listForThread = authedQuery({
@@ -50,6 +50,7 @@ export const getContext = authedQuery({
       id: message.messageId,
       role: message.role,
       content: getMessageContent(message),
+      thinking: getMessageThinking(message) || undefined,
       createdAt: message.createdAt,
     }))
   },
