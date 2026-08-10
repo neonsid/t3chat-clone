@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { Doc, Id } from "../../convex/_generated/dataModel"
+import type { Doc, Id } from "../../../convex/_generated/dataModel"
 import { toChatMessages } from "@/lib/threads"
 
 const storedMessageBase = {
