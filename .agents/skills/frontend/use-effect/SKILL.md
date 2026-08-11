@@ -6,9 +6,22 @@ description: >-
   useEffect, effect chains, subscriptions, or frontend side effects.
 ---
 
-# Frontend Guardrails: Ban `useEffect` (React) — Use Declarative Patterns Instead
+# Frontend Guardrails: Avoid `useEffect` (React) — Use Declarative Patterns Instead
 
-This document summarizes the key frontend practices from Alvin Sng’s article and the associated team rule used at FactoryAI: **do not directly use `useEffect`**. Instead, rely on declarative React patterns and targeted alternatives such as derivation, data-fetching libraries, event handlers, and a constrained `useMountEffect()`.
+This document summarizes the key frontend practices from Alvin Sng’s article and the associated team rule used at FactoryAI: **do not reach for `useEffect` by default**. Rely on declarative React patterns and targeted alternatives such as derivation, data-fetching libraries, event handlers, and a constrained `useMountEffect()`.
+
+## The escape hatch
+
+A direct `useEffect` is allowed, but only as a last resort: when the behaviour genuinely cannot be expressed by deriving during render, by an event handler, by a `key` remount, or by `useMountEffect` / `useMountSubscription`. In practice that means it must react to a **changing** value and it must touch something outside React — a timer that has to be rescheduled as its input changes is the canonical example, since `useMountEffect` can only ever run once.
+
+This is not enforced by ESLint, because the judgement call is the point and a lint error only teaches people to work around it. The bar is instead a review one:
+
+- Walk the replacement patterns below first and be able to say why each one fails.
+- Keep the effect to a single responsibility with a real cleanup — never an effect chain, and never state mirroring.
+- Leave a comment at the call site saying what external system it drives and why the declarative route does not work.
+- Prefer wrapping it in a named hook in `src/hooks/` so the effect is written once and call sites stay declarative, the way `useMountEffect` does.
+
+If you cannot write that comment convincingly, the effect is the wrong tool.
 
 ---
 
@@ -30,9 +43,10 @@ This means the team’s goal is not “make effects impossible”, but **make th
 ## Why the Rule Exists
 
 ### Core argument
-FactoryAI enforces:
-- **Direct use of `useEffect` is disallowed**
-- Only **`useMountEffect()`** is allowed for rare mount-time external syncs
+The default order of preference:
+- **Declarative patterns first** — derivation, event handlers, `key` remounts, data-fetching libraries
+- **`useMountEffect()`** for mount-time external syncs
+- **A direct `useEffect`** only when neither can express the behaviour (see “The escape hatch” above)
 
 The goal is to improve:
 - predictability
@@ -92,25 +106,33 @@ If your logic is “run whenever X changes”, you likely want:
 - event handler logic,
 - or a remount strategy with `key`.
 
+Only once all of those are ruled out — the work is external, and it has to be
+redone as X changes rather than once on mount — does a direct `useEffect`
+become the right answer.
+
 ---
 
-## `useMountEffect`: Allowed Alternative
+## `useMountEffect`: Preferred Alternative
 
-### Implementation (recommended)
-Use `useEffect` internally, but only as a controlled abstraction:
+### Implementation
+This repo already has it in `src/hooks/useMountEffect.ts`, alongside
+`useMountSubscription` for the “subscribe once, always call the latest
+listener” case. `useEffect` is used internally, as a controlled abstraction:
 
-```javascript
-import { useEffect } from "react";
+```typescript
+import { useEffect, useEffectEvent } from "react"
 
 /**
  * Runs `fn` exactly once on mount.
- * If `fn` returns a cleanup function, it will run on unmount.
+ * If `fn` returns a cleanup function, it runs on unmount.
  */
-export const useMountEffect = (fn) => {
+export function useMountEffect(fn: () => void | (() => void)) {
+  const onMount = useEffectEvent(fn)
+
   useEffect(() => {
-    return fn?.();
-  }, []);
-};
+    return onMount()
+  }, [])
+}
 ```
 
 Why this matters:
@@ -135,34 +157,13 @@ useMountEffect(() => {
 
 ---
 
-## Enforce via ESLint (example rule)
+## Why this is not an ESLint rule
 
-```javascript
-module.exports = {
-  rules: {
-    "no-use-effect": {
-      create(context) {
-        return {
-          CallExpression(node) {
-            if (
-              node.callee.name === "useEffect" ||
-              (node.callee.object &&
-                node.callee.object.name === "React" &&
-                node.callee.property.name === "useEffect")
-            ) {
-              context.report({
-                node,
-                message:
-                  "Direct use of useEffect is disallowed. Use useMountEffect for mount-time operations.",
-              });
-            }
-          },
-        };
-      },
-    },
-  },
-};
-```
+An earlier version of this repo banned the `useEffect` import through
+`no-restricted-syntax`. It was removed. A blanket ban cannot tell the difference
+between state mirroring and a timer that has to be rescheduled, so the only
+thing it reliably produces is a workaround: an inline disable, or a worse
+construct chosen to dodge the rule. Review against the checklist above instead.
 
 ---
 
