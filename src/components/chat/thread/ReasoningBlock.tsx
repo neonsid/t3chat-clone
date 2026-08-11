@@ -50,28 +50,21 @@ export function ReasoningBlock({
         />
       </button>
 
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
-          expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="overflow-hidden">
-          <div className="relative mt-2 w-full rounded-2xl border border-border bg-[color-mix(in_srgb,var(--foreground)_5%,var(--background))]">
-            <div className="w-full p-4 sm:p-5">
-              {content ? (
-                <StreamdownMarkdown
-                  text={content}
-                  isStreaming={isStreamingThinking}
-                  className="text-sm leading-6 text-foreground/85 [&_[data-streamdown]]:text-foreground/85"
-                />
-              ) : isStreamingThinking ? (
-                <BouncingDots label="Reasoning" />
-              ) : null}
-            </div>
+      {expanded ? (
+        <div className="mt-2 w-full rounded-2xl border border-border bg-[color-mix(in_srgb,var(--foreground)_5%,var(--background))]">
+          <div className="w-full p-4 sm:p-5">
+            {content ? (
+              <StreamdownMarkdown
+                text={content}
+                isStreaming={isStreamingThinking}
+                className="text-sm leading-6 text-foreground/85 [&_[data-streamdown]]:text-foreground/85"
+              />
+            ) : isStreamingThinking ? (
+              <BouncingDots label="Reasoning" />
+            ) : null}
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }

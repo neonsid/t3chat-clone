@@ -33,12 +33,14 @@ import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
 import { useChatUiStore } from "@/stores/AppStateProvider"
+import { MESSAGE_SCROLLER_ENSURE_END } from "@/components/chat/thread/constants"
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
  * can land short because message items use content-visibility placeholders until
- * painted. Re-scroll after layout settles so the last assistant message is visible
- * on thread load. Runs once per thread (or when a thread gains its first message),
+ * painted, and deferred markdown (e.g. reasoning) grows later. Keep correcting
+ * until content height stabilizes so the last assistant message is visible on
+ * thread load. Runs once per thread (or when a thread gains its first message),
  * not when streaming ends, so a user who scrolled up during a response stays put.
  *
  * Must render after the viewport: scrollToEnd is a no-op until the viewport has
@@ -54,25 +56,61 @@ function MessageScrollerEnsureEnd({
   hasMessages: boolean
 }) {
   const { scrollToEnd } = useMessageScroller()
+  const hostRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
     if (!hasMessages) return
 
-    scrollToEnd({ behavior: "auto" })
-
-    let frame = 0
-    const timeout = window.setTimeout(() => {
+    const scroller = hostRef.current?.closest('[data-slot="message-scroller"]')
+    const content = scroller?.querySelector(
+      '[data-slot="message-scroller-content"]',
+    )
+    if (!(content instanceof HTMLElement)) {
       scrollToEnd({ behavior: "auto" })
-      frame = requestAnimationFrame(() => scrollToEnd({ behavior: "auto" }))
-    }, 120)
+      return
+    }
+
+    let cancelled = false
+    let lastHeight = -1
+    let stablePolls = 0
+    const startedAt = performance.now()
+
+    const stickToEnd = () => {
+      if (cancelled) return
+      scrollToEnd({ behavior: "auto" })
+      const height = content.scrollHeight
+      if (height === lastHeight) {
+        stablePolls += 1
+      } else {
+        stablePolls = 0
+        lastHeight = height
+      }
+    }
+
+    stickToEnd()
+
+    const observer = new ResizeObserver(() => stickToEnd())
+    observer.observe(content)
+
+    const interval = window.setInterval(() => {
+      stickToEnd()
+      if (
+        stablePolls >= MESSAGE_SCROLLER_ENSURE_END.stablePolls ||
+        performance.now() - startedAt >= MESSAGE_SCROLLER_ENSURE_END.maxMs
+      ) {
+        window.clearInterval(interval)
+        observer.disconnect()
+      }
+    }, MESSAGE_SCROLLER_ENSURE_END.pollMs)
 
     return () => {
-      window.clearTimeout(timeout)
-      cancelAnimationFrame(frame)
+      cancelled = true
+      window.clearInterval(interval)
+      observer.disconnect()
     }
   }, [threadId, hasMessages, scrollToEnd])
 
-  return null
+  return <div ref={hostRef} className="hidden" aria-hidden />
 }
 
 function ChatTimelineMinimap({
