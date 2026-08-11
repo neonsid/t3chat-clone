@@ -61,13 +61,18 @@ function collectAndPersistStream({
     let hasSeenReasoningEvents = false
     let firstTokenAt: number | undefined
     let outputTokens = 0
+    let streamedChunks = 0
     let finished = false
 
     const generation = () => ({
       modelId,
       modelName,
       reasoningEffort,
-      outputTokens,
+      // Usage only rides on RUN_FINISHED, which a stopped or failed run never
+      // reaches. Providers stream roughly a token per chunk, so the chunk count
+      // stands in for a count the UI then marks as approximate — better than
+      // telling the reader a truncated answer cost zero tokens.
+      outputTokens: outputTokens || streamedChunks,
       durationMs: Date.now() - startedAt,
       timeToFirstTokenMs: firstTokenAt ? firstTokenAt - startedAt : 0,
     })
@@ -83,10 +88,12 @@ function collectAndPersistStream({
           assistantMessageId ??= chunk.messageId
         } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
           firstTokenAt ??= Date.now()
+          streamedChunks += 1
           text += chunk.delta
         } else if (chunk.type === "REASONING_MESSAGE_CONTENT") {
           firstTokenAt ??= Date.now()
           hasSeenReasoningEvents = true
+          streamedChunks += 1
           thinking = appendThinking(thinking, chunk.delta)
           assistantMessageId ??= chunk.messageId
         } else if (chunk.type === "STEP_FINISHED") {
@@ -94,6 +101,7 @@ function collectAndPersistStream({
           // with the same delta — prefer the AG-UI reasoning events when present.
           if (!hasSeenReasoningEvents && chunk.delta) {
             firstTokenAt ??= Date.now()
+            streamedChunks += 1
             thinking = appendThinking(thinking, chunk.delta)
             assistantMessageId ??= crypto.randomUUID()
           }
