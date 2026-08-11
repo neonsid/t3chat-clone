@@ -106,6 +106,8 @@ export function ChatShellComposer({
     }
   }, [])
 
+  // Latest-ref behind stable callback: always submit with current draft/auth/busy.
+  // Do not sync via useEffect — see docs/react-doctor-triage.md.
   const handleSubmitRef = useRef(() => {})
   handleSubmitRef.current = () => {
     const content = getThreadComposerState(

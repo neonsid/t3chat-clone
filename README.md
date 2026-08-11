@@ -2,6 +2,11 @@
 
 This is a template for a new TanStack Start project with React, TypeScript, and shadcn/ui.
 
+## Docs
+
+- [State management](docs/state-management.md)
+- [React Doctor triage](docs/react-doctor-triage.md) — which react-doctor findings to leave alone (especially ref-in-render) and why
+
 ## Convex
 
 Install dependencies, then create or connect a Convex development deployment:

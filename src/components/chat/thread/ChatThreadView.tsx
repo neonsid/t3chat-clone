@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 import { useMutation } from "convex/react"
@@ -13,7 +13,7 @@ import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
   focusComposerInput,
-  isSameMessageList,
+  resolveFrozenStreamingHistory,
 } from "@/components/chat/thread/logic"
 import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
@@ -73,19 +73,18 @@ function MessageScrollerEnsureEnd({
   hasMessages: boolean
 }) {
   const { scrollToEnd } = useMessageScroller()
-  const scrollToEndRef = useRef(scrollToEnd)
-  scrollToEndRef.current = scrollToEnd
+  // Effect Event: timeouts scheduled below must call the latest scrollToEnd
+  // without re-arming when the scroller identity changes. See docs/react-doctor-triage.md.
+  const onScrollToEnd = useEffectEvent(() => {
+    scrollToEnd({ behavior: "auto" })
+  })
 
   useLayoutEffect(() => {
     if (!hasMessages) return
 
     const timeouts: number[] = []
     for (const delayMs of MESSAGE_SCROLLER_ENSURE_END.delaysMs) {
-      timeouts.push(
-        window.setTimeout(() => {
-          scrollToEndRef.current({ behavior: "auto" })
-        }, delayMs)
-      )
+      timeouts.push(window.setTimeout(() => onScrollToEnd(), delayMs))
     }
 
     return () => {
@@ -270,30 +269,28 @@ export function ChatThreadView({
   const minimapRevision = `${messages.length}:${messages.at(-1)?.id ?? ""}:${
     isLoading ? "streaming" : "settled"
   }`
-
-  const minimapItemsRef = useRef<TimelineMinimapItem[]>([])
-  const minimapRevisionRef = useRef("")
-  if (minimapRevisionRef.current !== minimapRevision) {
-    minimapRevisionRef.current = minimapRevision
-    minimapItemsRef.current = deriveTimelineMinimapItems(messages)
-  }
-  const minimapItems = minimapItemsRef.current
+  const minimapItems = useMemo(
+    () => deriveTimelineMinimapItems(messages),
+    // Mid-stream text growth must not rebuild the minimap; revision ignores it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by minimapRevision
+    [minimapRevision]
+  )
 
   // Only the trailing assistant message changes mid-stream, so hold the rows
   // above it at the snapshot taken when the turn started. They then sit outside
   // the streaming render pass instead of being rebuilt on every chunk.
+  // Render-time ref freeze is intentional; see docs/react-doctor-triage.md.
   const streamingMessage =
     isLoading && lastMessage?.role === "assistant" ? lastMessage : null
   const historySource = streamingMessage
     ? displayMessages.slice(0, -1)
     : displayMessages
   const historyRef = useRef(historySource)
-  if (
-    !streamingMessage ||
-    !isSameMessageList(historyRef.current, historySource)
-  ) {
-    historyRef.current = historySource
-  }
+  historyRef.current = resolveFrozenStreamingHistory(
+    historyRef.current,
+    historySource,
+    streamingMessage !== null
+  )
   const history = historyRef.current
 
   const renderedStreamingMessage = useCoalescedValue(
@@ -417,6 +414,9 @@ export function ChatThreadView({
     stop()
   }
 
+  // Latest-ref for store actions: bind once per threadId, always call current
+  // submit/stop/flush. Do not move to useEffect — that reintroduces staleness.
+  // See docs/react-doctor-triage.md.
   const submitMessageRef = useRef(submitMessage)
   submitMessageRef.current = submitMessage
 
