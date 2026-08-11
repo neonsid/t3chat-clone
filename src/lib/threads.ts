@@ -72,6 +72,22 @@ export function toChatMessages(messages: Doc<"messages">[]): UIMessage[] {
   return messages.map(toChatMessage)
 }
 
+export function chatMessageText(message: UIMessage) {
+  let text = ""
+  for (const part of message.parts) {
+    if (part.type === "text") text += part.content
+  }
+  return text
+}
+
+export function chatMessageThinking(message: UIMessage) {
+  const parts: string[] = []
+  for (const part of message.parts) {
+    if (part.type === "thinking") parts.push(part.content)
+  }
+  return parts.join("\n").trim()
+}
+
 function toAssistantGenerationStats(
   message: Doc<"messages">
 ): AssistantGenerationStats | null {
