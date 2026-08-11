@@ -85,6 +85,29 @@ async function saveAssistantMessage(
   })
 }
 
+/**
+ * Fills in what only the server knows. Used when the client already wrote the
+ * message itself, so the content it rendered is left untouched.
+ */
+async function backfillGeneration(
+  ctx: ViewerMutationCtx,
+  threadId: Id<"threads">,
+  messageId: string | undefined,
+  generation: Doc<"messages">["generation"]
+) {
+  if (!messageId || !generation) return
+
+  const message = await ctx.db
+    .query("messages")
+    .withIndex("by_threadId_and_messageId", (query) =>
+      query.eq("threadId", threadId).eq("messageId", messageId)
+    )
+    .unique()
+  if (!message || message.generation) return
+
+  await ctx.db.patch("messages", message._id, { generation })
+}
+
 async function finishRun(
   ctx: ViewerMutationCtx,
   args: {
@@ -113,6 +136,18 @@ async function finishRun(
     args.runId,
     args.completionSecret
   )
+  // A viewer who stopped the run already wrote the answer at the point they
+  // saw it, which trails what this stream received by however long the abort
+  // took to arrive. Their text stands; only the usage is still missing.
+  if (run.status === "stopped") {
+    await backfillGeneration(
+      ctx,
+      thread._id,
+      run.assistantMessageId,
+      args.generation
+    )
+    return null
+  }
   if (run.status !== "running") return null
 
   await saveAssistantMessage(
@@ -265,6 +300,56 @@ export const complete = authedMutation({
 export const stop = authedMutation({
   args: finishArgs,
   handler: async (ctx, args) => await finishRun(ctx, args, "stopped"),
+})
+
+/**
+ * Ends the thread's running turn at the text the viewer actually saw.
+ *
+ * The stream keeps arriving for as long as the abort takes to reach the model,
+ * so leaving this to the server would store a paragraph the reader never read
+ * and watched disappear. Usage is left out because the client cannot know it;
+ * the run's own stop call fills that in when it lands.
+ */
+export const stopFromClient = authedMutation({
+  args: {
+    threadId: v.id("threads"),
+    assistantMessageId: v.optional(v.string()),
+    content: v.string(),
+    thinking: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (
+      args.assistantMessageId &&
+      args.assistantMessageId.length > MAX_CHAT_IDENTIFIER_LENGTH
+    ) {
+      throw new ConvexError("Invalid chat identifiers")
+    }
+
+    const thread = await getOwnedThread(ctx, args.threadId)
+    const run = await ctx.db
+      .query("chatRuns")
+      .withIndex("by_threadId_and_status", (query) =>
+        query.eq("threadId", thread._id).eq("status", "running")
+      )
+      .first()
+    if (!run || run.ownerId !== ctx.viewerId) return null
+
+    await saveAssistantMessage(
+      ctx,
+      thread,
+      args.assistantMessageId,
+      args.content.slice(0, MAX_MESSAGE_CONTENT_LENGTH),
+      (args.thinking ?? "").slice(0, MAX_MESSAGE_CONTENT_LENGTH),
+      "stopped",
+      undefined
+    )
+    await ctx.db.patch("chatRuns", run._id, {
+      assistantMessageId: args.assistantMessageId ?? run.assistantMessageId,
+      status: "stopped",
+      finishedAt: Date.now(),
+    })
+    return null
+  },
 })
 
 export const fail = authedMutation({

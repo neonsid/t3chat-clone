@@ -1,6 +1,10 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
+import { useMutation } from "convex/react"
+
+import { api } from "../../../../convex/_generated/api"
+import type { Id } from "../../../../convex/_generated/dataModel"
 
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
@@ -33,6 +37,7 @@ import {
   DEFAULT_CHAT_MODEL_ID,
   isChatModelId,
 } from "@/lib/chat-models"
+import { chatMessageText, chatMessageThinking } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
@@ -168,6 +173,7 @@ export function ChatThreadView({
   const [locallyStoppedMessageIds, setLocallyStoppedMessageIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
@@ -354,15 +360,26 @@ export function ChatThreadView({
   }
 
   function stopGeneration() {
-    // Mark it here as well as reading the persisted status: the run's stop
-    // mutation lands a beat later, and when the model only produced reasoning
-    // the server files the partial answer under the provider's id rather than
-    // the one this client generated, so the query alone would never match it.
+    // Mark it here as well as reading the persisted status: the mutation below
+    // lands a beat later, and a guest thread never gets one at all.
     const stoppedId = streamingMessage?.id
     if (stoppedId) {
       setLocallyStoppedMessageIds((previous) =>
         previous.has(stoppedId) ? previous : new Set(previous).add(stoppedId)
       )
+    }
+
+    // Claim the answer at the text on screen before letting go of the stream.
+    // The server keeps receiving for as long as the abort takes to reach the
+    // model, and whichever side writes first owns what the reader sees on their
+    // next visit.
+    if (streamingMessage && isAuthenticated) {
+      void stopStreamingMessage({
+        threadId: threadId as Id<"threads">,
+        assistantMessageId: streamingMessage.id,
+        content: chatMessageText(streamingMessage),
+        thinking: chatMessageThinking(streamingMessage) || undefined,
+      }).catch(() => undefined) // The run's own stop still closes it out.
     }
 
     stop()
