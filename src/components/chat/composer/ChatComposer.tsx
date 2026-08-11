@@ -40,7 +40,7 @@ export const ChatComposer = memo(function ChatComposer({
   className,
 }: ChatComposerProps) {
   // Latest-ref: stable onSubmit for ComposerDraftField without stale closures.
-  // useEffectEvent must not be passed as a child prop; see docs/react-doctor-triage.md.
+  // Prefer this over useEffectEvent here — Effect Events must not be child props.
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
   const submit = useCallback(() => {

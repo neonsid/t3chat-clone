@@ -74,7 +74,7 @@ function MessageScrollerEnsureEnd({
 }) {
   const { scrollToEnd } = useMessageScroller()
   // Effect Event: timeouts scheduled below must call the latest scrollToEnd
-  // without re-arming when the scroller identity changes. See docs/react-doctor-triage.md.
+  // without re-arming when the scroller identity changes.
   const onScrollToEnd = useEffectEvent(() => {
     scrollToEnd({ behavior: "auto" })
   })
@@ -279,7 +279,7 @@ export function ChatThreadView({
   // Only the trailing assistant message changes mid-stream, so hold the rows
   // above it at the snapshot taken when the turn started. They then sit outside
   // the streaming render pass instead of being rebuilt on every chunk.
-  // Render-time ref freeze is intentional; see docs/react-doctor-triage.md.
+  // Render-time ref freeze is intentional — effect-sync remounts history mid-stream.
   const streamingMessage =
     isLoading && lastMessage?.role === "assistant" ? lastMessage : null
   const historySource = streamingMessage
@@ -416,7 +416,6 @@ export function ChatThreadView({
 
   // Latest-ref for store actions: bind once per threadId, always call current
   // submit/stop/flush. Do not move to useEffect — that reintroduces staleness.
-  // See docs/react-doctor-triage.md.
   const submitMessageRef = useRef(submitMessage)
   submitMessageRef.current = submitMessage
 

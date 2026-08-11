@@ -48,7 +48,7 @@ export function ChatThreadPanel() {
 
   // Sticky latches: once this thread was ready / had a pending submit, keep the
   // panel mounted across transient unreadiness (draft handoff). Render-time
-  // ref read is intentional; see docs/react-doctor-triage.md.
+  // ref read is intentional — effect-sync would blank or false-redirect.
   const readyThreadIdRef = useRef<string | null>(null)
   if (isChatDataReady) readyThreadIdRef.current = threadId
   const wasCurrentThreadReady = readyThreadIdRef.current === threadId
