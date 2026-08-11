@@ -1,6 +1,10 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
+import { useMutation } from "convex/react"
+
+import { api } from "../../../../convex/_generated/api"
+import type { Id } from "../../../../convex/_generated/dataModel"
 
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
@@ -33,6 +37,7 @@ import {
   DEFAULT_CHAT_MODEL_ID,
   isChatModelId,
 } from "@/lib/chat-models"
+import { chatMessageText, chatMessageThinking } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
@@ -118,11 +123,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
   isScrollAnchor,
+  isStopped,
   generationStats,
 }: {
   message: UIMessage
   isStreaming: boolean
   isScrollAnchor: boolean
+  isStopped: boolean
   generationStats: AssistantGenerationStats | undefined
 }) {
   return (
@@ -130,6 +137,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       <ChatMessage
         message={message}
         isStreaming={isStreaming}
+        isStopped={isStopped}
         generationStats={generationStats}
       />
     </MessageScrollerItem>
@@ -141,6 +149,7 @@ export function ChatThreadView({
   threadStateKey,
   initialMessages,
   generationStats,
+  stoppedMessageIds,
   isReady,
   isAuthenticated,
   userName,
@@ -150,6 +159,7 @@ export function ChatThreadView({
   threadStateKey: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
+  stoppedMessageIds: ReadonlySet<string>
   isReady: boolean
   isAuthenticated: boolean
   userName: string
@@ -160,6 +170,10 @@ export function ChatThreadView({
     (state) => state.activeTurnContent
   )
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
+  const [locallyStoppedMessageIds, setLocallyStoppedMessageIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
+  const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
@@ -286,10 +300,20 @@ export function ChatThreadView({
           message={message}
           isStreaming={false}
           isScrollAnchor={message.id === scrollAnchorId}
+          isStopped={
+            stoppedMessageIds.has(message.id) ||
+            locallyStoppedMessageIds.has(message.id)
+          }
           generationStats={generationStats[message.id]}
         />
       )),
-    [generationStats, history, scrollAnchorId]
+    [
+      generationStats,
+      history,
+      locallyStoppedMessageIds,
+      scrollAnchorId,
+      stoppedMessageIds,
+    ]
   )
 
   // One flat keyed list rather than a history component plus a tail: when the
@@ -306,6 +330,7 @@ export function ChatThreadView({
           message={renderedStreamingMessage}
           isStreaming
           isScrollAnchor={false}
+          isStopped={false}
           generationStats={undefined}
         />,
       ]
@@ -335,6 +360,28 @@ export function ChatThreadView({
   }
 
   function stopGeneration() {
+    // Mark it here as well as reading the persisted status: the mutation below
+    // lands a beat later, and a guest thread never gets one at all.
+    const stoppedId = streamingMessage?.id
+    if (stoppedId) {
+      setLocallyStoppedMessageIds((previous) =>
+        previous.has(stoppedId) ? previous : new Set(previous).add(stoppedId)
+      )
+    }
+
+    // Claim the answer at the text on screen before letting go of the stream.
+    // The server keeps receiving for as long as the abort takes to reach the
+    // model, and whichever side writes first owns what the reader sees on their
+    // next visit.
+    if (streamingMessage && isAuthenticated) {
+      void stopStreamingMessage({
+        threadId: threadId as Id<"threads">,
+        assistantMessageId: streamingMessage.id,
+        content: chatMessageText(streamingMessage),
+        thinking: chatMessageThinking(streamingMessage) || undefined,
+      }).catch(() => undefined) // The run's own stop still closes it out.
+    }
+
     stop()
   }
 

@@ -2,6 +2,7 @@ import { memo, useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
 import {
   CheckIcon,
+  CircleSlashIcon,
   Clock3Icon,
   CopyIcon,
   CpuIcon,
@@ -10,25 +11,14 @@ import {
 } from "lucide-react"
 import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
+import { STOPPED_RESPONSE } from "@/components/chat/thread/constants"
 import { Button } from "@/components/shared/ui/button"
-import { formatShortTimestamp } from "@/lib/threads"
+import {
+  chatMessageText,
+  chatMessageThinking,
+  formatShortTimestamp,
+} from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
-
-function getMessageText(message: UIMessage) {
-  let text = ""
-  for (const part of message.parts) {
-    if (part.type === "text") text += part.content
-  }
-  return text
-}
-
-function getThinkingText(message: UIMessage) {
-  const parts: string[] = []
-  for (const part of message.parts) {
-    if (part.type === "thinking") parts.push(part.content)
-  }
-  return parts.join("\n").trim()
-}
 
 async function copyText(text: string) {
   if (!text) return
@@ -64,17 +54,19 @@ function MessageCopyControl({ text }: { text: string }) {
 type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
+  isStopped?: boolean
   generationStats?: AssistantGenerationStats
 }
 
 export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
+  isStopped = false,
   generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
-  const text = getMessageText(message)
-  const thinking = getThinkingText(message)
+  const text = chatMessageText(message)
+  const thinking = chatMessageThinking(message)
   const timestamp = formatShortTimestamp(message.createdAt)
 
   if (isUser) {
@@ -126,6 +118,18 @@ export const ChatMessage = memo(function ChatMessage({
           <StreamdownMarkdown text={text} isStreaming={isStreaming} />
         ) : null}
 
+        {/* Stays visible instead of hiding behind hover like the stats row: it
+            explains why the answer ends where it does. */}
+        {isStopped && !isStreaming ? (
+          <p
+            role="status"
+            className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            <CircleSlashIcon aria-hidden="true" className="size-4 shrink-0" />
+            {STOPPED_RESPONSE.label}
+          </p>
+        ) : null}
+
         {(text || timestamp || generationStats) && !isStreaming ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
             {generationStats ? (
@@ -137,24 +141,36 @@ export const ChatMessage = memo(function ChatMessage({
                 <span className="font-semibold text-foreground/75">
                   {generationStats.modelName} ({generationStats.mode})
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <ZapIcon aria-hidden="true" className="size-3.5" />
-                  {generationStats.tokensPerSecond.toFixed(2)} tok/sec
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <CpuIcon aria-hidden="true" className="size-3.5" />
-                  {generationStats.outputTokens.toLocaleString()} tokens
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock3Icon aria-hidden="true" className="size-3.5" />
-                  Time-to-First:{" "}
-                  {generationStats.timeToFirstTokenSeconds.toFixed(4)} sec
-                </span>
+                {/* A cut-short run has no usage report and no meaningful rate
+                    or completion time, so only the token count survives — as an
+                    estimate from the chunks that did arrive. */}
+                {isStopped ? (
+                  <span className="inline-flex items-center gap-1">
+                    <CpuIcon aria-hidden="true" className="size-3.5" />~
+                    {generationStats.outputTokens.toLocaleString()} tokens
+                  </span>
+                ) : (
+                  <>
+                    <span className="inline-flex items-center gap-1">
+                      <ZapIcon aria-hidden="true" className="size-3.5" />
+                      {generationStats.tokensPerSecond.toFixed(2)} tok/sec
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <CpuIcon aria-hidden="true" className="size-3.5" />
+                      {generationStats.outputTokens.toLocaleString()} tokens
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock3Icon aria-hidden="true" className="size-3.5" />
+                      Time-to-First:{" "}
+                      {generationStats.timeToFirstTokenSeconds.toFixed(4)} sec
+                    </span>
+                  </>
+                )}
               </div>
             ) : null}
             <div className="flex items-center gap-2">
               {text ? <MessageCopyControl text={text} /> : null}
-              {timestamp ? (
+              {timestamp && !isStopped ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {timestamp}
                 </p>

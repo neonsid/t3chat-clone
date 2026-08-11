@@ -112,4 +112,37 @@ describe("createMessageProjectionCache", () => {
       cache.generationStats([...documents])
     )
   })
+
+  it("collects only the messages the user stopped", () => {
+    const cache = createMessageProjectionCache()
+
+    const stopped = cache.stoppedMessageIds([
+      storedMessage({ messageId: "message-1" }),
+      storedMessage({ messageId: "message-2", status: "stopped" }),
+      storedMessage({ messageId: "message-3", status: "failed" }),
+    ])
+
+    expect([...stopped]).toEqual(["message-2"])
+  })
+
+  it("keeps the stopped set identical when nothing changed", () => {
+    const cache = createMessageProjectionCache()
+    const documents = [storedMessage({ status: "stopped" })]
+
+    expect(cache.stoppedMessageIds(documents)).toBe(
+      cache.stoppedMessageIds([...documents])
+    )
+  })
+
+  it("rebuilds the stopped set when a message is stopped", () => {
+    const cache = createMessageProjectionCache()
+    const first = cache.stoppedMessageIds([storedMessage({})])
+
+    const second = cache.stoppedMessageIds([
+      storedMessage({ status: "stopped" }),
+    ])
+
+    expect(second).not.toBe(first)
+    expect(second.has("message-1")).toBe(true)
+  })
 })
