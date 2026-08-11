@@ -36,8 +36,13 @@ import {
   CHAT_MODEL_CONFIG,
   DEFAULT_CHAT_MODEL_ID,
   isChatModelId,
+  resolveChatModel,
 } from "@/lib/chat-models"
-import { chatMessageText, chatMessageThinking } from "@/lib/threads"
+import {
+  chatMessageHasContent,
+  chatMessageText,
+  chatMessageThinking,
+} from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
@@ -47,6 +52,7 @@ import {
   CHAT_STREAM_PROCESSOR,
   CHAT_STREAM_RENDER_INTERVAL_MS,
   MESSAGE_SCROLLER_ENSURE_END,
+  REASONING_BLOCK,
 } from "@/components/chat/thread/constants"
 import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
 
@@ -188,14 +194,24 @@ export function ChatThreadView({
   )
   const hasPendingSubmission = Boolean(pendingSubmission)
   const modelPreferences = useModelPreferences()
-  const modelConfig = isChatModelId(modelPreferences.selectedModelId)
-    ? CHAT_MODEL_CONFIG[modelPreferences.selectedModelId]
-    : CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
+  const selectedModelId = isChatModelId(modelPreferences.selectedModelId)
+    ? modelPreferences.selectedModelId
+    : DEFAULT_CHAT_MODEL_ID
+  const modelConfig = CHAT_MODEL_CONFIG[selectedModelId]
   const effectiveReasoningEffort = modelConfig.supportedReasoningEfforts.some(
     (effort) => effort === reasoningEffort
   )
     ? reasoningEffort
     : modelConfig.defaultReasoningEffort
+  // Instant is not the same as silent: Gemini still thinks minimally on it,
+  // while models without effort control never reason at any setting. Asking the
+  // resolved model keeps that distinction out of the view.
+  const providerReasoningEffort = resolveChatModel(
+    selectedModelId,
+    effectiveReasoningEffort
+  )?.providerReasoningEffort
+  const expectsReasoning =
+    providerReasoningEffort !== undefined && providerReasoningEffort !== "none"
   const forwardedProps = useMemo(
     () => ({
       modelId: modelPreferences.selectedModelId,
@@ -225,9 +241,6 @@ export function ChatThreadView({
     !activeTurn &&
     !hasDraft
   const lastMessage = messages.at(-1)
-  const showPendingDots =
-    (isLoading && lastMessage?.role === "user") ||
-    ((hasPendingSubmission || hasStartedTurn || activeTurn) && isEmptyThread)
 
   // During the draft→thread handoff the real user message isn't dispatched until
   // after navigation, so paint an optimistic bubble from the in-flight text.
@@ -316,25 +329,44 @@ export function ChatThreadView({
     ]
   )
 
+  // The assistant message exists from the moment the model answers, which is
+  // before its first token arrives. Nothing to render there yet, so the wait
+  // stays on the dots instead of an empty row.
+  const isAwaitingFirstContent =
+    renderedStreamingMessage !== null &&
+    !chatMessageHasContent(renderedStreamingMessage)
+
+  const showPendingDots =
+    (isLoading && lastMessage?.role === "user") ||
+    isAwaitingFirstContent ||
+    ((hasPendingSubmission || hasStartedTurn || activeTurn) && isEmptyThread)
+  // Nothing visible distinguishes the two waits, but a reader on a screen
+  // reader is told which one this is.
+  const pendingDotsLabel =
+    isAwaitingFirstContent && expectsReasoning
+      ? REASONING_BLOCK.streamingLabel
+      : undefined
+
   // One flat keyed list rather than a history component plus a tail: when the
   // stream settles and the tail joins the history it keeps its key in the same
   // child slot, so React matches it instead of remounting the finished message.
   // Mid-turn is not ours to hold onto — the processor names the assistant
   // message itself when reasoning starts, then renames it to the provider's id
   // once the answer does, and that one remount happens whatever we key on.
-  const messageRows = renderedStreamingMessage
-    ? [
-        ...historyRows,
-        <ChatMessageRow
-          key={renderedStreamingMessage.id}
-          message={renderedStreamingMessage}
-          isStreaming
-          isScrollAnchor={false}
-          isStopped={false}
-          generationStats={undefined}
-        />,
-      ]
-    : historyRows
+  const messageRows =
+    renderedStreamingMessage && !isAwaitingFirstContent
+      ? [
+          ...historyRows,
+          <ChatMessageRow
+            key={renderedStreamingMessage.id}
+            message={renderedStreamingMessage}
+            isStreaming
+            isScrollAnchor={false}
+            isStopped={false}
+            generationStats={undefined}
+          />,
+        ]
+      : historyRows
 
   function submitMessage(content?: string) {
     const text =
@@ -495,7 +527,7 @@ export function ChatThreadView({
 
                   {showPendingDots ? (
                     <MessageScrollerItem messageId="pending-assistant">
-                      <BouncingDots className="px-1" />
+                      <BouncingDots className="px-1" label={pendingDotsLabel} />
                     </MessageScrollerItem>
                   ) : null}
                 </MessageScrollerContent>

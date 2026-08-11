@@ -101,8 +101,11 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
 
-  const isStreamingThinking = isStreaming && !text
-  const showReasoning = Boolean(thinking) || isStreamingThinking
+  // Only ever opened by a trace that exists. Standing in for one that might
+  // arrive means guessing, and OpenAI decides per run whether to summarise its
+  // reasoning at all — a guess that shows a tab and then takes it away again.
+  const showReasoning = Boolean(thinking)
+  const isStreamingThinking = showReasoning && isStreaming && !text
 
   return (
     <div className="group/assistant pb-2">
