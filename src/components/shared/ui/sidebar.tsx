@@ -32,25 +32,43 @@ import { useWindowEvent } from "@/hooks/useWindowEvent"
 
 type SidebarOpenUpdater = boolean | ((open: boolean) => boolean)
 
-type SidebarContextProps = {
+type SidebarStateContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
-  setOpen: (value: SidebarOpenUpdater) => void
   openMobile: boolean
-  setOpenMobile: (value: SidebarOpenUpdater) => void
   isMobile: boolean
+}
+
+type SidebarActionsContextProps = {
+  setOpen: (value: SidebarOpenUpdater) => void
+  setOpenMobile: (value: SidebarOpenUpdater) => void
   toggleSidebar: () => void
 }
 
-const SidebarContext = React.createContext<SidebarContextProps | null>(null)
+const SidebarStateContext =
+  React.createContext<SidebarStateContextProps | null>(null)
+const SidebarActionsContext =
+  React.createContext<SidebarActionsContextProps | null>(null)
 
-function useSidebar() {
-  const context = React.useContext(SidebarContext)
+function useSidebarState() {
+  const context = React.useContext(SidebarStateContext)
   if (!context) {
-    throw new Error("useSidebar must be used within a SidebarProvider.")
+    throw new Error("useSidebarState must be used within a SidebarProvider.")
   }
-
   return context
+}
+
+function useSidebarActions() {
+  const context = React.useContext(SidebarActionsContext)
+  if (!context) {
+    throw new Error("useSidebarActions must be used within a SidebarProvider.")
+  }
+  return context
+}
+
+/** Prefer useSidebarState / useSidebarActions to avoid open-toggle fan-out. */
+function useSidebar() {
+  return { ...useSidebarState(), ...useSidebarActions() }
 }
 
 function SidebarProvider({
@@ -73,39 +91,44 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const [_openMobile, _setOpenMobile] = React.useState(false)
   const openMobile = openMobileProp ?? _openMobile
-  const setOpenMobile = React.useCallback(
-    (value: SidebarOpenUpdater) => {
-      const openState = typeof value === "function" ? value(openMobile) : value
-      if (setOpenMobileProp) setOpenMobileProp(openState)
-      else _setOpenMobile(openState)
-    },
-    [openMobile, setOpenMobileProp]
-  )
-
-  // This is the internal state of the sidebar.
-  // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
-  const setOpen = React.useCallback(
-    (value: SidebarOpenUpdater) => {
-      const openState = typeof value === "function" ? value(open) : value
-      if (setOpenProp) {
-        setOpenProp(openState)
-      } else {
-        _setOpen(openState)
-      }
-    },
-    [setOpenProp, open]
-  )
 
-  // Helper to toggle the sidebar.
+  // Refs keep action callbacks stable across open toggles so action-only
+  // consumers (thread lists, rails) do not re-render with every expand/collapse.
+  const openRef = React.useRef(open)
+  const openMobileRef = React.useRef(openMobile)
+  const isMobileRef = React.useRef(isMobile)
+  const setOpenPropRef = React.useRef(setOpenProp)
+  const setOpenMobilePropRef = React.useRef(setOpenMobileProp)
+  openRef.current = open
+  openMobileRef.current = openMobile
+  isMobileRef.current = isMobile
+  setOpenPropRef.current = setOpenProp
+  setOpenMobilePropRef.current = setOpenMobileProp
+
+  const setOpen = React.useCallback((value: SidebarOpenUpdater) => {
+    const openState =
+      typeof value === "function" ? value(openRef.current) : value
+    if (setOpenPropRef.current) setOpenPropRef.current(openState)
+    else _setOpen(openState)
+  }, [])
+
+  const setOpenMobile = React.useCallback((value: SidebarOpenUpdater) => {
+    const openState =
+      typeof value === "function" ? value(openMobileRef.current) : value
+    if (setOpenMobilePropRef.current) setOpenMobilePropRef.current(openState)
+    else _setOpenMobile(openState)
+  }, [])
+
   const toggleSidebar = React.useCallback(() => {
-    return isMobile
-      ? setOpenMobile((currentOpen) => !currentOpen)
-      : setOpen((currentOpen) => !currentOpen)
-  }, [isMobile, setOpen, setOpenMobile])
+    if (isMobileRef.current) {
+      setOpenMobile((currentOpen) => !currentOpen)
+      return
+    }
+    setOpen((currentOpen) => !currentOpen)
+  }, [setOpen, setOpenMobile])
 
-  // Adds a keyboard shortcut to toggle the sidebar.
   useWindowEvent("keydown", (event) => {
     if (
       event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
@@ -116,43 +139,49 @@ function SidebarProvider({
     }
   })
 
-  // We add a state so that we can do data-state="expanded" or "collapsed".
-  // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
 
-  const contextValue = React.useMemo<SidebarContextProps>(
+  const stateValue = React.useMemo<SidebarStateContextProps>(
     () => ({
       state,
       open,
-      setOpen,
-      isMobile,
       openMobile,
+      isMobile,
+    }),
+    [state, open, openMobile, isMobile]
+  )
+
+  const actionsValue = React.useMemo<SidebarActionsContextProps>(
+    () => ({
+      setOpen,
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [setOpen, setOpenMobile, toggleSidebar]
   )
 
   return (
-    <SidebarContext.Provider value={contextValue}>
-      <div
-        data-slot="sidebar-wrapper"
-        style={
-          {
-            "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-            ...style,
-          } as React.CSSProperties
-        }
-        className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </div>
-    </SidebarContext.Provider>
+    <SidebarStateContext.Provider value={stateValue}>
+      <SidebarActionsContext.Provider value={actionsValue}>
+        <div
+          data-slot="sidebar-wrapper"
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              ...style,
+            } as React.CSSProperties
+          }
+          className={cn(
+            "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </div>
+      </SidebarActionsContext.Provider>
+    </SidebarStateContext.Provider>
   )
 }
 
@@ -169,7 +198,8 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile } = useSidebarState()
+  const { setOpenMobile } = useSidebarActions()
 
   if (collapsible === "none") {
     return (
@@ -263,7 +293,8 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { isMobile, open, openMobile, toggleSidebar } = useSidebar()
+  const { isMobile, open, openMobile } = useSidebarState()
+  const { toggleSidebar } = useSidebarActions()
   const isOpen = isMobile ? openMobile : open
 
   return (
@@ -287,7 +318,7 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar } = useSidebarActions()
 
   return (
     <button
@@ -525,8 +556,46 @@ function SidebarMenuButton({
           children: React.ReactNode
         })
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
-  const { isMobile, state } = useSidebar()
-  const comp = useRender({
+  // Avoid subscribing to open state on the common path (thread rows). Only the
+  // collapsed-icon tooltip branch needs state/isMobile.
+  if (!tooltip) {
+    return (
+      <SidebarMenuButtonRoot
+        render={render}
+        isActive={isActive}
+        variant={variant}
+        size={size}
+        className={className}
+        {...props}
+      />
+    )
+  }
+
+  return (
+    <SidebarMenuButtonWithTooltip
+      render={render}
+      isActive={isActive}
+      variant={variant}
+      size={size}
+      tooltip={tooltip}
+      className={className}
+      {...props}
+    />
+  )
+}
+
+function SidebarMenuButtonRoot({
+  render,
+  isActive = false,
+  variant = "default",
+  size = "default",
+  className,
+  ...props
+}: useRender.ComponentProps<"button"> &
+  React.ComponentProps<"button"> & {
+    isActive?: boolean
+  } & VariantProps<typeof sidebarMenuButtonVariants>) {
+  return useRender({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
@@ -542,8 +611,38 @@ function SidebarMenuButton({
       active: isActive,
     },
   })
+}
 
-  if (!tooltip || state !== "collapsed" || isMobile) {
+function SidebarMenuButtonWithTooltip({
+  render,
+  isActive = false,
+  variant = "default",
+  size = "default",
+  tooltip,
+  className,
+  ...props
+}: useRender.ComponentProps<"button"> &
+  React.ComponentProps<"button"> & {
+    isActive?: boolean
+    tooltip:
+      | string
+      | (Omit<React.ComponentProps<typeof Tooltip>, "children" | "content"> & {
+          children: React.ReactNode
+        })
+  } & VariantProps<typeof sidebarMenuButtonVariants>) {
+  const { isMobile, state } = useSidebarState()
+  const comp = (
+    <SidebarMenuButtonRoot
+      render={render}
+      isActive={isActive}
+      variant={variant}
+      size={size}
+      className={className}
+      {...props}
+    />
+  )
+
+  if (state !== "collapsed" || isMobile) {
     return comp
   }
 
@@ -732,4 +831,6 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  useSidebarActions,
+  useSidebarState,
 }

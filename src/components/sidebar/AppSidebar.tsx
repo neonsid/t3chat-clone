@@ -31,8 +31,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
+  useSidebarActions,
 } from "@/components/shared/ui/sidebar"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useWindowEvent } from "@/hooks/useWindowEvent"
 import type { ChatThread } from "@/lib/threads"
 import { cn } from "@/lib/utils"
@@ -64,7 +65,9 @@ export function AppSidebar({
   onLoadMore,
   actions,
 }: AppSidebarProps) {
-  const { isMobile, setOpen, setOpenMobile } = useSidebar()
+  // Actions-only: open toggles must not re-render the full thread list.
+  const { setOpen, setOpenMobile } = useSidebarActions()
+  const isMobile = useIsMobile()
   const sidebar = useSidebarUiStore(
     useShallow((state) => ({
       searchQuery: state.searchQuery,

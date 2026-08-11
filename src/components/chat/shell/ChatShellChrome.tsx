@@ -12,14 +12,19 @@ import {
 } from "@/components/chat/shell/constants"
 import { SettingsMenu } from "@/components/settings/SettingsMenu"
 import { Button } from "@/components/shared/ui/button"
-import { SidebarTrigger, useSidebar } from "@/components/shared/ui/sidebar"
+import { SidebarTrigger } from "@/components/shared/ui/sidebar"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import { useSidebarUiStore } from "@/stores/AppStateProvider"
 
 /**
  * Chrome buttons hover against either the chrome-surface chip or the near-black
  * gutter depending on sidebar state, so the lift stays translucent to read on
  * both. The opaque `accent` the button variant defaults to sits only three
  * values above the chip and disappears against it.
+ *
+ * Reads desktopOpen from the zustand store (not Sidebar React context) so
+ * toggling the sidebar does not fan out through ChatShell → Outlet.
  */
 export const SidebarControl = memo(function SidebarControl({
   hasConversation,
@@ -28,7 +33,7 @@ export const SidebarControl = memo(function SidebarControl({
   hasConversation: boolean
   onCreateThread: () => void
 }) {
-  const { open } = useSidebar()
+  const open = useSidebarUiStore((state) => state.desktopOpen)
   const highlightedIconClass = "[&_svg]:stroke-foreground"
   const highlightedPlusIconClass = hasConversation && highlightedIconClass
   return (
@@ -110,14 +115,16 @@ function ChatHeaderNotch() {
   )
 }
 
-function ChatShellEdge({ visible }: { visible: boolean }) {
+/**
+ * Visibility is driven by the sidebar peer's data-state (see ChatShell), not
+ * React open state, so the chat Outlet is not an ancestor of a context consumer.
+ */
+function ChatShellEdge() {
   return (
     <div
       aria-hidden="true"
-      className={cn(
-        "pointer-events-none absolute inset-0 z-50 border-t border-l border-border transition-[opacity,border-radius] duration-200 ease-linear",
-        visible ? "rounded-tl-2xl opacity-100" : "opacity-0"
-      )}
+      data-shell-edge=""
+      className="pointer-events-none absolute inset-0 z-50 border-t border-l border-border opacity-0 transition-[opacity,border-radius] duration-200 ease-linear"
     >
       <ChatHeaderNotch />
     </div>
@@ -131,7 +138,8 @@ function ChatShellEdge({ visible }: { visible: boolean }) {
  * crossfade with no CSS transition of its own to stay in step with.
  */
 export function ChatHeaderActions() {
-  const { isMobile, open } = useSidebar()
+  const isMobile = useIsMobile()
+  const open = useSidebarUiStore((state) => state.desktopOpen)
   const onNotch = open && !isMobile
 
   return (
@@ -167,27 +175,30 @@ export function ChatHeaderActions() {
   )
 }
 
+/**
+ * Shell chrome follows the sidebar peer's data-state via CSS so this component
+ * never subscribes to open and never re-renders the Outlet on toggle.
+ */
 export function ChatShell({ children }: { children: ReactNode }) {
-  const { isMobile, open } = useSidebar()
-  const showSidebarEdge = open && !isMobile
-
   return (
     <div
       data-chat-shell=""
       className={cn(
         "relative flex min-h-0 min-w-0 flex-1 transition-[margin] duration-200 ease-linear",
-        showSidebarEdge && "mt-3"
+        "md:peer-data-[state=expanded]:mt-3",
+        "md:peer-data-[state=expanded]:[&_[data-shell-edge]]:rounded-tl-2xl",
+        "md:peer-data-[state=expanded]:[&_[data-shell-edge]]:opacity-100"
       )}
     >
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background transition-[border-radius] duration-200 ease-linear",
-          showSidebarEdge && "rounded-tl-2xl"
+          "md:peer-data-[state=expanded]:rounded-tl-2xl"
         )}
       >
         {children}
       </div>
-      <ChatShellEdge visible={showSidebarEdge} />
+      <ChatShellEdge />
     </div>
   )
 }
