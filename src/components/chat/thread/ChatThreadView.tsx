@@ -23,7 +23,10 @@ import {
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
-import { useThreadSubmissionState } from "@/hooks/useThreadComposerState"
+import {
+  useThreadComposerHasDraft,
+  useThreadComposerReasoningEffort,
+} from "@/hooks/useThreadComposerState"
 import {
   CHAT_MODEL_CONFIG,
   DEFAULT_CHAT_MODEL_ID,
@@ -32,8 +35,10 @@ import {
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
-import { useChatUiStore } from "@/stores/AppStateProvider"
+import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
+import { getThreadComposerState } from "@/stores/chat-ui-store"
 import { MESSAGE_SCROLLER_ENSURE_END } from "@/components/chat/thread/constants"
+import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
@@ -155,13 +160,17 @@ export function ChatThreadView({
   userName: string
   onRequireAuthentication: () => void
 }) {
-  const composerHeight = useChatRuntimeStore((state) => state.composerHeight)
   const activeTurn = useChatRuntimeStore((state) => state.activeTurn)
   const activeTurnContent = useChatRuntimeStore(
     (state) => state.activeTurnContent
   )
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
-  const composer = useThreadSubmissionState(threadStateKey)
+  // Do not subscribe to draft here — every keystroke would re-render the scroller.
+  const hasDraft = useThreadComposerHasDraft(threadStateKey)
+  const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
+  const chatUi = useChatUiStoreApi()
+  const setDraft = useChatUiStore((state) => state.setDraft)
+  const clearDraft = useChatUiStore((state) => state.clearDraft)
   const pendingSubmission = useChatUiStore(
     (state) => state.pendingSubmissions[threadId]
   )
@@ -174,9 +183,9 @@ export function ChatThreadView({
     ? CHAT_MODEL_CONFIG[modelPreferences.selectedModelId]
     : CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
   const effectiveReasoningEffort = modelConfig.supportedReasoningEfforts.some(
-    (effort) => effort === composer.reasoningEffort
+    (effort) => effort === reasoningEffort
   )
-    ? composer.reasoningEffort
+    ? reasoningEffort
     : modelConfig.defaultReasoningEffort
   const forwardedProps = useMemo(
     () => ({
@@ -204,7 +213,7 @@ export function ChatThreadView({
     !hasPendingSubmission &&
     !hasStartedTurn &&
     !activeTurn &&
-    composer.draft.trim().length === 0
+    !hasDraft
   const lastMessage = messages.at(-1)
   const showPendingDots =
     (isLoading && lastMessage?.role === "user") ||
@@ -236,23 +245,26 @@ export function ChatThreadView({
     [messages]
   )
 
-  function submitMessage(content = composer.draft.trim()) {
-    if (!isReady || !content || isLoading) return
+  function submitMessage(content?: string) {
+    const text =
+      content ??
+      getThreadComposerState(chatUi.getState(), threadStateKey).draft.trim()
+    if (!isReady || !text || isLoading) return
     if (!isAuthenticated) {
       onRequireAuthentication()
       return
     }
 
-    composer.clearDraft(threadStateKey)
+    clearDraft(threadStateKey)
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
-      content: [{ type: "text", content }],
+      content: [{ type: "text", content: text }],
     })
   }
 
   function fillPrompt(prompt: string) {
-    composer.setDraft(threadStateKey, prompt)
+    setDraft(threadStateKey, prompt)
     queueMicrotask(focusComposerInput)
   }
 
@@ -343,7 +355,9 @@ export function ChatThreadView({
         <div
           aria-busy={!isReady || isLoading}
           className="absolute inset-0 z-0 overflow-hidden"
-          style={{ paddingBottom: Math.max(0, composerHeight - 16) }}
+          style={{
+            paddingBottom: `max(0px, calc(var(${CHAT_COMPOSER_OVERLAY_HEIGHT.cssVar}, ${CHAT_COMPOSER_OVERLAY_HEIGHT.fallbackPx}px) - ${CHAT_COMPOSER_OVERLAY_HEIGHT.threadInsetPx}px))`,
+          }}
         >
           {!isEmptyThread && (
             <ChatTimelineMinimap items={minimapItems} bottomInset={0} />

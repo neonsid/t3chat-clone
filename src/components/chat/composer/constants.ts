@@ -6,6 +6,13 @@ export const CHAT_COMPOSER_PLACEHOLDERS = {
   loadingConversation: "Loading conversation...",
 } as const
 
+/** Published on [data-chat-shell] by ChatShellComposer; thread view reads via CSS. */
+export const CHAT_COMPOSER_OVERLAY_HEIGHT = {
+  cssVar: "--chat-composer-overlay-height",
+  fallbackPx: 148,
+  threadInsetPx: 16,
+} as const
+
 export const REASONING_EFFORTS = [
   {
     value: "instant",

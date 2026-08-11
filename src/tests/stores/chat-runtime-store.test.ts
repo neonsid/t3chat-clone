@@ -8,14 +8,6 @@ afterEach(() => {
 })
 
 describe("chat runtime reset", () => {
-  test("keeps the shell composer height a thread view never measures", () => {
-    chatRuntimeStore.getState().setPanelState({ composerHeight: 212 })
-
-    chatRuntimeStore.getState().reset()
-
-    expect(chatRuntimeStore.getState().composerHeight).toBe(212)
-  })
-
   test("clears thread state", () => {
     chatRuntimeStore.getState().setPanelState({
       isReady: true,
@@ -29,6 +21,16 @@ describe("chat runtime reset", () => {
     expect(state.isReady).toBe(false)
     expect(state.isEmptyThread).toBe(true)
     expect(state.isLoading).toBe(false)
+  })
+
+  test("preserves activeTurn across reset", () => {
+    chatRuntimeStore.getState().setActiveTurn(true, "hello")
+
+    chatRuntimeStore.getState().reset()
+
+    const state = chatRuntimeStore.getState()
+    expect(state.activeTurn).toBe(true)
+    expect(state.activeTurnContent).toBe("hello")
   })
 })
 
