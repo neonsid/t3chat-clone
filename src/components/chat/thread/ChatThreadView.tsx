@@ -9,7 +9,7 @@ import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
   focusComposerInput,
-  isSameMessageOrder,
+  isSameMessageList,
 } from "@/components/chat/thread/logic"
 import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
@@ -237,17 +237,12 @@ export function ChatThreadView({
     : messages
 
   // Freeze minimap while streaming so assistant-text growth does not rebuild it
-  // on every chunk. Refresh when user turns change or the stream settles.
-  const minimapRevision = useMemo(() => {
-    const userIds: string[] = []
-    for (const message of messages) {
-      if (message.role === "user") userIds.push(message.id)
-    }
-    const settleKey = isLoading
-      ? "streaming"
-      : `${messages.at(-1)?.id ?? ""}:${messages.length}`
-    return `${userIds.join("|")}:${settleKey}`
-  }, [isLoading, messages])
+  // on every chunk. A new turn changes the length, and the answer that just
+  // finished is picked up when the stream settles — neither happens mid-chunk,
+  // so this stays O(1) on the streaming path.
+  const minimapRevision = `${messages.length}:${messages.at(-1)?.id ?? ""}:${
+    isLoading ? "streaming" : "settled"
+  }`
 
   const minimapItemsRef = useRef<TimelineMinimapItem[]>([])
   const minimapRevisionRef = useRef("")
@@ -268,7 +263,7 @@ export function ChatThreadView({
   const historyRef = useRef(historySource)
   if (
     !streamingMessage ||
-    !isSameMessageOrder(historyRef.current, historySource)
+    !isSameMessageList(historyRef.current, historySource)
   ) {
     historyRef.current = historySource
   }
@@ -300,6 +295,9 @@ export function ChatThreadView({
   // One flat keyed list rather than a history component plus a tail: when the
   // stream settles and the tail joins the history it keeps its key in the same
   // child slot, so React matches it instead of remounting the finished message.
+  // Mid-turn is not ours to hold onto — the processor names the assistant
+  // message itself when reasoning starts, then renames it to the provider's id
+  // once the answer does, and that one remount happens whatever we key on.
   const messageRows = renderedStreamingMessage
     ? [
         ...historyRows,

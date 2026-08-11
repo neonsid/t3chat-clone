@@ -6,7 +6,7 @@ import { api } from "../../convex/_generated/api"
 import {
   createMessageProjectionCache,
   createPendingChatThread,
-  toChatThread,
+  toActiveChatThread,
 } from "@/lib/threads"
 import type {
   AssistantGenerationStats,
@@ -65,9 +65,7 @@ export function useActiveThread(
   const activeThread = useMemo(() => {
     if (!useBackend || !hasActiveThreadId) return guestThread
     if (!threadDocument) return threadDocument
-    // isStreaming belongs to the sidebar's running-run subscription; the panel
-    // reads liveness from its own useChat instead.
-    return toChatThread(threadDocument, messages, generationStats, false)
+    return toActiveChatThread(threadDocument, messages, generationStats)
   }, [
     generationStats,
     guestThread,

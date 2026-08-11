@@ -45,10 +45,16 @@ export function focusComposerInput() {
     ?.focus()
 }
 
-export function isSameMessageOrder(left: UIMessage[], right: UIMessage[]) {
+/**
+ * Identity rather than ids. The stream processor rebuilds only the message it
+ * touched, so comparing references costs the same as comparing ids but also
+ * catches a change to a message that is not the tail — a tool result or an
+ * approval lands on whichever message holds the matching call.
+ */
+export function isSameMessageList(left: UIMessage[], right: UIMessage[]) {
   return (
     left.length === right.length &&
-    left.every((message, index) => message.id === right[index].id)
+    left.every((message, index) => message === right[index])
   )
 }
 

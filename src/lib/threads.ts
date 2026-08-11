@@ -92,17 +92,6 @@ function toAssistantGenerationStats(
   }
 }
 
-export function toGenerationStats(
-  messages: Doc<"messages">[]
-): Record<string, AssistantGenerationStats> {
-  const stats: Record<string, AssistantGenerationStats> = {}
-  for (const message of messages) {
-    const messageStats = toAssistantGenerationStats(message)
-    if (messageStats) stats[message.messageId] = messageStats
-  }
-  return stats
-}
-
 function isSameChatMessage(left: UIMessage, right: UIMessage) {
   if (
     left.role !== right.role ||
@@ -215,6 +204,30 @@ export function createMessageProjectionCache(): MessageProjectionCache {
   }
 }
 
+/**
+ * The panel's view of a thread. isStreaming is absent rather than false:
+ * liveness comes from the sidebar's running-run subscription, which the panel
+ * deliberately does not hold, and the panel reads its own useChat instead.
+ */
+export type ActiveChatThread = Omit<ChatThread, "isStreaming">
+
+export function toActiveChatThread(
+  thread: Doc<"threads">,
+  messages: UIMessage[] = [],
+  generationStats: Record<string, AssistantGenerationStats> = {}
+): ActiveChatThread {
+  return {
+    id: thread._id,
+    title: thread.title,
+    titleSource: thread.titleSource,
+    createdAt: thread._creationTime,
+    updatedAt: thread.updatedAt,
+    messages,
+    generationStats,
+    pinnedAt: thread.pinnedAt,
+  }
+}
+
 export function toChatThread(
   thread: Doc<"threads">,
   messages: UIMessage[] = [],
@@ -222,15 +235,8 @@ export function toChatThread(
   isStreaming = false
 ): ChatThread {
   return {
-    id: thread._id,
-    title: thread.title,
-    titleSource: thread.titleSource,
+    ...toActiveChatThread(thread, messages, generationStats),
     isStreaming,
-    createdAt: thread._creationTime,
-    updatedAt: thread.updatedAt,
-    messages,
-    generationStats,
-    pinnedAt: thread.pinnedAt,
   }
 }
 
