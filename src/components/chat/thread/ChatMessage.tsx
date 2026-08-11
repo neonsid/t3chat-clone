@@ -55,6 +55,7 @@ type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
   isStopped?: boolean
+  expectsReasoning?: boolean
   generationStats?: AssistantGenerationStats
 }
 
@@ -62,6 +63,7 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
   isStopped = false,
+  expectsReasoning = false,
   generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
@@ -101,7 +103,10 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
 
-  const isStreamingThinking = isStreaming && !text
+  // Standing in for reasoning that has not arrived only makes sense for a run
+  // that reasons. Without that check every model opens with a phantom
+  // "Reasoning…" for however long the first token takes.
+  const isStreamingThinking = isStreaming && !text && expectsReasoning
   const showReasoning = Boolean(thinking) || isStreamingThinking
 
   return (

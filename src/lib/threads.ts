@@ -80,6 +80,16 @@ export function chatMessageText(message: UIMessage) {
   return text
 }
 
+/**
+ * Whether a message has anything to show yet. Cheaper than building its text,
+ * which matters on the streaming path where this runs per chunk.
+ */
+export function chatMessageHasContent(message: UIMessage) {
+  return message.parts.some(
+    (part) => "content" in part && part.content.length > 0
+  )
+}
+
 export function chatMessageThinking(message: UIMessage) {
   const parts: string[] = []
   for (const part of message.parts) {
