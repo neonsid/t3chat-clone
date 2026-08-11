@@ -130,6 +130,10 @@ function isSameOrder<T>(left: T[], right: T[]) {
   )
 }
 
+function isSameSet<T>(left: ReadonlySet<T>, right: ReadonlySet<T>) {
+  return left.size === right.size && [...left].every((item) => right.has(item))
+}
+
 function isSameRecord<T>(left: Record<string, T>, right: Record<string, T>) {
   const leftKeys = Object.keys(left)
   return (
@@ -143,6 +147,7 @@ export type MessageProjectionCache = {
   generationStats: (
     documents: Doc<"messages">[]
   ) => Record<string, AssistantGenerationStats>
+  stoppedMessageIds: (documents: Doc<"messages">[]) => ReadonlySet<string>
 }
 
 /**
@@ -160,6 +165,7 @@ export function createMessageProjectionCache(): MessageProjectionCache {
   let statsCache = new Map<string, AssistantGenerationStats>()
   let lastMessages: UIMessage[] = []
   let lastStats: Record<string, AssistantGenerationStats> = {}
+  let lastStoppedIds: ReadonlySet<string> = new Set()
 
   return {
     messages(documents) {
@@ -199,6 +205,17 @@ export function createMessageProjectionCache(): MessageProjectionCache {
       statsCache = nextCache
       if (isSameRecord(lastStats, next)) return lastStats
       lastStats = next
+      return next
+    },
+
+    stoppedMessageIds(documents) {
+      const next = new Set<string>()
+      for (const document of documents) {
+        if (document.status === "stopped") next.add(document.messageId)
+      }
+
+      if (isSameSet(lastStoppedIds, next)) return lastStoppedIds
+      lastStoppedIds = next
       return next
     },
   }

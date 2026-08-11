@@ -15,6 +15,7 @@ import type {
 
 const EMPTY_MESSAGES: UIMessage[] = []
 const EMPTY_GENERATION_STATS: Record<string, AssistantGenerationStats> = {}
+const EMPTY_STOPPED_MESSAGE_IDS: ReadonlySet<string> = new Set()
 
 /**
  * The chat panel's own subscriptions, deliberately narrow. Sidebar queries live
@@ -56,6 +57,16 @@ export function useActiveThread(
         : EMPTY_GENERATION_STATS,
     [messageDocuments, projection]
   )
+  // Kept beside the thread rather than on it: a stopped turn is a property of
+  // the run, and the panel needs it for messages it is rendering from useChat
+  // rather than from this query.
+  const stoppedMessageIds = useMemo(
+    () =>
+      messageDocuments
+        ? projection.stoppedMessageIds(messageDocuments)
+        : EMPTY_STOPPED_MESSAGE_IDS,
+    [messageDocuments, projection]
+  )
 
   const guestThread = useMemo(
     () => createPendingChatThread(normalizedThreadId ?? "guest"),
@@ -77,6 +88,7 @@ export function useActiveThread(
 
   return {
     activeThread,
+    stoppedMessageIds,
     canPersistThread: useBackend,
     isThreadDataReady: Boolean(
       !isAuthLoading &&

@@ -2,6 +2,7 @@ import { memo, useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
 import {
   CheckIcon,
+  CircleSlashIcon,
   Clock3Icon,
   CopyIcon,
   CpuIcon,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react"
 import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
+import { STOPPED_RESPONSE } from "@/components/chat/thread/constants"
 import { Button } from "@/components/shared/ui/button"
 import { formatShortTimestamp } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
@@ -64,12 +66,14 @@ function MessageCopyControl({ text }: { text: string }) {
 type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
+  isStopped?: boolean
   generationStats?: AssistantGenerationStats
 }
 
 export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
+  isStopped = false,
   generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
@@ -124,6 +128,15 @@ export const ChatMessage = memo(function ChatMessage({
 
         {text ? (
           <StreamdownMarkdown text={text} isStreaming={isStreaming} />
+        ) : null}
+
+        {/* Stays visible instead of hiding behind hover like the stats row: it
+            explains why the answer ends where it does. */}
+        {isStopped && !isStreaming ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+            <CircleSlashIcon aria-hidden="true" className="size-3.5" />
+            {STOPPED_RESPONSE.label}
+          </p>
         ) : null}
 
         {(text || timestamp || generationStats) && !isStreaming ? (

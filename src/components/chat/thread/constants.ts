@@ -55,6 +55,10 @@ export const REASONING_BLOCK = {
   streamingLabel: "Reasoning…",
 } as const
 
+export const STOPPED_RESPONSE = {
+  label: "Stopped by user",
+} as const
+
 /** Post-layout retries after opening a thread (no continuous ResizeObserver). */
 export const MESSAGE_SCROLLER_ENSURE_END = {
   delaysMs: [0, 50, 150, 400] as const,

@@ -118,11 +118,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
   isScrollAnchor,
+  isStopped,
   generationStats,
 }: {
   message: UIMessage
   isStreaming: boolean
   isScrollAnchor: boolean
+  isStopped: boolean
   generationStats: AssistantGenerationStats | undefined
 }) {
   return (
@@ -130,6 +132,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       <ChatMessage
         message={message}
         isStreaming={isStreaming}
+        isStopped={isStopped}
         generationStats={generationStats}
       />
     </MessageScrollerItem>
@@ -141,6 +144,7 @@ export function ChatThreadView({
   threadStateKey,
   initialMessages,
   generationStats,
+  stoppedMessageIds,
   isReady,
   isAuthenticated,
   userName,
@@ -150,6 +154,7 @@ export function ChatThreadView({
   threadStateKey: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
+  stoppedMessageIds: ReadonlySet<string>
   isReady: boolean
   isAuthenticated: boolean
   userName: string
@@ -160,6 +165,9 @@ export function ChatThreadView({
     (state) => state.activeTurnContent
   )
   const [workStartedAt, setWorkStartedAt] = useState<number | null>(null)
+  const [locallyStoppedMessageIds, setLocallyStoppedMessageIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
@@ -286,10 +294,20 @@ export function ChatThreadView({
           message={message}
           isStreaming={false}
           isScrollAnchor={message.id === scrollAnchorId}
+          isStopped={
+            stoppedMessageIds.has(message.id) ||
+            locallyStoppedMessageIds.has(message.id)
+          }
           generationStats={generationStats[message.id]}
         />
       )),
-    [generationStats, history, scrollAnchorId]
+    [
+      generationStats,
+      history,
+      locallyStoppedMessageIds,
+      scrollAnchorId,
+      stoppedMessageIds,
+    ]
   )
 
   // One flat keyed list rather than a history component plus a tail: when the
@@ -306,6 +324,7 @@ export function ChatThreadView({
           message={renderedStreamingMessage}
           isStreaming
           isScrollAnchor={false}
+          isStopped={false}
           generationStats={undefined}
         />,
       ]
@@ -335,6 +354,17 @@ export function ChatThreadView({
   }
 
   function stopGeneration() {
+    // Mark it here as well as reading the persisted status: the run's stop
+    // mutation lands a beat later, and when the model only produced reasoning
+    // the server files the partial answer under the provider's id rather than
+    // the one this client generated, so the query alone would never match it.
+    const stoppedId = streamingMessage?.id
+    if (stoppedId) {
+      setLocallyStoppedMessageIds((previous) =>
+        previous.has(stoppedId) ? previous : new Set(previous).add(stoppedId)
+      )
+    }
+
     stop()
   }
 
