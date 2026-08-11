@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
@@ -11,7 +11,7 @@ type ReasoningBlockProps = {
   isStreamingThinking: boolean
 }
 
-export function ReasoningBlock({
+export const ReasoningBlock = memo(function ReasoningBlock({
   content,
   isStreamingThinking,
 }: ReasoningBlockProps) {
@@ -67,4 +67,4 @@ export function ReasoningBlock({
       ) : null}
     </div>
   )
-}
+})

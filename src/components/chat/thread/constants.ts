@@ -1,3 +1,4 @@
+import { WordBoundaryStrategy } from "@tanstack/ai/client"
 import { createCodePlugin } from "@streamdown/code"
 import {
   BookOpenIcon,
@@ -54,11 +55,17 @@ export const REASONING_BLOCK = {
   streamingLabel: "Reasoning…",
 } as const
 
-/** How long to keep correcting scroll-to-end after opening a thread. */
+/** Post-layout retries after opening a thread (no continuous ResizeObserver). */
 export const MESSAGE_SCROLLER_ENSURE_END = {
-  maxMs: 1500,
-  pollMs: 50,
-  stablePolls: 3,
+  delaysMs: [0, 50, 150, 400] as const,
+} as const
+
+/**
+ * Emits UI message updates at word boundaries instead of every SSE token.
+ * Cuts ChatThreadView re-renders several-fold without visible streaming lag.
+ */
+export const CHAT_STREAM_PROCESSOR = {
+  chunkStrategy: new WordBoundaryStrategy(),
 } as const
 
 export const STREAMDOWN_PLUGINS = {

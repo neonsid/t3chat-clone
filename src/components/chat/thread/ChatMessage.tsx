@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { memo, useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
 import {
   CheckIcon,
@@ -64,12 +64,11 @@ function MessageCopyControl({ text }: { text: string }) {
 type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
-  workedMs?: number | null
   previousUserCreatedAt?: Date | number | string | null
   generationStats?: AssistantGenerationStats
 }
 
-export function ChatMessage({
+export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
   generationStats,
@@ -167,4 +166,4 @@ export function ChatMessage({
       </div>
     </div>
   )
-}
+})

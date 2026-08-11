@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
 
@@ -14,8 +14,8 @@ import {
 import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
 import {
+  MemoMessageScrollerButton,
   MessageScroller,
-  MessageScrollerButton,
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerProvider,
@@ -37,21 +37,20 @@ import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import { getThreadComposerState } from "@/stores/chat-ui-store"
-import { MESSAGE_SCROLLER_ENSURE_END } from "@/components/chat/thread/constants"
+import {
+  CHAT_STREAM_PROCESSOR,
+  MESSAGE_SCROLLER_ENSURE_END,
+} from "@/components/chat/thread/constants"
 import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
 
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
- * can land short because message items use content-visibility placeholders until
- * painted, and deferred markdown (e.g. reasoning) grows later. Keep correcting
- * until content height stabilizes so the last assistant message is visible on
- * thread load. Runs once per thread (or when a thread gains its first message),
- * not when streaming ends, so a user who scrolled up during a response stays put.
+ * can land short because deferred markdown grows later. A few delayed
+ * corrections are enough — continuous ResizeObserver + scrollToEnd floods the
+ * scroller store.
  *
  * Must render after the viewport: scrollToEnd is a no-op until the viewport has
- * registered its scroll element, and layout effects run in tree order, so placing
- * this earlier costs the pre-paint pass and leaves only the settle pass, which
- * lands after the browser has already painted the top of the thread.
+ * registered its scroll element.
  */
 function MessageScrollerEnsureEnd({
   threadId,
@@ -61,64 +60,30 @@ function MessageScrollerEnsureEnd({
   hasMessages: boolean
 }) {
   const { scrollToEnd } = useMessageScroller()
-  const hostRef = useRef<HTMLDivElement>(null)
+  const scrollToEndRef = useRef(scrollToEnd)
+  scrollToEndRef.current = scrollToEnd
 
   useLayoutEffect(() => {
     if (!hasMessages) return
 
-    const scroller = hostRef.current?.closest('[data-slot="message-scroller"]')
-    const content = scroller?.querySelector(
-      '[data-slot="message-scroller-content"]',
-    )
-    if (!(content instanceof HTMLElement)) {
-      scrollToEnd({ behavior: "auto" })
-      return
+    const timeouts: number[] = []
+    for (const delayMs of MESSAGE_SCROLLER_ENSURE_END.delaysMs) {
+      timeouts.push(
+        window.setTimeout(() => {
+          scrollToEndRef.current({ behavior: "auto" })
+        }, delayMs)
+      )
     }
-
-    let cancelled = false
-    let lastHeight = -1
-    let stablePolls = 0
-    const startedAt = performance.now()
-
-    const stickToEnd = () => {
-      if (cancelled) return
-      scrollToEnd({ behavior: "auto" })
-      const height = content.scrollHeight
-      if (height === lastHeight) {
-        stablePolls += 1
-      } else {
-        stablePolls = 0
-        lastHeight = height
-      }
-    }
-
-    stickToEnd()
-
-    const observer = new ResizeObserver(() => stickToEnd())
-    observer.observe(content)
-
-    const interval = window.setInterval(() => {
-      stickToEnd()
-      if (
-        stablePolls >= MESSAGE_SCROLLER_ENSURE_END.stablePolls ||
-        performance.now() - startedAt >= MESSAGE_SCROLLER_ENSURE_END.maxMs
-      ) {
-        window.clearInterval(interval)
-        observer.disconnect()
-      }
-    }, MESSAGE_SCROLLER_ENSURE_END.pollMs)
 
     return () => {
-      cancelled = true
-      window.clearInterval(interval)
-      observer.disconnect()
+      for (const timeout of timeouts) window.clearTimeout(timeout)
     }
-  }, [threadId, hasMessages, scrollToEnd])
+  }, [threadId, hasMessages])
 
-  return <div ref={hostRef} className="hidden" aria-hidden />
+  return null
 }
 
-function ChatTimelineMinimap({
+const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
   items,
   bottomInset,
 }: {
@@ -126,20 +91,77 @@ function ChatTimelineMinimap({
   bottomInset: number
 }) {
   const { scrollToMessage } = useMessageScroller()
+  const onSelect = useCallback(
+    (item: TimelineMinimapItem) => {
+      scrollToMessage(item.id, {
+        align: "center",
+        behavior: "smooth",
+      })
+    },
+    [scrollToMessage]
+  )
 
   return (
-    <TimelineMinimap
-      items={items}
-      bottomInset={bottomInset}
-      onSelect={(item) => {
-        scrollToMessage(item.id, {
-          align: "center",
-          behavior: "smooth",
-        })
-      }}
-    />
+    <TimelineMinimap items={items} bottomInset={bottomInset} onSelect={onSelect} />
   )
+})
+
+type ThreadMessagePair = {
+  message: UIMessage
+  previousUserCreatedAt: UIMessage["createdAt"] | null
 }
+
+/**
+ * Isolated so MessageScrollerButton / EnsureEnd siblings are not forced to
+ * reconcile when only message content changes mid-stream.
+ */
+const ThreadMessages = memo(function ThreadMessages({
+  messagePairs,
+  isLoading,
+  lastAssistantMessageId,
+  latestUserMessageId,
+  generationStats,
+  showPendingDots,
+}: {
+  messagePairs: ThreadMessagePair[]
+  isLoading: boolean
+  lastAssistantMessageId: string | undefined
+  latestUserMessageId: string | null
+  generationStats: Record<string, AssistantGenerationStats>
+  showPendingDots: boolean
+}) {
+  return (
+    <>
+      {messagePairs.map(({ message, previousUserCreatedAt }) => {
+        const isStreaming =
+          isLoading &&
+          message.role === "assistant" &&
+          message.id === lastAssistantMessageId
+
+        return (
+          <MessageScrollerItem
+            key={message.id}
+            messageId={message.id}
+            scrollAnchor={isLoading && message.id === latestUserMessageId}
+          >
+            <ChatMessage
+              message={message}
+              isStreaming={isStreaming}
+              previousUserCreatedAt={previousUserCreatedAt}
+              generationStats={generationStats[message.id]}
+            />
+          </MessageScrollerItem>
+        )
+      })}
+
+      {showPendingDots ? (
+        <MessageScrollerItem messageId="pending-assistant">
+          <BouncingDots className="px-1" />
+        </MessageScrollerItem>
+      ) : null}
+    </>
+  )
+})
 
 export function ChatThreadView({
   threadId,
@@ -200,6 +222,7 @@ export function ChatThreadView({
     initialMessages,
     forwardedProps,
     connection: fetchServerSentEvents("/api/chat"),
+    streamProcessor: CHAT_STREAM_PROCESSOR,
   })
 
   const isEmptyThread = messages.length === 0
@@ -240,10 +263,33 @@ export function ChatThreadView({
     ? [optimisticUserMessage]
     : messages
 
+  // Freeze minimap while streaming so assistant-text growth does not rebuild it
+  // on every chunk. Refresh when user turns change or the stream settles.
+  const minimapRevision = useMemo(() => {
+    const userIds: string[] = []
+    for (const message of messages) {
+      if (message.role === "user") userIds.push(message.id)
+    }
+    const settleKey = isLoading
+      ? "streaming"
+      : `${messages.at(-1)?.id ?? ""}:${messages.length}`
+    return `${userIds.join("|")}:${settleKey}`
+  }, [isLoading, messages])
+
   const minimapItems = useMemo(
     () => deriveTimelineMinimapItems(messages),
-    [messages]
+    // messages is read when revision changes; intentional freeze while streaming.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- minimapRevision gates updates
+    [minimapRevision]
   )
+
+  const messagePairs = useMemo(
+    () => pairMessagesWithPreviousUser(displayMessages),
+    [displayMessages]
+  )
+  const latestUserMessageId = findLastUserMessageId(displayMessages)
+  const lastAssistantMessageId =
+    lastMessage?.role === "assistant" ? lastMessage.id : undefined
 
   function submitMessage(content?: string) {
     const text =
@@ -290,9 +336,6 @@ export function ChatThreadView({
       content: [{ type: "text", content: pending.content }],
     })
   }
-
-  const messagePairs = pairMessagesWithPreviousUser(displayMessages)
-  const latestUserMessageId = findLastUserMessageId(displayMessages)
 
   useLayoutEffect(() => {
     return chatRuntimeStore.getState().bindActions({
@@ -343,13 +386,14 @@ export function ChatThreadView({
     if (isLoading || error) chatRuntimeStore.getState().setActiveTurn(false)
   }, [isLoading, error])
 
-  const activeWorkedMs =
-    isLoading && workStartedAt != null ? Date.now() - workStartedAt : null
-
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
       <MessageScrollerProvider
-        autoScroll={!isLoading}
+        // Never enable library autoScroll while idle: following-bottom + content
+        // resize calls scrollToEnd forever and floods the scroll store. Stick to
+        // the bottom via defaultScrollPosition + EnsureEnd; during a turn the
+        // user-message scrollAnchor keeps the viewport stable.
+        autoScroll={false}
         defaultScrollPosition="end"
       >
         <div
@@ -380,39 +424,17 @@ export function ChatThreadView({
                   aria-busy={!isReady || isLoading}
                   className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
-                  {messagePairs.map(({ message, previousUserCreatedAt }) => {
-                    const isStreaming =
-                      isLoading &&
-                      message.role === "assistant" &&
-                      message.id === messages.at(-1)?.id
-
-                    return (
-                      <MessageScrollerItem
-                        key={message.id}
-                        messageId={message.id}
-                        scrollAnchor={
-                          isLoading && message.id === latestUserMessageId
-                        }
-                      >
-                        <ChatMessage
-                          message={message}
-                          isStreaming={isStreaming}
-                          previousUserCreatedAt={previousUserCreatedAt}
-                          workedMs={isStreaming ? activeWorkedMs : null}
-                          generationStats={generationStats[message.id]}
-                        />
-                      </MessageScrollerItem>
-                    )
-                  })}
-
-                  {showPendingDots ? (
-                    <MessageScrollerItem messageId="pending-assistant">
-                      <BouncingDots className="px-1" />
-                    </MessageScrollerItem>
-                  ) : null}
+                  <ThreadMessages
+                    messagePairs={messagePairs}
+                    isLoading={isLoading}
+                    lastAssistantMessageId={lastAssistantMessageId}
+                    latestUserMessageId={latestUserMessageId}
+                    generationStats={generationStats}
+                    showPendingDots={showPendingDots}
+                  />
                 </MessageScrollerContent>
               </MessageScrollerViewport>
-              {!isEmptyThread && <MessageScrollerButton />}
+              {!isEmptyThread && <MemoMessageScrollerButton />}
               <MessageScrollerEnsureEnd
                 threadId={threadId}
                 hasMessages={!isEmptyThread}
