@@ -50,3 +50,4 @@ import { Button } from "@/components/ui/button"
 - [] While copying keep the original without markdown text
 
 -[] Preserve the chat UI state always
+- [] Model search is broken
