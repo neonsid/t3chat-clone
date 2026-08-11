@@ -39,6 +39,8 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder = CHAT_COMPOSER_PLACEHOLDERS.newThread,
   className,
 }: ChatComposerProps) {
+  // Latest-ref: stable onSubmit for ComposerDraftField without stale closures.
+  // Prefer this over useEffectEvent here — Effect Events must not be child props.
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
   const submit = useCallback(() => {

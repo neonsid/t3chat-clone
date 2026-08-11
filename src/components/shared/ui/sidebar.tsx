@@ -96,6 +96,7 @@ function SidebarProvider({
 
   // Refs keep action callbacks stable across open toggles so action-only
   // consumers (thread lists, rails) do not re-render with every expand/collapse.
+  // Latest-ref pattern — do not effect-sync (would stale toggle handlers).
   const openRef = React.useRef(open)
   const openMobileRef = React.useRef(openMobile)
   const isMobileRef = React.useRef(isMobile)

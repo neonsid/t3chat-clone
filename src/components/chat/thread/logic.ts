@@ -58,6 +58,22 @@ export function isSameMessageList(left: UIMessage[], right: UIMessage[]) {
   )
 }
 
+/**
+ * While the trailing assistant message streams, keep the preceding history at
+ * the prior snapshot when the message identities are unchanged. Callers then
+ * keep history rows out of the hot streaming render pass.
+ */
+export function resolveFrozenStreamingHistory(
+  previous: UIMessage[],
+  historySource: UIMessage[],
+  isStreamingTail: boolean
+): UIMessage[] {
+  if (!isStreamingTail || !isSameMessageList(previous, historySource)) {
+    return historySource
+  }
+  return previous
+}
+
 export function findLastUserMessageId(messages: UIMessage[]) {
   for (let index = messages.length - 1; index >= 0; index--) {
     if (messages[index]?.role === "user") {
