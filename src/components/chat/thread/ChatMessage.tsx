@@ -133,8 +133,11 @@ export const ChatMessage = memo(function ChatMessage({
         {/* Stays visible instead of hiding behind hover like the stats row: it
             explains why the answer ends where it does. */}
         {isStopped && !isStreaming ? (
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
-            <CircleSlashIcon aria-hidden="true" className="size-3.5" />
+          <p
+            role="status"
+            className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            <CircleSlashIcon aria-hidden="true" className="size-4 shrink-0" />
             {STOPPED_RESPONSE.label}
           </p>
         ) : null}
