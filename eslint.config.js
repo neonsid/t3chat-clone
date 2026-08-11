@@ -13,27 +13,9 @@ export default [
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/require-await": "off",
       "pnpm/json-enforce-catalog": "off",
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector:
-            ":matches(ImportDeclaration[source.value='react']) > ImportSpecifier[imported.name='useEffect']",
-          message:
-            "Direct useEffect is not allowed. Use declarative state or useMountEffect for mount-only external synchronization.",
-        },
-        {
-          selector:
-            "MemberExpression[object.name='React'][property.name='useEffect']",
-          message:
-            "Direct React.useEffect is not allowed. Use declarative state or useMountEffect for mount-only external synchronization.",
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/hooks/useMountEffect.ts"],
-    rules: {
-      "no-restricted-syntax": "off",
+      // useEffect is a judgement call, not a lint error: see
+      // .agents/skills/frontend/use-effect. Derive during render or reach for
+      // useMountEffect first; a raw useEffect needs a comment saying why.
     },
   },
   {

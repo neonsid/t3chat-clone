@@ -8,28 +8,22 @@ import {
 
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
-import { toChatMessages, toChatThread, toGenerationStats } from "@/lib/threads"
+import { toChatThread } from "@/lib/threads"
 
 const THREAD_PAGE_SIZE = 20
 
-export function useThreads(
-  initialThreadId?: string,
+/**
+ * Sidebar-only data. Keep the active thread's subscriptions out of here (see
+ * useActiveThread): a hook shared with the panel makes every thread-list update
+ * re-render the open conversation.
+ */
+export function useThreadList(
   options: { forceGuestThread?: boolean; searchQuery?: string } = {}
 ) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const useBackend = isAuthenticated && !options.forceGuestThread
   const query = options.searchQuery ?? ""
-  const normalizedThreadId = initialThreadId ?? null
-  const hasActiveThreadId =
-    normalizedThreadId != null && normalizedThreadId !== "guest"
-  const activeThreadDocument = useQuery(
-    api.threads.get,
-    useBackend && hasActiveThreadId ? { threadId: normalizedThreadId } : "skip"
-  )
-  const messageDocuments = useQuery(
-    api.messages.listForThread,
-    useBackend && hasActiveThreadId ? { threadId: normalizedThreadId } : "skip"
-  )
+
   const pinnedDocuments = useQuery(
     api.threads.listPinned,
     useBackend ? {} : "skip"
@@ -43,6 +37,10 @@ export function useThreads(
     useBackend ? {} : "skip",
     { initialNumItems: THREAD_PAGE_SIZE }
   )
+  const runningThreadIds = useQuery(
+    api.chatRuns.listRunningThreadIds,
+    useBackend ? {} : "skip"
+  )
 
   const deleteThreadMutation = useMutation(api.threads.remove)
   const archiveThreadMutation = useMutation(api.threads.archive)
@@ -50,47 +48,10 @@ export function useThreads(
   const renameThreadMutation = useMutation(api.threads.rename)
   const regenerateTitleMutation = useMutation(api.threads.regenerateTitle)
 
-  const activeMessages = useMemo(
-    () => (messageDocuments ? toChatMessages(messageDocuments) : []),
-    [messageDocuments]
-  )
-  const generationStats = useMemo(
-    () => (messageDocuments ? toGenerationStats(messageDocuments) : {}),
-    [messageDocuments]
-  )
-  const guestThread = useMemo(
-    () => ({
-      id: normalizedThreadId ?? "guest",
-      title: "New Chat",
-      titleSource: "derived" as const,
-      isStreaming: false,
-      createdAt: 0,
-      updatedAt: 0,
-      messages: [],
-      generationStats: {},
-    }),
-    [normalizedThreadId]
-  )
-  const runningThreadIds = useQuery(
-    api.chatRuns.listRunningThreadIds,
-    useBackend ? {} : "skip"
-  )
   const runningThreadIdSet = useMemo(
     () => new Set(runningThreadIds ?? []),
     [runningThreadIds]
   )
-  const activeThread = !useBackend
-    ? guestThread
-    : !hasActiveThreadId
-      ? guestThread
-      : activeThreadDocument
-        ? toChatThread(
-            activeThreadDocument,
-            activeMessages,
-            generationStats,
-            runningThreadIdSet.has(activeThreadDocument._id)
-          )
-        : activeThreadDocument
 
   const threads = useMemo(() => {
     if (!useBackend) return []
@@ -103,9 +64,7 @@ export function useThreads(
     return [...(pinnedDocuments ?? []), ...recent.results].flatMap((thread) => {
       if (seen.has(thread._id)) return []
       seen.add(thread._id)
-      return [
-        toChatThread(thread, [], {}, runningThreadIdSet.has(thread._id)),
-      ]
+      return [toChatThread(thread, [], {}, runningThreadIdSet.has(thread._id))]
     })
   }, [
     pinnedDocuments,
@@ -115,13 +74,7 @@ export function useThreads(
     searchDocuments,
     useBackend,
   ])
-  const isThreadDataReady = Boolean(
-    !isAuthLoading &&
-    (!useBackend ||
-      !hasActiveThreadId ||
-      (activeThreadDocument !== undefined &&
-        messageDocuments !== undefined))
-  )
+
   const isSidebarDataReady = Boolean(
     !isAuthLoading &&
     (!useBackend ||
@@ -194,15 +147,10 @@ export function useThreads(
   )
 
   return {
-    activeThread,
     isAuthenticated,
     isAuthLoading,
-    isThreadDataReady,
     isSidebarDataReady,
     canPersistThread: useBackend,
-    messagesLoading: Boolean(
-      useBackend && hasActiveThreadId && messageDocuments === undefined
-    ),
     threads,
     paginationStatus: !useBackend || query.trim() ? "Exhausted" : recent.status,
     loadMore,

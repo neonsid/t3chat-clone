@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { Doc, Id } from "../../../convex/_generated/dataModel"
-import { toChatMessages } from "@/lib/threads"
+import { createMessageProjectionCache, toChatMessages } from "@/lib/threads"
 
 const storedMessageBase = {
   _id: "message-id" as Id<"messages">,
@@ -45,5 +45,71 @@ describe("toChatMessages", () => {
       { type: "thinking", content: "Legacy reasoning" },
       { type: "text", content: "Legacy response" },
     ])
+  })
+})
+
+const generation = {
+  modelId: "model-id",
+  modelName: "Model",
+  reasoningEffort: "medium" as const,
+  outputTokens: 40,
+  durationMs: 2000,
+  timeToFirstTokenMs: 400,
+}
+
+function storedMessage(overrides: Partial<Doc<"messages">>): Doc<"messages"> {
+  return { ...storedMessageBase, ...overrides }
+}
+
+describe("createMessageProjectionCache", () => {
+  it("keeps message and collection identity when documents are unchanged", () => {
+    const cache = createMessageProjectionCache()
+    const documents = [storedMessage({ content: "First" })]
+
+    const first = cache.messages(documents)
+    const second = cache.messages([storedMessage({ content: "First" })])
+
+    expect(second).toBe(first)
+    expect(second[0]).toBe(first[0])
+  })
+
+  it("replaces only the message whose content changed", () => {
+    const cache = createMessageProjectionCache()
+    const first = cache.messages([
+      storedMessage({ messageId: "message-1", content: "First" }),
+      storedMessage({ messageId: "message-2", content: "Second" }),
+    ])
+
+    const second = cache.messages([
+      storedMessage({ messageId: "message-1", content: "First" }),
+      storedMessage({ messageId: "message-2", content: "Second edited" }),
+    ])
+
+    expect(second).not.toBe(first)
+    expect(second[0]).toBe(first[0])
+    expect(second[1]).not.toBe(first[1])
+  })
+
+  it("keeps finished generation stats identical when a later message arrives", () => {
+    const cache = createMessageProjectionCache()
+    const first = cache.generationStats([
+      storedMessage({ messageId: "message-1", generation }),
+    ])
+
+    const second = cache.generationStats([
+      storedMessage({ messageId: "message-1", generation }),
+      storedMessage({ messageId: "message-2", generation }),
+    ])
+
+    expect(second["message-1"]).toBe(first["message-1"])
+  })
+
+  it("keeps the stats record identical when nothing changed", () => {
+    const cache = createMessageProjectionCache()
+    const documents = [storedMessage({ messageId: "message-1", generation })]
+
+    expect(cache.generationStats(documents)).toBe(
+      cache.generationStats([...documents])
+    )
   })
 })

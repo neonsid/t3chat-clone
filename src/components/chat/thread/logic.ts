@@ -45,21 +45,17 @@ export function focusComposerInput() {
     ?.focus()
 }
 
-export function pairMessagesWithPreviousUser(messages: UIMessage[]) {
-  const pairs: Array<{
-    message: UIMessage
-    previousUserCreatedAt: UIMessage["createdAt"] | null
-  }> = []
-  let previousUserCreatedAt: UIMessage["createdAt"] | null = null
-
-  for (const message of messages) {
-    pairs.push({ message, previousUserCreatedAt })
-    if (message.role === "user") {
-      previousUserCreatedAt = message.createdAt ?? null
-    }
-  }
-
-  return pairs
+/**
+ * Identity rather than ids. The stream processor rebuilds only the message it
+ * touched, so comparing references costs the same as comparing ids but also
+ * catches a change to a message that is not the tail — a tool result or an
+ * approval lands on whichever message holds the matching call.
+ */
+export function isSameMessageList(left: UIMessage[], right: UIMessage[]) {
+  return (
+    left.length === right.length &&
+    left.every((message, index) => message === right[index])
+  )
 }
 
 export function findLastUserMessageId(messages: UIMessage[]) {
