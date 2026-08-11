@@ -52,6 +52,7 @@ import {
   CHAT_STREAM_PROCESSOR,
   CHAT_STREAM_RENDER_INTERVAL_MS,
   MESSAGE_SCROLLER_ENSURE_END,
+  REASONING_BLOCK,
 } from "@/components/chat/thread/constants"
 import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
 
@@ -129,14 +130,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isStreaming,
   isScrollAnchor,
   isStopped,
-  expectsReasoning = false,
   generationStats,
 }: {
   message: UIMessage
   isStreaming: boolean
   isScrollAnchor: boolean
   isStopped: boolean
-  expectsReasoning?: boolean
   generationStats: AssistantGenerationStats | undefined
 }) {
   return (
@@ -145,7 +144,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
         message={message}
         isStreaming={isStreaming}
         isStopped={isStopped}
-        expectsReasoning={expectsReasoning}
         generationStats={generationStats}
       />
     </MessageScrollerItem>
@@ -332,18 +330,22 @@ export function ChatThreadView({
   )
 
   // The assistant message exists from the moment the model answers, which is
-  // before its first token arrives. A run that reasons fills that pause with
-  // its reasoning block; one that cannot has nothing to say yet, so it waits on
-  // the dots rather than rendering an empty row.
+  // before its first token arrives. Nothing to render there yet, so the wait
+  // stays on the dots instead of an empty row.
   const isAwaitingFirstContent =
     renderedStreamingMessage !== null &&
-    !expectsReasoning &&
     !chatMessageHasContent(renderedStreamingMessage)
 
   const showPendingDots =
     (isLoading && lastMessage?.role === "user") ||
     isAwaitingFirstContent ||
     ((hasPendingSubmission || hasStartedTurn || activeTurn) && isEmptyThread)
+  // Nothing visible distinguishes the two waits, but a reader on a screen
+  // reader is told which one this is.
+  const pendingDotsLabel =
+    isAwaitingFirstContent && expectsReasoning
+      ? REASONING_BLOCK.streamingLabel
+      : undefined
 
   // One flat keyed list rather than a history component plus a tail: when the
   // stream settles and the tail joins the history it keeps its key in the same
@@ -361,7 +363,6 @@ export function ChatThreadView({
             isStreaming
             isScrollAnchor={false}
             isStopped={false}
-            expectsReasoning={expectsReasoning}
             generationStats={undefined}
           />,
         ]
@@ -526,7 +527,7 @@ export function ChatThreadView({
 
                   {showPendingDots ? (
                     <MessageScrollerItem messageId="pending-assistant">
-                      <BouncingDots className="px-1" />
+                      <BouncingDots className="px-1" label={pendingDotsLabel} />
                     </MessageScrollerItem>
                   ) : null}
                 </MessageScrollerContent>

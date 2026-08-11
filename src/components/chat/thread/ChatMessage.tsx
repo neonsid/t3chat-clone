@@ -55,7 +55,6 @@ type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
   isStopped?: boolean
-  expectsReasoning?: boolean
   generationStats?: AssistantGenerationStats
 }
 
@@ -63,7 +62,6 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
   isStopped = false,
-  expectsReasoning = false,
   generationStats,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
@@ -103,11 +101,11 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
 
-  // Standing in for reasoning that has not arrived only makes sense for a run
-  // that reasons. Without that check every model opens with a phantom
-  // "Reasoning…" for however long the first token takes.
-  const isStreamingThinking = isStreaming && !text && expectsReasoning
-  const showReasoning = Boolean(thinking) || isStreamingThinking
+  // Only ever opened by a trace that exists. Standing in for one that might
+  // arrive means guessing, and OpenAI decides per run whether to summarise its
+  // reasoning at all — a guess that shows a tab and then takes it away again.
+  const showReasoning = Boolean(thinking)
+  const isStreamingThinking = showReasoning && isStreaming && !text
 
   return (
     <div className="group/assistant pb-2">

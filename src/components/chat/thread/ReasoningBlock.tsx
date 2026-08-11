@@ -1,7 +1,6 @@
 import { memo, useEffect, useState } from "react"
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 
-import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { REASONING_BLOCK } from "@/components/chat/thread/constants"
 import { cn } from "@/lib/utils"
@@ -53,15 +52,11 @@ export const ReasoningBlock = memo(function ReasoningBlock({
       {expanded ? (
         <div className="mt-2 w-full rounded-2xl border border-border bg-[color-mix(in_srgb,var(--foreground)_5%,var(--background))]">
           <div className="w-full p-4 sm:p-5">
-            {content ? (
-              <StreamdownMarkdown
-                text={content}
-                isStreaming={isStreamingThinking}
-                className="text-sm leading-6 text-foreground/85 [&_[data-streamdown]]:text-foreground/85"
-              />
-            ) : isStreamingThinking ? (
-              <BouncingDots label="Reasoning" />
-            ) : null}
+            <StreamdownMarkdown
+              text={content}
+              isStreaming={isStreamingThinking}
+              className="text-sm leading-6 text-foreground/85 [&_[data-streamdown]]:text-foreground/85"
+            />
           </div>
         </div>
       ) : null}
