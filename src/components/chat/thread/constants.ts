@@ -68,6 +68,13 @@ export const CHAT_STREAM_PROCESSOR = {
   chunkStrategy: new WordBoundaryStrategy(),
 } as const
 
+/**
+ * Ceiling on how often the streaming message reaches the DOM. Word boundaries
+ * alone still emit faster than a markdown re-parse is worth, and ~16 updates a
+ * second reads as continuous.
+ */
+export const CHAT_STREAM_RENDER_INTERVAL_MS = 60
+
 export const STREAMDOWN_PLUGINS = {
   code: createCodePlugin({ themes: ["github-light", "min-dark"] }),
 }

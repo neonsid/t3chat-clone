@@ -45,21 +45,11 @@ export function focusComposerInput() {
     ?.focus()
 }
 
-export function pairMessagesWithPreviousUser(messages: UIMessage[]) {
-  const pairs: Array<{
-    message: UIMessage
-    previousUserCreatedAt: UIMessage["createdAt"] | null
-  }> = []
-  let previousUserCreatedAt: UIMessage["createdAt"] | null = null
-
-  for (const message of messages) {
-    pairs.push({ message, previousUserCreatedAt })
-    if (message.role === "user") {
-      previousUserCreatedAt = message.createdAt ?? null
-    }
-  }
-
-  return pairs
+export function isSameMessageOrder(left: UIMessage[], right: UIMessage[]) {
+  return (
+    left.length === right.length &&
+    left.every((message, index) => message.id === right[index].id)
+  )
 }
 
 export function findLastUserMessageId(messages: UIMessage[]) {

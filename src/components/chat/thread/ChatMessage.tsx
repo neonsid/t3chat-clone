@@ -64,7 +64,6 @@ function MessageCopyControl({ text }: { text: string }) {
 type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
-  previousUserCreatedAt?: Date | number | string | null
   generationStats?: AssistantGenerationStats
 }
 

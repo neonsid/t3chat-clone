@@ -15,7 +15,7 @@ import { AppSidebar } from "@/components/sidebar/AppSidebar"
 import { AppSidebarProvider } from "@/components/sidebar/AppSidebarProvider"
 import { SidebarInset } from "@/components/shared/ui/sidebar"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
-import { useThreads } from "@/hooks/useThreads"
+import { useThreadList } from "@/hooks/useThreadList"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { useChatUiStore, useSidebarUiStore } from "@/stores/AppStateProvider"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
@@ -43,9 +43,8 @@ export function ChatShellLayout() {
   const forceGuestThread = isAuthLoading || !isAuthenticated
   const isRouteDataReady = !isAuthLoading
   const threadStateKey = createThreadStateKey(user?.id, threadId)
-  // Highlight only — do not pass threadId into useThreads here. Subscribing to
-  // the active thread's messages would re-render this whole shell (sidebar +
-  // chrome) on every thread switch and message update.
+  // Highlight only: the shell never subscribes to the active thread, or every
+  // message update would re-render the sidebar and chrome.
   const sidebarActiveThreadId = isDraft ? "guest" : threadId
   const hasConversation = useChatRuntimeStore((state) => !state.isEmptyThread)
 
@@ -60,7 +59,7 @@ export function ChatShellLayout() {
     archiveThread,
     renameThread,
     regenerateThreadTitle,
-  } = useThreads(undefined, { forceGuestThread, searchQuery })
+  } = useThreadList({ forceGuestThread, searchQuery })
 
   const openThread = useCallback(
     (nextThreadId: string) => {

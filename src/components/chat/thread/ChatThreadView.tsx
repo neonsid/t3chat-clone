@@ -9,7 +9,7 @@ import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
   focusComposerInput,
-  pairMessagesWithPreviousUser,
+  isSameMessageOrder,
 } from "@/components/chat/thread/logic"
 import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
@@ -22,6 +22,7 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
+import { useCoalescedValue } from "@/hooks/useCoalescedValue"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
 import {
   useThreadComposerHasDraft,
@@ -39,6 +40,7 @@ import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import { getThreadComposerState } from "@/stores/chat-ui-store"
 import {
   CHAT_STREAM_PROCESSOR,
+  CHAT_STREAM_RENDER_INTERVAL_MS,
   MESSAGE_SCROLLER_ENSURE_END,
 } from "@/components/chat/thread/constants"
 import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
@@ -106,60 +108,31 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
   )
 })
 
-type ThreadMessagePair = {
-  message: UIMessage
-  previousUserCreatedAt: UIMessage["createdAt"] | null
-}
-
 /**
- * Isolated so MessageScrollerButton / EnsureEnd siblings are not forced to
- * reconcile when only message content changes mid-stream.
+ * The memo boundary that matters. It owns the scroller wrapper too, so a chunk
+ * costs one shallow compare per row instead of reconciling every message
+ * subtree — memoizing further up can't help, because the message list is the
+ * very prop that changes.
  */
-const ThreadMessages = memo(function ThreadMessages({
-  messagePairs,
-  isLoading,
-  lastAssistantMessageId,
-  latestUserMessageId,
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  isStreaming,
+  isScrollAnchor,
   generationStats,
-  showPendingDots,
 }: {
-  messagePairs: ThreadMessagePair[]
-  isLoading: boolean
-  lastAssistantMessageId: string | undefined
-  latestUserMessageId: string | null
-  generationStats: Record<string, AssistantGenerationStats>
-  showPendingDots: boolean
+  message: UIMessage
+  isStreaming: boolean
+  isScrollAnchor: boolean
+  generationStats: AssistantGenerationStats | undefined
 }) {
   return (
-    <>
-      {messagePairs.map(({ message, previousUserCreatedAt }) => {
-        const isStreaming =
-          isLoading &&
-          message.role === "assistant" &&
-          message.id === lastAssistantMessageId
-
-        return (
-          <MessageScrollerItem
-            key={message.id}
-            messageId={message.id}
-            scrollAnchor={isLoading && message.id === latestUserMessageId}
-          >
-            <ChatMessage
-              message={message}
-              isStreaming={isStreaming}
-              previousUserCreatedAt={previousUserCreatedAt}
-              generationStats={generationStats[message.id]}
-            />
-          </MessageScrollerItem>
-        )
-      })}
-
-      {showPendingDots ? (
-        <MessageScrollerItem messageId="pending-assistant">
-          <BouncingDots className="px-1" />
-        </MessageScrollerItem>
-      ) : null}
-    </>
+    <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
+      <ChatMessage
+        message={message}
+        isStreaming={isStreaming}
+        generationStats={generationStats}
+      />
+    </MessageScrollerItem>
   )
 })
 
@@ -276,20 +249,69 @@ export function ChatThreadView({
     return `${userIds.join("|")}:${settleKey}`
   }, [isLoading, messages])
 
-  const minimapItems = useMemo(
-    () => deriveTimelineMinimapItems(messages),
-    // messages is read when revision changes; intentional freeze while streaming.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- minimapRevision gates updates
-    [minimapRevision]
+  const minimapItemsRef = useRef<TimelineMinimapItem[]>([])
+  const minimapRevisionRef = useRef("")
+  if (minimapRevisionRef.current !== minimapRevision) {
+    minimapRevisionRef.current = minimapRevision
+    minimapItemsRef.current = deriveTimelineMinimapItems(messages)
+  }
+  const minimapItems = minimapItemsRef.current
+
+  // Only the trailing assistant message changes mid-stream, so hold the rows
+  // above it at the snapshot taken when the turn started. They then sit outside
+  // the streaming render pass instead of being rebuilt on every chunk.
+  const streamingMessage =
+    isLoading && lastMessage?.role === "assistant" ? lastMessage : null
+  const historySource = streamingMessage
+    ? displayMessages.slice(0, -1)
+    : displayMessages
+  const historyRef = useRef(historySource)
+  if (
+    !streamingMessage ||
+    !isSameMessageOrder(historyRef.current, historySource)
+  ) {
+    historyRef.current = historySource
+  }
+  const history = historyRef.current
+
+  const renderedStreamingMessage = useCoalescedValue(
+    streamingMessage,
+    CHAT_STREAM_RENDER_INTERVAL_MS,
+    streamingMessage !== null
   )
 
-  const messagePairs = useMemo(
-    () => pairMessagesWithPreviousUser(displayMessages),
-    [displayMessages]
-  )
   const latestUserMessageId = findLastUserMessageId(displayMessages)
-  const lastAssistantMessageId =
-    lastMessage?.role === "assistant" ? lastMessage.id : undefined
+  const scrollAnchorId = isLoading ? latestUserMessageId : null
+
+  const historyRows = useMemo(
+    () =>
+      history.map((message) => (
+        <ChatMessageRow
+          key={message.id}
+          message={message}
+          isStreaming={false}
+          isScrollAnchor={message.id === scrollAnchorId}
+          generationStats={generationStats[message.id]}
+        />
+      )),
+    [generationStats, history, scrollAnchorId]
+  )
+
+  // One flat keyed list rather than a history component plus a tail: when the
+  // stream settles and the tail joins the history it keeps its key in the same
+  // child slot, so React matches it instead of remounting the finished message.
+  const messageRows = renderedStreamingMessage
+    ? [
+        ...historyRows,
+        <ChatMessageRow
+          key={renderedStreamingMessage.id}
+          message={renderedStreamingMessage}
+          isStreaming
+          isScrollAnchor={false}
+          generationStats={undefined}
+        />,
+      ]
+    : historyRows
 
   function submitMessage(content?: string) {
     const text =
@@ -424,14 +446,13 @@ export function ChatThreadView({
                   aria-busy={!isReady || isLoading}
                   className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
                 >
-                  <ThreadMessages
-                    messagePairs={messagePairs}
-                    isLoading={isLoading}
-                    lastAssistantMessageId={lastAssistantMessageId}
-                    latestUserMessageId={latestUserMessageId}
-                    generationStats={generationStats}
-                    showPendingDots={showPendingDots}
-                  />
+                  {messageRows}
+
+                  {showPendingDots ? (
+                    <MessageScrollerItem messageId="pending-assistant">
+                      <BouncingDots className="px-1" />
+                    </MessageScrollerItem>
+                  ) : null}
                 </MessageScrollerContent>
               </MessageScrollerViewport>
               {!isEmptyThread && <MemoMessageScrollerButton />}

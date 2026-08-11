@@ -40,61 +40,179 @@ const shortTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 })
 
-export function toChatMessages(messages: Doc<"messages">[]): UIMessage[] {
-  return messages.map((message) => {
-    const legacyParts = message.parts ?? []
-    const content =
-      message.content ??
-      legacyParts
-        .filter((part) => part.type === "text")
-        .map((part) => part.content)
-        .join("\n")
-        .trim()
-    const thinking =
-      message.thinking ??
-      legacyParts
-        .filter((part) => part.type === "thinking")
-        .map((part) => part.content)
-        .join("\n")
-        .trim()
+function toChatMessage(message: Doc<"messages">): UIMessage {
+  const legacyParts = message.parts ?? []
+  const content =
+    message.content ??
+    legacyParts
+      .filter((part) => part.type === "text")
+      .map((part) => part.content)
+      .join("\n")
+      .trim()
+  const thinking =
+    message.thinking ??
+    legacyParts
+      .filter((part) => part.type === "thinking")
+      .map((part) => part.content)
+      .join("\n")
+      .trim()
 
-    return {
-      id: message.messageId,
-      role: message.role,
-      parts: [
-        ...(thinking ? [{ type: "thinking" as const, content: thinking }] : []),
-        ...(content ? [{ type: "text" as const, content }] : []),
-      ],
-      createdAt: new Date(message.createdAt),
-    }
-  })
+  return {
+    id: message.messageId,
+    role: message.role,
+    parts: [
+      ...(thinking ? [{ type: "thinking" as const, content: thinking }] : []),
+      ...(content ? [{ type: "text" as const, content }] : []),
+    ],
+    createdAt: new Date(message.createdAt),
+  }
+}
+
+export function toChatMessages(messages: Doc<"messages">[]): UIMessage[] {
+  return messages.map(toChatMessage)
+}
+
+function toAssistantGenerationStats(
+  message: Doc<"messages">
+): AssistantGenerationStats | null {
+  const generation = message.generation
+  if (!generation) return null
+
+  const generationSeconds = Math.max(
+    (generation.durationMs - generation.timeToFirstTokenMs) / 1000,
+    0.001
+  )
+
+  return {
+    modelName: generation.modelName,
+    mode: `${generation.reasoningEffort.charAt(0).toUpperCase()}${generation.reasoningEffort.slice(1)}`,
+    outputTokens: generation.outputTokens,
+    tokensPerSecond: generation.outputTokens / generationSeconds,
+    timeToFirstTokenSeconds: generation.timeToFirstTokenMs / 1000,
+  }
 }
 
 export function toGenerationStats(
   messages: Doc<"messages">[]
 ): Record<string, AssistantGenerationStats> {
-  return Object.fromEntries(
-    messages.flatMap((message) => {
-      const generation = message.generation
-      if (!generation) return []
-      const generationSeconds = Math.max(
-        (generation.durationMs - generation.timeToFirstTokenMs) / 1000,
-        0.001
-      )
-      return [
-        [
-          message.messageId,
-          {
-            modelName: generation.modelName,
-            mode: `${generation.reasoningEffort.charAt(0).toUpperCase()}${generation.reasoningEffort.slice(1)}`,
-            outputTokens: generation.outputTokens,
-            tokensPerSecond: generation.outputTokens / generationSeconds,
-            timeToFirstTokenSeconds: generation.timeToFirstTokenMs / 1000,
-          },
-        ],
-      ]
-    })
+  const stats: Record<string, AssistantGenerationStats> = {}
+  for (const message of messages) {
+    const messageStats = toAssistantGenerationStats(message)
+    if (messageStats) stats[message.messageId] = messageStats
+  }
+  return stats
+}
+
+function isSameChatMessage(left: UIMessage, right: UIMessage) {
+  if (
+    left.role !== right.role ||
+    left.parts.length !== right.parts.length ||
+    Number(left.createdAt) !== Number(right.createdAt)
+  ) {
+    return false
+  }
+
+  return left.parts.every((part, index) => {
+    const other = right.parts[index]
+    if (part.type !== other.type) return false
+    const leftContent = "content" in part ? part.content : null
+    const rightContent = "content" in other ? other.content : null
+    return leftContent === rightContent
+  })
+}
+
+function isSameGenerationStats(
+  left: AssistantGenerationStats,
+  right: AssistantGenerationStats
+) {
+  return (
+    left.modelName === right.modelName &&
+    left.mode === right.mode &&
+    left.outputTokens === right.outputTokens &&
+    left.tokensPerSecond === right.tokensPerSecond &&
+    left.timeToFirstTokenSeconds === right.timeToFirstTokenSeconds
   )
+}
+
+function isSameOrder<T>(left: T[], right: T[]) {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  )
+}
+
+function isSameRecord<T>(left: Record<string, T>, right: Record<string, T>) {
+  const leftKeys = Object.keys(left)
+  return (
+    leftKeys.length === Object.keys(right).length &&
+    leftKeys.every((key) => left[key] === right[key])
+  )
+}
+
+export type MessageProjectionCache = {
+  messages: (documents: Doc<"messages">[]) => UIMessage[]
+  generationStats: (
+    documents: Doc<"messages">[]
+  ) => Record<string, AssistantGenerationStats>
+}
+
+/**
+ * Convex re-parses documents on every subscription update, so projecting them
+ * fresh hands each message row a new prop identity and defeats its memo — an
+ * unrelated title patch would then re-render every finished message. Reuse the
+ * previous projection whenever the underlying values are unchanged, and the
+ * previous collection whenever nothing in it moved.
+ *
+ * Scoped per hook instance rather than module-global so entries die with the
+ * component instead of accumulating for every thread visited.
+ */
+export function createMessageProjectionCache(): MessageProjectionCache {
+  let messageCache = new Map<string, UIMessage>()
+  let statsCache = new Map<string, AssistantGenerationStats>()
+  let lastMessages: UIMessage[] = []
+  let lastStats: Record<string, AssistantGenerationStats> = {}
+
+  return {
+    messages(documents) {
+      const nextCache = new Map<string, UIMessage>()
+      const next = documents.map((document) => {
+        const projected = toChatMessage(document)
+        const previous = messageCache.get(projected.id)
+        const value =
+          previous && isSameChatMessage(previous, projected)
+            ? previous
+            : projected
+        nextCache.set(projected.id, value)
+        return value
+      })
+
+      messageCache = nextCache
+      if (isSameOrder(lastMessages, next)) return lastMessages
+      lastMessages = next
+      return next
+    },
+
+    generationStats(documents) {
+      const nextCache = new Map<string, AssistantGenerationStats>()
+      const next: Record<string, AssistantGenerationStats> = {}
+      for (const document of documents) {
+        const projected = toAssistantGenerationStats(document)
+        if (!projected) continue
+        const previous = statsCache.get(document.messageId)
+        const value =
+          previous && isSameGenerationStats(previous, projected)
+            ? previous
+            : projected
+        nextCache.set(document.messageId, value)
+        next[document.messageId] = value
+      }
+
+      statsCache = nextCache
+      if (isSameRecord(lastStats, next)) return lastStats
+      lastStats = next
+      return next
+    },
+  }
 }
 
 export function toChatThread(

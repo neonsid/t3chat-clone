@@ -1,11 +1,11 @@
 import { useUser } from "@clerk/tanstack-react-start"
 import { Navigate, useLocation, useNavigate } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
-import { useCallback, useLayoutEffect, useRef } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react"
 
 import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
+import { useActiveThread } from "@/hooks/useActiveThread"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
-import { useThreads } from "@/hooks/useThreads"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { createPendingChatThread } from "@/lib/threads"
 import { useChatUiStore } from "@/stores/AppStateProvider"
@@ -27,16 +27,20 @@ export function ChatThreadPanel() {
     isThreadDataReady,
     canPersistThread,
     messagesLoading,
-  } = useThreads(threadId, { forceGuestThread })
+  } = useActiveThread(threadId, { forceGuestThread })
 
   const isChatDataReady = isRouteDataReady && isThreadDataReady
   const activeThreadMissing = Boolean(
     !isDraft && isThreadDataReady && activeThread === null
   )
+  // Memoized so the placeholder's empty message list and stats keep their
+  // identity; ChatThreadView memoizes rows against both.
+  const pendingThread = useMemo(
+    () => createPendingChatThread(threadId),
+    [threadId]
+  )
   const renderedThread =
-    activeThread && !messagesLoading
-      ? activeThread
-      : createPendingChatThread(threadId)
+    activeThread && !messagesLoading ? activeThread : pendingThread
   const hasPendingSubmission = useChatUiStore((state) =>
     Boolean(state.pendingSubmissions[threadId])
   )
