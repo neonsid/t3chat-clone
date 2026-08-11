@@ -29,7 +29,6 @@ export type ChatRuntimeState = {
   effectiveReasoningEffort: ReasoningEffort
   supportedReasoningEfforts: readonly ReasoningEffort[]
   modelLoading: boolean
-  composerHeight: number
   submit: (() => void) | null
   stop: (() => void) | null
   setPanelState: (
@@ -44,7 +43,6 @@ export type ChatRuntimeState = {
         | "effectiveReasoningEffort"
         | "supportedReasoningEfforts"
         | "modelLoading"
-        | "composerHeight"
       >
     >
   ) => void
@@ -59,16 +57,6 @@ export type ChatRuntimeState = {
     stop: () => void
   }) => () => void
   reset: () => void
-}
-
-const DEFAULT_COMPOSER_HEIGHT = 148
-
-// Owned by the shell composer, which lives above the route and outlives every
-// thread view. Keeping it out of the thread slice is what stops a thread reset
-// from throwing away a measurement nothing will re-take: the composer measures
-// once on mount and then only when its own box resizes.
-const initialShellState = {
-  composerHeight: DEFAULT_COMPOSER_HEIGHT,
 }
 
 const initialThreadState = {
@@ -114,7 +102,6 @@ function schedulePendingFlush(
 }
 
 export const chatRuntimeStore = createStore<ChatRuntimeState>()((set, get) => ({
-  ...initialShellState,
   ...initialThreadState,
   pendingFlushThreadId: null,
   setPanelState(state) {
@@ -161,8 +148,9 @@ export const chatRuntimeStore = createStore<ChatRuntimeState>()((set, get) => ({
   },
   // The thread view resets on unmount, which happens mid-handoff when the draft
   // route swaps to the thread route. Preserve activeTurn so the composer stays
-  // "sending" across that remount; pendingFlushThreadId and the shell slice are
-  // untouched so the flush request still reaches the new thread view.
+  // "sending" across that remount; pendingFlushThreadId is untouched so the
+  // flush request still reaches the new thread view. Composer overlay height is
+  // a CSS var on [data-chat-shell], not React state, so it survives too.
   reset() {
     set((state) => ({
       ...initialThreadState,

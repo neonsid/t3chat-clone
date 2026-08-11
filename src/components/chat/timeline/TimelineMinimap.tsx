@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, memo } from "react"
 import type { MouseEvent as ReactMouseEvent } from "react"
 
 import {
@@ -241,7 +241,9 @@ function TimelineMinimapContent({
   )
 }
 
-export function TimelineMinimap(props: TimelineMinimapProps) {
+export const TimelineMinimap = memo(function TimelineMinimap(
+  props: TimelineMinimapProps
+) {
   if (props.items.length < TIMELINE_MINIMAP_MIN_ITEMS) return null
   return <TimelineMinimapContent {...props} />
-}
+})

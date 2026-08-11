@@ -69,7 +69,10 @@ function MessageScrollerItem({
       data-slot="message-scroller-item"
       scrollAnchor={scrollAnchor}
       className={cn(
-        "min-w-0 shrink-0 [contain-intrinsic-size:auto_10rem] [content-visibility:auto]",
+        // Avoid content-visibility here: it fights the scroller's resize
+        // handling (placeholder sizes ↔ scrollHeight) and keeps scroll state
+        // thrashing. Messages are already windowed by the viewport.
+        "min-w-0 shrink-0",
         className
       )}
       {...props}
@@ -111,6 +114,11 @@ function MessageScrollerButton({
   )
 }
 
+/** No props — parent thread re-renders must not remount/re-render scroll chrome. */
+const MemoMessageScrollerButton = React.memo(function MemoMessageScrollerButton() {
+  return <MessageScrollerButton />
+})
+
 export {
   MessageScrollerProvider,
   MessageScroller,
@@ -118,5 +126,6 @@ export {
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerButton,
+  MemoMessageScrollerButton,
   useMessageScroller,
 }

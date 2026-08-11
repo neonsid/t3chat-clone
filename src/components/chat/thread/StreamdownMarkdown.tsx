@@ -1,4 +1,4 @@
-import { Component } from "react"
+import { Component, memo } from "react"
 import type { ErrorInfo, ReactNode } from "react"
 import { Streamdown } from "streamdown"
 
@@ -40,7 +40,7 @@ class MarkdownErrorBoundary extends Component<
   }
 }
 
-export function StreamdownMarkdown({
+export const StreamdownMarkdown = memo(function StreamdownMarkdown({
   text,
   isStreaming = false,
   className,
@@ -67,4 +67,4 @@ export function StreamdownMarkdown({
       </div>
     </MarkdownErrorBoundary>
   )
-}
+})

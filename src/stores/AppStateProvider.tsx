@@ -78,6 +78,10 @@ export function useChatUiStore<T>(selector: (state: ChatUiState) => T): T {
   return useStore(useAppStores().chatUi, selector)
 }
 
+export function useChatUiStoreApi() {
+  return useAppStores().chatUi
+}
+
 export function useModelPickerStore<T>(
   selector: (state: ModelPickerState) => T
 ): T {

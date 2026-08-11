@@ -32,7 +32,12 @@ export default defineSchema({
   threads: defineTable({
     ownerId: v.string(),
     title: v.string(),
-    titleSource: v.union(v.literal("derived"), v.literal("manual")),
+    titleSource: v.union(
+      v.literal("pending"),
+      v.literal("generated"),
+      v.literal("derived"),
+      v.literal("manual")
+    ),
     state: v.union(
       v.literal("active"),
       v.literal("archived"),
@@ -109,7 +114,8 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   })
     .index("by_threadId_and_status", ["threadId", "status"])
-    .index("by_threadId_and_runId", ["threadId", "runId"]),
+    .index("by_threadId_and_runId", ["threadId", "runId"])
+    .index("by_ownerId_and_status", ["ownerId", "status"]),
 
   preferences: defineTable({
     ownerId: v.string(),

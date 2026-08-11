@@ -13,6 +13,8 @@ export type AssistantGenerationStats = {
 export type ChatThread = {
   id: string
   title: string
+  titleSource: "pending" | "generated" | "derived" | "manual"
+  isStreaming: boolean
   createdAt: number
   updatedAt: number
   messages: UIMessage[]
@@ -24,6 +26,8 @@ export function createPendingChatThread(id: string): ChatThread {
   return {
     id,
     title: "New Chat",
+    titleSource: "derived",
+    isStreaming: false,
     createdAt: 0,
     updatedAt: 0,
     messages: [],
@@ -96,11 +100,14 @@ export function toGenerationStats(
 export function toChatThread(
   thread: Doc<"threads">,
   messages: UIMessage[] = [],
-  generationStats: Record<string, AssistantGenerationStats> = {}
+  generationStats: Record<string, AssistantGenerationStats> = {},
+  isStreaming = false
 ): ChatThread {
   return {
     id: thread._id,
     title: thread.title,
+    titleSource: thread.titleSource,
+    isStreaming,
     createdAt: thread._creationTime,
     updatedAt: thread.updatedAt,
     messages,

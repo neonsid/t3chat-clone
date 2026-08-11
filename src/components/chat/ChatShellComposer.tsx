@@ -1,11 +1,14 @@
-import { useLayoutEffect, useRef } from "react"
+import { useCallback, useLayoutEffect, useRef } from "react"
 
 import { useShallow } from "zustand/react/shallow"
 
 import { ChatComposer } from "@/components/chat/composer/ChatComposer"
-import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
-import { useThreadComposerControls } from "@/hooks/useThreadComposerState"
-import { useChatUiStore } from "@/stores/AppStateProvider"
+import {
+  CHAT_COMPOSER_OVERLAY_HEIGHT,
+  CHAT_COMPOSER_PLACEHOLDERS,
+} from "@/components/chat/composer/constants"
+import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
+import { getThreadComposerState } from "@/stores/chat-ui-store"
 import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 
 type ChatShellComposerProps = {
@@ -17,6 +20,15 @@ type ChatShellComposerProps = {
   onRequireAuthentication: () => void
 }
 
+function publishComposerOverlayHeight(overlay: HTMLElement, heightPx: number) {
+  const shell = overlay.closest("[data-chat-shell]")
+  if (!(shell instanceof HTMLElement)) return
+  shell.style.setProperty(
+    CHAT_COMPOSER_OVERLAY_HEIGHT.cssVar,
+    `${heightPx}px`
+  )
+}
+
 export function ChatShellComposer({
   threadStateKey,
   isDraft,
@@ -26,7 +38,7 @@ export function ChatShellComposer({
   onRequireAuthentication,
 }: ChatShellComposerProps) {
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
-  const composer = useThreadComposerControls(threadStateKey)
+  const chatUi = useChatUiStoreApi()
   const clearDraft = useChatUiStore((state) => state.clearDraft)
   const {
     isLoading,
@@ -41,7 +53,6 @@ export function ChatShellComposer({
     submit,
     stop,
     setActiveTurn,
-    setPanelState,
   } = useChatRuntimeStore(
     useShallow((state) => ({
       isLoading: state.isLoading,
@@ -56,7 +67,6 @@ export function ChatShellComposer({
       submit: state.submit,
       stop: state.stop,
       setActiveTurn: state.setActiveTurn,
-      setPanelState: state.setPanelState,
     }))
   )
 
@@ -64,15 +74,22 @@ export function ChatShellComposer({
   // isLoading briefly falls back to false while the thread is created and the
   // route swaps; activeTurn covers that window so the icon never flips back.
   const isBusy = isLoading || activeTurn
+  // Handoff (and in-flight turns) can still see messages===undefined for a beat;
+  // don't treat that as a normal conversation load or the placeholder/send flash.
+  const blockOnMessagesLoad = messagesLoading && !isBusy
 
+  // Height goes to a CSS var on the shell — not React state — so textarea growth
+  // does not re-render ChatThreadView / the message scroller.
   useLayoutEffect(() => {
     const element = composerOverlayRef.current
     if (!element) return
 
+    let lastHeight = -1
     const updateHeight = () => {
-      setPanelState({
-        composerHeight: Math.ceil(element.getBoundingClientRect().height),
-      })
+      const height = Math.ceil(element.getBoundingClientRect().height)
+      if (height === lastHeight) return
+      lastHeight = height
+      publishComposerOverlayHeight(element, height)
     }
 
     updateHeight()
@@ -87,10 +104,14 @@ export function ChatShellComposer({
       observer?.disconnect()
       window.removeEventListener("resize", updateHeight)
     }
-  }, [setPanelState])
+  }, [])
 
-  function handleSubmit() {
-    const content = composer.draft.trim()
+  const handleSubmitRef = useRef(() => {})
+  handleSubmitRef.current = () => {
+    const content = getThreadComposerState(
+      chatUi.getState(),
+      threadStateKey
+    ).draft.trim()
     if (!content || isBusy) return
 
     if (!isAuthenticated) {
@@ -110,6 +131,9 @@ export function ChatShellComposer({
     setActiveTurn(true, content)
     submit?.()
   }
+  const handleSubmit = useCallback(() => {
+    handleSubmitRef.current()
+  }, [])
 
   return (
     <div
@@ -134,9 +158,9 @@ export function ChatShellComposer({
             onSubmit={handleSubmit}
             onStop={stop ?? undefined}
             isLoading={isBusy}
-            disabled={modelLoading || messagesLoading}
+            disabled={modelLoading || blockOnMessagesLoad}
             placeholder={
-              messagesLoading
+              blockOnMessagesLoad
                 ? CHAT_COMPOSER_PLACEHOLDERS.loadingConversation
                 : isEmptyThread
                   ? CHAT_COMPOSER_PLACEHOLDERS.newThread

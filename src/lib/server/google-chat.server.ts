@@ -2,7 +2,10 @@ import { chat, createModel, extendAdapter } from "@tanstack/ai"
 import { createGeminiChat } from "@tanstack/ai-gemini"
 
 import type { ChatExecutor } from "@/lib/server/chat-executor-types"
-import { MAX_MODEL_OUTPUT_TOKENS } from "@/lib/chat-models"
+import {
+  GEMINI_THINKING_LEVELS,
+  MAX_MODEL_OUTPUT_TOKENS,
+} from "@/lib/chat-models"
 
 const googleText = extendAdapter(createGeminiChat, [
   createModel("gemini-flash-latest", [
@@ -30,13 +33,6 @@ const googleText = extendAdapter(createGeminiChat, [
   createModel("gemma-4-31b-it", ["text", "image"]),
 ] as const)
 
-const GEMINI_THINKING_LEVELS = {
-  minimal: "MINIMAL",
-  low: "LOW",
-  medium: "MEDIUM",
-  high: "HIGH",
-} as const
-
 export const streamGoogleChat: ChatExecutor = ({
   runtime,
   messages,
@@ -47,6 +43,8 @@ export const streamGoogleChat: ChatExecutor = ({
   const apiKey = process.env.GOOGLE_API_KEY
   if (!apiKey) throw new Error("GOOGLE_API_KEY not configured")
 
+  // Thought summaries require includeThoughts — see
+  // https://ai.google.dev/gemini-api/docs/thinking#javascript
   const thinkingLevel =
     providerReasoningEffort && providerReasoningEffort !== "none"
       ? GEMINI_THINKING_LEVELS[providerReasoningEffort]
@@ -61,7 +59,12 @@ export const streamGoogleChat: ChatExecutor = ({
     modelOptions: {
       maxOutputTokens: MAX_MODEL_OUTPUT_TOKENS,
       ...(thinkingLevel
-        ? { thinkingConfig: { includeThoughts: true, thinkingLevel } }
+        ? {
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingLevel,
+            },
+          }
         : {}),
     },
     abortController,

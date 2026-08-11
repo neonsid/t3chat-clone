@@ -62,6 +62,8 @@ export function useThreads(
     () => ({
       id: normalizedThreadId ?? "guest",
       title: "New Chat",
+      titleSource: "derived" as const,
+      isStreaming: false,
       createdAt: 0,
       updatedAt: 0,
       messages: [],
@@ -69,26 +71,50 @@ export function useThreads(
     }),
     [normalizedThreadId]
   )
+  const runningThreadIds = useQuery(
+    api.chatRuns.listRunningThreadIds,
+    useBackend ? {} : "skip"
+  )
+  const runningThreadIdSet = useMemo(
+    () => new Set(runningThreadIds ?? []),
+    [runningThreadIds]
+  )
   const activeThread = !useBackend
     ? guestThread
     : !hasActiveThreadId
       ? guestThread
       : activeThreadDocument
-        ? toChatThread(activeThreadDocument, activeMessages, generationStats)
+        ? toChatThread(
+            activeThreadDocument,
+            activeMessages,
+            generationStats,
+            runningThreadIdSet.has(activeThreadDocument._id)
+          )
         : activeThreadDocument
 
   const threads = useMemo(() => {
     if (!useBackend) return []
     if (query.trim())
-      return (searchDocuments ?? []).map((thread) => toChatThread(thread))
+      return (searchDocuments ?? []).map((thread) =>
+        toChatThread(thread, [], {}, runningThreadIdSet.has(thread._id))
+      )
 
     const seen = new Set<string>()
     return [...(pinnedDocuments ?? []), ...recent.results].flatMap((thread) => {
       if (seen.has(thread._id)) return []
       seen.add(thread._id)
-      return [toChatThread(thread)]
+      return [
+        toChatThread(thread, [], {}, runningThreadIdSet.has(thread._id)),
+      ]
     })
-  }, [pinnedDocuments, query, recent.results, searchDocuments, useBackend])
+  }, [
+    pinnedDocuments,
+    query,
+    recent.results,
+    runningThreadIdSet,
+    searchDocuments,
+    useBackend,
+  ])
   const isThreadDataReady = Boolean(
     !isAuthLoading &&
     (!useBackend ||
