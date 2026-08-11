@@ -153,24 +153,36 @@ export const ChatMessage = memo(function ChatMessage({
                 <span className="font-semibold text-foreground/75">
                   {generationStats.modelName} ({generationStats.mode})
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <ZapIcon aria-hidden="true" className="size-3.5" />
-                  {generationStats.tokensPerSecond.toFixed(2)} tok/sec
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <CpuIcon aria-hidden="true" className="size-3.5" />
-                  {generationStats.outputTokens.toLocaleString()} tokens
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock3Icon aria-hidden="true" className="size-3.5" />
-                  Time-to-First:{" "}
-                  {generationStats.timeToFirstTokenSeconds.toFixed(4)} sec
-                </span>
+                {/* A cut-short run has no usage report and no meaningful rate
+                    or completion time, so only the token count survives — as an
+                    estimate from the chunks that did arrive. */}
+                {isStopped ? (
+                  <span className="inline-flex items-center gap-1">
+                    <CpuIcon aria-hidden="true" className="size-3.5" />~
+                    {generationStats.outputTokens.toLocaleString()} tokens
+                  </span>
+                ) : (
+                  <>
+                    <span className="inline-flex items-center gap-1">
+                      <ZapIcon aria-hidden="true" className="size-3.5" />
+                      {generationStats.tokensPerSecond.toFixed(2)} tok/sec
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <CpuIcon aria-hidden="true" className="size-3.5" />
+                      {generationStats.outputTokens.toLocaleString()} tokens
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock3Icon aria-hidden="true" className="size-3.5" />
+                      Time-to-First:{" "}
+                      {generationStats.timeToFirstTokenSeconds.toFixed(4)} sec
+                    </span>
+                  </>
+                )}
               </div>
             ) : null}
             <div className="flex items-center gap-2">
               {text ? <MessageCopyControl text={text} /> : null}
-              {timestamp ? (
+              {timestamp && !isStopped ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {timestamp}
                 </p>
