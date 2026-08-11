@@ -24,6 +24,7 @@ export function ChatThreadPanel() {
 
   const {
     activeThread,
+    stoppedMessageIds,
     isThreadDataReady,
     canPersistThread,
     messagesLoading,
@@ -112,6 +113,7 @@ export function ChatThreadPanel() {
       threadStateKey={threadStateKey}
       initialMessages={renderedThread.messages}
       generationStats={renderedThread.generationStats}
+      stoppedMessageIds={stoppedMessageIds}
       isReady={isChatDataReady}
       isAuthenticated={isAuthenticated && canPersistThread}
       userName={userName}
