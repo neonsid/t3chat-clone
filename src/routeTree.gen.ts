@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ChatRouteRouteImport } from './routes/_chat/route'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SsoCallbackRouteImport } from './routes/sso-callback'
 import { Route as ChatIndexRouteImport } from './routes/_chat/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ChatChatThreadIdRouteImport } from './routes/_chat/chat.$threadId'
@@ -22,6 +23,11 @@ const ChatRouteRoute = ChatRouteRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SsoCallbackRoute = SsoCallbackRouteImport.update({
+  id: '/sso-callback',
+  path: '/sso-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatIndexRoute = ChatIndexRouteImport.update({
@@ -43,11 +49,13 @@ const ChatChatThreadIdRoute = ChatChatThreadIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/sign-in': typeof SignInRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/': typeof ChatIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
@@ -56,19 +64,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/chat/$threadId': typeof ChatChatThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/api/chat' | '/chat/$threadId'
+  fullPaths:
+    '/' | '/sign-in' | '/sso-callback' | '/api/chat' | '/chat/$threadId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/sign-in' | '/api/chat' | '/' | '/chat/$threadId'
+  to: '/sign-in' | '/sso-callback' | '/api/chat' | '/' | '/chat/$threadId'
   id:
     | '__root__'
     | '/_chat'
     | '/sign-in'
+    | '/sso-callback'
     | '/api/chat'
     | '/_chat/'
     | '/_chat/chat/$threadId'
@@ -77,6 +88,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   ChatRouteRoute: typeof ChatRouteRouteWithChildren
   SignInRoute: typeof SignInRoute
+  SsoCallbackRoute: typeof SsoCallbackRoute
   ApiChatRoute: typeof ApiChatRoute
 }
 
@@ -94,6 +106,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sso-callback': {
+      id: '/sso-callback'
+      path: '/sso-callback'
+      fullPath: '/sso-callback'
+      preLoaderRoute: typeof SsoCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_chat/': {
@@ -137,6 +156,7 @@ const ChatRouteRouteWithChildren = ChatRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   ChatRouteRoute: ChatRouteRouteWithChildren,
   SignInRoute: SignInRoute,
+  SsoCallbackRoute: SsoCallbackRoute,
   ApiChatRoute: ApiChatRoute,
 }
 export const routeTree = rootRouteImport
