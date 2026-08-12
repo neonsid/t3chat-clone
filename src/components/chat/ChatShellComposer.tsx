@@ -8,7 +8,11 @@ import {
   CHAT_COMPOSER_PLACEHOLDERS,
 } from "@/components/chat/composer/constants"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
-import { getThreadComposerState } from "@/stores/chat-ui-store"
+import {
+  composerCanSend,
+  getThreadComposerState,
+  readyAttachmentIds,
+} from "@/stores/chat-ui-store"
 import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 
 type ChatShellComposerProps = {
@@ -16,7 +20,7 @@ type ChatShellComposerProps = {
   isDraft: boolean
   isAuthenticated: boolean
   canSubmit: boolean
-  onDraftSubmit: (content: string) => void
+  onDraftSubmit: (content: string, attachmentIds: string[]) => void
   onRequireAuthentication: () => void
 }
 
@@ -110,11 +114,10 @@ export function ChatShellComposer({
   // Do not sync via useEffect — that reintroduces stale handlers.
   const handleSubmitRef = useRef(() => {})
   handleSubmitRef.current = () => {
-    const content = getThreadComposerState(
-      chatUi.getState(),
-      threadStateKey
-    ).draft.trim()
-    if (!content || isBusy) return
+    const composer = getThreadComposerState(chatUi.getState(), threadStateKey)
+    if (!composerCanSend(composer) || isBusy) return
+    const content = composer.draft.trim()
+    const attachmentIds = readyAttachmentIds(composer)
 
     if (!isAuthenticated) {
       onRequireAuthentication()
@@ -125,7 +128,7 @@ export function ChatShellComposer({
       if (!canSubmit) return
       setActiveTurn(true, content)
       clearDraft(threadStateKey)
-      onDraftSubmit(content)
+      onDraftSubmit(content, attachmentIds)
       return
     }
 

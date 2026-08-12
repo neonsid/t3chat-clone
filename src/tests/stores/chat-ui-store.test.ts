@@ -27,6 +27,7 @@ describe("chat UI store", () => {
       draft: "",
       reasoningEffort: "high",
       searchEnabled: true,
+      attachments: [],
     })
     expect(getThreadComposerState(store.getState(), second).draft).toBe(
       "Second draft"
@@ -100,6 +101,39 @@ describe("chat UI store", () => {
     await secondStore.persist.rehydrate()
 
     expect(secondStore.getState().peekPendingSubmission("thread-1")).toBeNull()
+  })
+
+  test("queues attachment-only pending submissions", () => {
+    const store = createChatUiStore()
+    store.getState().queuePendingSubmission("thread-1", "", ["att-1"])
+    expect(store.getState().peekPendingSubmission("thread-1")).toMatchObject({
+      content: "",
+      attachmentIds: ["att-1"],
+    })
+  })
+
+  test("does not persist composer attachments", async () => {
+    const firstStore = createChatUiStore()
+    const key = createThreadStateKey("user-1", "thread-1")
+    firstStore.getState().setAttachments(key, [
+      {
+        localId: "local-1",
+        attachmentId: "att-1",
+        filename: "photo.png",
+        mimeType: "image/png",
+        kind: "image",
+        sizeBytes: 12,
+        status: "ready",
+        progress: 1,
+      },
+    ])
+
+    const secondStore = createChatUiStore()
+    await secondStore.persist.rehydrate()
+
+    expect(
+      getThreadComposerState(secondStore.getState(), key).attachments
+    ).toEqual([])
   })
 
   test("marks hydration without persisting the hydration flag", async () => {

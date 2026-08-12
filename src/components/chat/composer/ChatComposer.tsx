@@ -1,16 +1,28 @@
-import { memo, useCallback, useRef } from "react"
+import { memo, useCallback, useEffect, useRef } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
-import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  GlobeIcon,
+  PaperclipIcon,
+  SquareIcon,
+} from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
+import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
 import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
-import { Tooltip } from "@/components/shared/motion/tooltip"
 import {
+  AnimatedToastStack,
+  useAnimatedToastStack,
+} from "@/components/shared/motion/animated-toast-stack"
+import { Tooltip } from "@/components/shared/motion/tooltip"
+import { useComposerAttachments } from "@/hooks/useComposerAttachments"
+import {
+  useThreadComposerCanSend,
   useThreadComposerDraft,
-  useThreadComposerHasDraft,
   useThreadComposerToolbarControls,
 } from "@/hooks/useThreadComposerState"
+import { ATTACHMENT_ACCEPT } from "@/lib/attachment-limits"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
@@ -47,10 +59,77 @@ export const ChatComposer = memo(function ChatComposer({
     onSubmitRef.current()
   }, [])
 
+  const {
+    attachments,
+    addFiles,
+    removeAttachment,
+  } = useComposerAttachments(threadStateKey)
+  const toasts = useAnimatedToastStack({ limit: 4 })
+  const uploadToastId = useRef<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     submit()
   }
+
+  async function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return
+
+    await addFiles(fileList, {
+      onPreparing: () => {
+        toasts.showToast({
+          title: "Preparing attachments...",
+          status: "loading",
+          duration: 1800,
+          dismissible: true,
+        })
+      },
+      onBatchStart: (count) => {
+        uploadToastId.current = toasts.showToast({
+          id: uploadToastId.current ?? undefined,
+          title: `Uploading ${count} file${count === 1 ? "" : "s"}`,
+          status: "loading",
+          duration: 0,
+          dismissible: false,
+        })
+      },
+      onRejected: (message) => {
+        toasts.showToast({
+          title: message,
+          status: "error",
+          duration: 3600,
+        })
+      },
+    })
+  }
+
+  const busyUploading = attachments.some(
+    (attachment) =>
+      attachment.status === "preparing" ||
+      attachment.status === "uploading" ||
+      attachment.status === "processing"
+  )
+  const allSettled =
+    attachments.length > 0 &&
+    attachments.every(
+      (attachment) =>
+        attachment.status === "ready" || attachment.status === "failed"
+    )
+
+  useEffect(() => {
+    if (!uploadToastId.current || busyUploading || !allSettled) return
+    const failed = attachments.some(
+      (attachment) => attachment.status === "failed"
+    )
+    toasts.updateToast(uploadToastId.current, {
+      title: failed ? "Some uploads failed" : "Attachments ready",
+      status: failed ? "error" : "success",
+      duration: 2800,
+      dismissible: true,
+    })
+    uploadToastId.current = null
+  }, [allSettled, attachments, busyUploading, toasts])
 
   return (
     <div
@@ -59,6 +138,13 @@ export const ChatComposer = memo(function ChatComposer({
         className
       )}
     >
+      <AnimatedToastStack
+        toasts={toasts.toasts}
+        onDismiss={toasts.dismissToast}
+        placement="absolute"
+        position="bottom-right"
+        className="bottom-full mb-3"
+      />
       <div className="chat-composer-glass-host relative z-10 w-full rounded-[18px]">
         <form
           className="mx-auto w-full max-w-3xl min-w-0"
@@ -66,11 +152,19 @@ export const ChatComposer = memo(function ChatComposer({
           onSubmit={handleSubmit}
         >
           <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+            <ComposerAttachmentChips
+              attachments={attachments}
+              disabled={disabled || isLoading}
+              onRemove={(localId) => {
+                void removeAttachment(localId)
+              }}
+            />
             <ComposerDraftField
               threadStateKey={threadStateKey}
               disabled={disabled || isLoading}
               placeholder={placeholder}
               onSubmit={submit}
+              canSubmit={!isLoading && !disabled}
             />
           </div>
 
@@ -81,6 +175,19 @@ export const ChatComposer = memo(function ChatComposer({
             isLoading={isLoading}
             disabled={disabled}
             onStop={onStop}
+            onAttachClick={() => fileInputRef.current?.click()}
+            attachDisabled={disabled || isLoading}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ATTACHMENT_ACCEPT}
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              void handleFilesSelected(event.target.files)
+              event.target.value = ""
+            }}
           />
         </form>
       </div>
@@ -93,19 +200,26 @@ function ComposerDraftField({
   disabled,
   placeholder,
   onSubmit,
+  canSubmit,
 }: {
   threadStateKey: string
   disabled: boolean
   placeholder: string
   onSubmit: () => void
+  canSubmit: boolean
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const draft = useThreadComposerDraft(threadStateKey)
   const setDraft = useChatUiStore((state) => state.setDraft)
+  const canSend = useThreadComposerCanSend(threadStateKey, {
+    isLoading: !canSubmit,
+    disabled,
+  })
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
+      if (!canSend) return
       onSubmit()
     }
   }
@@ -133,6 +247,8 @@ const ComposerToolbar = memo(function ComposerToolbar({
   isLoading,
   disabled,
   onStop,
+  onAttachClick,
+  attachDisabled,
 }: {
   threadStateKey: string
   effectiveReasoningEffort: ReasoningEffort
@@ -140,6 +256,8 @@ const ComposerToolbar = memo(function ComposerToolbar({
   isLoading: boolean
   disabled: boolean
   onStop?: () => void
+  onAttachClick: () => void
+  attachDisabled: boolean
 }) {
   const composer = useThreadComposerToolbarControls(threadStateKey)
 
@@ -181,8 +299,10 @@ const ComposerToolbar = memo(function ComposerToolbar({
         <Tooltip content="Attach files">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             aria-label="Attach"
+            disabled={attachDisabled}
+            onClick={onAttachClick}
           >
             <PaperclipIcon className="size-3.5" />
             Attach
@@ -211,17 +331,19 @@ const ComposerSendButton = memo(function ComposerSendButton({
   disabled: boolean
   onStop?: () => void
 }) {
-  // Boolean only — re-renders on empty↔non-empty, not every keystroke.
-  const hasDraft = useThreadComposerHasDraft(threadStateKey)
-  const canSend = hasDraft && !isLoading && !disabled
+  const canSend = useThreadComposerCanSend(threadStateKey, {
+    isLoading,
+    disabled,
+  })
   // Stay on primary stop styling while busy even if stop isn't rebound yet
   // (draft→thread remount) or messagesLoading disabled the rest of the form.
+  // Upload busy must not become stop — only generation isLoading flips stop.
   const isActionDisabled = isLoading ? false : !canSend
   const actionTooltip = isLoading
     ? "Stop generating"
     : canSend
       ? "Send message"
-      : "Message requires text"
+      : "Add a message or ready attachment"
 
   return (
     <Tooltip content={actionTooltip}>

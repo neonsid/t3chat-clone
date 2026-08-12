@@ -47,7 +47,11 @@ import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
-import { getThreadComposerState } from "@/stores/chat-ui-store"
+import {
+  composerCanSend,
+  getThreadComposerState,
+  readyAttachmentIds,
+} from "@/stores/chat-ui-store"
 import {
   CHAT_STREAM_PROCESSOR,
   CHAT_STREAM_RENDER_INTERVAL_MS,
@@ -181,10 +185,15 @@ export function ChatThreadView({
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
+  const hasComposerAttachments = useChatUiStore(
+    (state) =>
+      getThreadComposerState(state, threadStateKey).attachments.length > 0
+  )
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
   const chatUi = useChatUiStoreApi()
   const setDraft = useChatUiStore((state) => state.setDraft)
   const clearDraft = useChatUiStore((state) => state.clearDraft)
+  const clearAttachments = useChatUiStore((state) => state.clearAttachments)
   const pendingSubmission = useChatUiStore(
     (state) => state.pendingSubmissions[threadId]
   )
@@ -211,18 +220,20 @@ export function ChatThreadView({
   )?.providerReasoningEffort
   const expectsReasoning =
     providerReasoningEffort !== undefined && providerReasoningEffort !== "none"
-  const forwardedProps = useMemo(
-    () => ({
-      modelId: modelPreferences.selectedModelId,
-      reasoningEffort: effectiveReasoningEffort,
-    }),
-    [effectiveReasoningEffort, modelPreferences.selectedModelId]
-  )
+  // Stable object mutated before each send so attachmentIds are current when
+  // ChatClient spreads forwardedPropsOption at request time.
+  const forwardedPropsRef = useRef({
+    modelId: modelPreferences.selectedModelId,
+    reasoningEffort: effectiveReasoningEffort,
+    attachmentIds: [] as string[],
+  })
+  forwardedPropsRef.current.modelId = modelPreferences.selectedModelId
+  forwardedPropsRef.current.reasoningEffort = effectiveReasoningEffort
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     threadId,
     initialMessages,
-    forwardedProps,
+    forwardedProps: forwardedPropsRef.current,
     connection: fetchServerSentEvents("/api/chat"),
     streamProcessor: CHAT_STREAM_PROCESSOR,
   })
@@ -238,7 +249,8 @@ export function ChatThreadView({
     !hasPendingSubmission &&
     !hasStartedTurn &&
     !activeTurn &&
-    !hasDraft
+    !hasDraft &&
+    !hasComposerAttachments
   const lastMessage = messages.at(-1)
 
   // During the draft→thread handoff the real user message isn't dispatched until
@@ -249,15 +261,29 @@ export function ChatThreadView({
     isEmptyThread && (activeTurn || hasPendingSubmission)
       ? activeTurnContent || pendingSubmission?.content || ""
       : ""
+  const optimisticAttachmentCount =
+    isEmptyThread && (activeTurn || hasPendingSubmission)
+      ? (pendingSubmission?.attachmentIds.length ??
+        getThreadComposerState(chatUi.getState(), threadStateKey).attachments
+          .length)
+      : 0
   const optimisticUserMessage = useMemo<UIMessage | null>(() => {
-    if (!optimisticUserContent) return null
+    if (!optimisticUserContent && optimisticAttachmentCount === 0) return null
     return {
       id: pendingSubmission?.messageId ?? "optimistic-user",
       role: "user",
-      parts: [{ type: "text", content: optimisticUserContent }],
+      parts: [
+        ...(optimisticUserContent
+          ? [{ type: "text" as const, content: optimisticUserContent }]
+          : [{ type: "text" as const, content: "" }]),
+      ],
       createdAt: new Date(),
     }
-  }, [optimisticUserContent, pendingSubmission?.messageId])
+  }, [
+    optimisticAttachmentCount,
+    optimisticUserContent,
+    pendingSubmission?.messageId,
+  ])
   const displayMessages = optimisticUserMessage
     ? [optimisticUserMessage]
     : messages
@@ -366,21 +392,35 @@ export function ChatThreadView({
       : historyRows
 
   function submitMessage(content?: string) {
-    const text =
-      content ??
-      getThreadComposerState(chatUi.getState(), threadStateKey).draft.trim()
-    if (!isReady || !text || isLoading) return
+    const composer = getThreadComposerState(chatUi.getState(), threadStateKey)
+    const text = content ?? composer.draft.trim()
+    const attachmentIds = readyAttachmentIds(composer)
+    if (!isReady || isLoading) return
+    if (!composerCanSend({ ...composer, draft: text })) return
     if (!isAuthenticated) {
       onRequireAuthentication()
       return
     }
 
+    forwardedPropsRef.current.attachmentIds = attachmentIds
     clearDraft(threadStateKey)
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
-      content: [{ type: "text", content: text }],
-    })
+      content: text
+        ? [{ type: "text", content: text }]
+        : [{ type: "text", content: "" }],
+    }).then(
+      () => {
+        // Stream accepted — safe to clear chips (server bound the ids).
+        clearAttachments(threadStateKey)
+        forwardedPropsRef.current.attachmentIds = []
+      },
+      () => {
+        // Early failure: keep chips / attachmentIds for retry.
+        forwardedPropsRef.current.attachmentIds = attachmentIds
+      }
+    )
   }
 
   function fillPrompt(prompt: string) {
@@ -428,11 +468,22 @@ export function ChatThreadView({
     const pending = takePendingSubmission(threadId)
     if (!pending) return
 
+    forwardedPropsRef.current.attachmentIds = pending.attachmentIds
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: pending.messageId,
-      content: [{ type: "text", content: pending.content }],
-    })
+      content: pending.content
+        ? [{ type: "text", content: pending.content }]
+        : [{ type: "text", content: "" }],
+    }).then(
+      () => {
+        clearAttachments(threadStateKey)
+        forwardedPropsRef.current.attachmentIds = []
+      },
+      () => {
+        forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+      }
+    )
   }
 
   useLayoutEffect(() => {

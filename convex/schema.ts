@@ -123,4 +123,33 @@ export default defineSchema({
     favoriteModelIds: v.array(v.string()),
     combineResults: v.boolean(),
   }).index("by_ownerId", ["ownerId"]),
+
+  attachments: defineTable({
+    ownerId: v.string(),
+    attachmentId: v.string(),
+    objectKey: v.string(),
+    filename: v.string(),
+    mimeType: v.string(),
+    sizeBytes: v.number(),
+    kind: v.union(v.literal("image"), v.literal("pdf")),
+    status: v.union(
+      v.literal("pending_upload"),
+      v.literal("uploaded"),
+      v.literal("processing"),
+      v.literal("ready"),
+      v.literal("failed"),
+      v.literal("deleting")
+    ),
+    bindingStatus: v.union(v.literal("unbound"), v.literal("bound")),
+    threadId: v.optional(v.id("threads")),
+    messageId: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_ownerId_and_attachmentId", ["ownerId", "attachmentId"])
+    .index("by_threadId_and_messageId", ["threadId", "messageId"])
+    .index("by_ownerId_and_status", ["ownerId", "status"])
+    .index("by_bindingStatus_and_expiresAt", ["bindingStatus", "expiresAt"])
+    .index("by_threadId_and_status", ["threadId", "status"]),
 })

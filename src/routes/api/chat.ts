@@ -10,8 +10,16 @@ import {
   isReasoningEffort,
   resolveChatModel,
 } from "@/lib/chat-models"
-import { contextToModelMessages } from "@/lib/chat-context"
-import { latestUserChatMessage } from "@/lib/chat-messages"
+import {
+  contextRequiresPdf,
+  contextRequiresVision,
+  contextToModelMessages,
+  type ChatContextMessage,
+} from "@/lib/chat-context"
+import {
+  latestUserChatMessage,
+  parseAttachmentIds,
+} from "@/lib/chat-messages"
 import {
   getMissingRuntimeKey,
   streamChatModel,
@@ -61,9 +69,25 @@ export const Route = createFileRoute("/api/chat")({
         const missingRuntimeKey = getMissingRuntimeKey(model.runtime)
         if (missingRuntimeKey) return errorResponse(missingRuntimeKey, 500)
 
+        let attachmentIds: string[]
+        try {
+          attachmentIds = parseAttachmentIds(
+            params.forwardedProps.attachmentIds
+          )
+        } catch (error) {
+          return errorResponse(
+            error instanceof Error ? error.message : "Invalid attachments",
+            400
+          )
+        }
+
         const userMessage = latestUserChatMessage(params.messages)
-        if (!userMessage)
+        if (!userMessage) {
           return errorResponse("A user message is required", 400)
+        }
+        if (!userMessage.content && attachmentIds.length === 0) {
+          return errorResponse("Message cannot be empty", 400)
+        }
 
         const convexUrl = import.meta.env.VITE_CONVEX_URL
         if (!convexUrl)
@@ -80,6 +104,7 @@ export const Route = createFileRoute("/api/chat")({
             completionSecret,
             userMessageId: userMessage.id,
             content: userMessage.content,
+            attachmentIds,
             modelId,
             reasoningEffort,
           })
@@ -87,9 +112,65 @@ export const Route = createFileRoute("/api/chat")({
             return errorResponse("This chat request was already handled", 409)
           }
           runAccepted = true
+
           const context = await convex.query(api.messages.getContext, {
             threadId,
           })
+
+          const catalogModel = getChatModelById(model.id)
+          const capabilities = catalogModel?.capabilities ?? []
+          if (
+            contextRequiresVision(context) &&
+            !capabilities.includes("vision")
+          ) {
+            throw new Error("This model does not support image attachments")
+          }
+          if (contextRequiresPdf(context) && !capabilities.includes("pdf")) {
+            throw new Error("This model does not support PDF attachments")
+          }
+
+          const contextAttachmentIds = [
+            ...new Set(
+              context.flatMap(
+                (message: (typeof context)[number]) =>
+                  message.attachments.map(
+                    (attachment) => attachment.attachmentId
+                  )
+              )
+            ),
+          ]
+          const signedDownloads =
+            contextAttachmentIds.length > 0
+              ? await convex.action(api.r2.mintModelDownloadUrls, {
+                  threadId,
+                  attachmentIds: contextAttachmentIds,
+                })
+              : []
+          const urlByAttachmentId = new Map(
+            signedDownloads.map(
+              (entry: (typeof signedDownloads)[number]) => [
+                entry.attachmentId,
+                entry.url,
+              ]
+            )
+          )
+
+          const messagesWithUrls: ChatContextMessage[] = context.map(
+            (message: (typeof context)[number]) => ({
+              role: message.role,
+              content: message.content,
+              thinking: message.thinking,
+              attachments: message.attachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                kind: attachment.kind,
+                mimeType: attachment.mimeType,
+                filename: attachment.filename,
+                sizeBytes: attachment.sizeBytes,
+                url: urlByAttachmentId.get(attachment.attachmentId),
+              })),
+            })
+          )
+
           const abortController = new AbortController()
           request.signal.addEventListener(
             "abort",
@@ -101,7 +182,7 @@ export const Route = createFileRoute("/api/chat")({
           const startedAt = Date.now()
           const stream = streamChatModel({
             runtime: model.runtime,
-            messages: contextToModelMessages(context),
+            messages: contextToModelMessages(messagesWithUrls),
             providerReasoningEffort: model.providerReasoningEffort,
             abortController,
           })
@@ -114,7 +195,7 @@ export const Route = createFileRoute("/api/chat")({
               runId: params.runId,
               completionSecret,
               modelId,
-              modelName: getChatModelById(model.id)?.name ?? model.id,
+              modelName: catalogModel?.name ?? model.id,
               reasoningEffort,
               startedAt,
               signal: abortController.signal,

@@ -16,6 +16,7 @@ export const DEFAULT_THREAD_COMPOSER_STATE: ThreadComposerState = Object.freeze(
     draft: "",
     reasoningEffort: "instant",
     searchEnabled: false,
+    attachments: [],
   }
 )
 

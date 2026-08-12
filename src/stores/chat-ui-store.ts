@@ -7,11 +7,12 @@ import {
   CHAT_UI_STORAGE_VERSION,
   DEFAULT_THREAD_COMPOSER_STATE,
 } from "@/stores/constants"
-import type { ThreadComposerState } from "@/stores/types"
+import type { ComposerAttachment, ThreadComposerState } from "@/stores/types"
 
 export type PendingSubmission = {
   messageId: string
   content: string
+  attachmentIds: string[]
 }
 
 export type ChatUiState = {
@@ -25,21 +26,48 @@ export type ChatUiState = {
     reasoningEffort: ThreadComposerState["reasoningEffort"]
   ) => void
   setSearchEnabled: (key: string, searchEnabled: boolean) => void
+  setAttachments: (key: string, attachments: Array<ComposerAttachment>) => void
+  updateAttachment: (
+    key: string,
+    localId: string,
+    patch: Partial<ComposerAttachment>
+  ) => void
+  removeAttachment: (key: string, localId: string) => void
+  clearAttachments: (key: string) => void
   clearDraft: (key: string) => void
   moveThreadState: (fromKey: string, toKey: string) => void
   removeThreadState: (key: string) => void
-  queuePendingSubmission: (threadId: string, content: string) => void
+  queuePendingSubmission: (
+    threadId: string,
+    content: string,
+    attachmentIds?: string[]
+  ) => void
   peekPendingSubmission: (threadId: string) => PendingSubmission | null
   takePendingSubmission: (threadId: string) => PendingSubmission | null
 }
 
-type PersistedChatUiState = Pick<ChatUiState, "composers">
+type PersistedComposer = Pick<
+  ThreadComposerState,
+  "draft" | "reasoningEffort" | "searchEnabled"
+>
+type PersistedChatUiState = {
+  composers: Partial<Record<string, PersistedComposer>>
+}
+
+function revokePreviewUrls(attachments: Array<ComposerAttachment>) {
+  for (const attachment of attachments) {
+    if (attachment.localPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(attachment.localPreviewUrl)
+    }
+  }
+}
 
 function isDefaultComposerState(state: ThreadComposerState): boolean {
   return (
     state.draft === DEFAULT_THREAD_COMPOSER_STATE.draft &&
     state.reasoningEffort === DEFAULT_THREAD_COMPOSER_STATE.reasoningEffort &&
-    state.searchEnabled === DEFAULT_THREAD_COMPOSER_STATE.searchEnabled
+    state.searchEnabled === DEFAULT_THREAD_COMPOSER_STATE.searchEnabled &&
+    state.attachments.length === 0
   )
 }
 
@@ -58,6 +86,8 @@ function sanitizeComposer(value: unknown): ThreadComposerState | null {
     draft: candidate.draft,
     reasoningEffort: candidate.reasoningEffort,
     searchEnabled: candidate.searchEnabled,
+    // Never restore in-flight uploads from session storage.
+    attachments: [],
   }
 }
 
@@ -71,9 +101,17 @@ function sanitizePersistedState(value: unknown): PersistedChatUiState {
   const composers = Object.fromEntries(
     Object.entries(candidate.composers).flatMap(([key, composer]) => {
       const sanitized = sanitizeComposer(composer)
-      return sanitized && !isDefaultComposerState(sanitized)
-        ? [[key, sanitized]]
-        : []
+      if (!sanitized || isDefaultComposerState(sanitized)) return []
+      return [
+        [
+          key,
+          {
+            draft: sanitized.draft,
+            reasoningEffort: sanitized.reasoningEffort,
+            searchEnabled: sanitized.searchEnabled,
+          },
+        ],
+      ]
     })
   )
   return { composers }
@@ -85,7 +123,11 @@ function updateComposer(
   patch: Partial<ThreadComposerState>
 ): Partial<Record<string, ThreadComposerState>> {
   const current = state.composers[key] ?? DEFAULT_THREAD_COMPOSER_STATE
-  const next = { ...current, ...patch }
+  const next = {
+    ...current,
+    attachments: current.attachments,
+    ...patch,
+  }
   const composers: Partial<Record<string, ThreadComposerState>> = {
     ...state.composers,
   }
@@ -110,6 +152,32 @@ export function createThreadStateKey(
   return `${userId ? `user:${userId}` : "guest"}:${threadId}`
 }
 
+export function composerCanSend(
+  composer: ThreadComposerState,
+  options?: { isLoading?: boolean; disabled?: boolean }
+): boolean {
+  if (options?.isLoading || options?.disabled) return false
+  const hasText = composer.draft.trim().length > 0
+  const attachments = composer.attachments
+  if (attachments.some((attachment) => attachment.status !== "ready")) {
+    return false
+  }
+  const readyCount = attachments.filter(
+    (attachment) => attachment.status === "ready" && attachment.attachmentId
+  ).length
+  return hasText || readyCount > 0
+}
+
+export function readyAttachmentIds(
+  composer: ThreadComposerState
+): string[] {
+  return composer.attachments.flatMap((attachment) =>
+    attachment.status === "ready" && attachment.attachmentId
+      ? [attachment.attachmentId]
+      : []
+  )
+}
+
 export function createChatUiStore() {
   const initializer = persist<ChatUiState, [], [], PersistedChatUiState>(
     (set, get) => ({
@@ -132,6 +200,72 @@ export function createChatUiStore() {
           composers: updateComposer(state, key, { searchEnabled }),
         }))
       },
+      setAttachments(key, attachments) {
+        set((state) => {
+          const previous =
+            state.composers[key]?.attachments ??
+            DEFAULT_THREAD_COMPOSER_STATE.attachments
+          const keep = new Set(
+            attachments.map((attachment) => attachment.localPreviewUrl)
+          )
+          revokePreviewUrls(
+            previous.filter(
+              (attachment) =>
+                attachment.localPreviewUrl &&
+                !keep.has(attachment.localPreviewUrl)
+            )
+          )
+          return {
+            composers: updateComposer(state, key, { attachments }),
+          }
+        })
+      },
+      updateAttachment(key, localId, patch) {
+        set((state) => {
+          const current =
+            state.composers[key]?.attachments ??
+            DEFAULT_THREAD_COMPOSER_STATE.attachments
+          const attachments = current.map((attachment) =>
+            attachment.localId === localId
+              ? { ...attachment, ...patch }
+              : attachment
+          )
+          return {
+            composers: updateComposer(state, key, { attachments }),
+          }
+        })
+      },
+      removeAttachment(key, localId) {
+        set((state) => {
+          const current =
+            state.composers[key]?.attachments ??
+            DEFAULT_THREAD_COMPOSER_STATE.attachments
+          const removed = current.find(
+            (attachment) => attachment.localId === localId
+          )
+          if (removed?.localPreviewUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(removed.localPreviewUrl)
+          }
+          return {
+            composers: updateComposer(state, key, {
+              attachments: current.filter(
+                (attachment) => attachment.localId !== localId
+              ),
+            }),
+          }
+        })
+      },
+      clearAttachments(key) {
+        set((state) => {
+          const current =
+            state.composers[key]?.attachments ??
+            DEFAULT_THREAD_COMPOSER_STATE.attachments
+          revokePreviewUrls(current)
+          return {
+            composers: updateComposer(state, key, { attachments: [] }),
+          }
+        })
+      },
       clearDraft(key) {
         set((state) => ({
           composers: updateComposer(state, key, { draft: "" }),
@@ -147,22 +281,25 @@ export function createChatUiStore() {
         })
       },
       removeThreadState(key) {
-        if (!get().composers[key]) return
+        const existing = get().composers[key]
+        if (!existing) return
+        revokePreviewUrls(existing.attachments)
         set((state) => {
           const composers = { ...state.composers }
           delete composers[key]
           return { composers }
         })
       },
-      queuePendingSubmission(threadId, content) {
+      queuePendingSubmission(threadId, content, attachmentIds = []) {
         const trimmed = content.trim()
-        if (!trimmed) return
+        if (!trimmed && attachmentIds.length === 0) return
         set((state) => ({
           pendingSubmissions: {
             ...state.pendingSubmissions,
             [threadId]: {
               messageId: crypto.randomUUID(),
               content: trimmed,
+              attachmentIds,
             },
           },
         }))
@@ -189,12 +326,41 @@ export function createChatUiStore() {
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
       partialize: (state): PersistedChatUiState => ({
-        composers: state.composers,
+        // Exclude attachments entirely — blob URLs and mid-upload state must
+        // not survive reload.
+        composers: Object.fromEntries(
+          Object.entries(state.composers).flatMap(([key, composer]) => {
+            if (!composer) return []
+            return [
+              [
+                key,
+                {
+                  draft: composer.draft,
+                  reasoningEffort: composer.reasoningEffort,
+                  searchEnabled: composer.searchEnabled,
+                },
+              ],
+            ]
+          })
+        ),
       }),
-      merge: (persisted, current) => ({
-        ...current,
-        ...sanitizePersistedState(persisted),
-      }),
+      merge: (persisted, current): ChatUiState => {
+        const sanitized = sanitizePersistedState(persisted)
+        const composers: Partial<Record<string, ThreadComposerState>> = {}
+        for (const [key, composer] of Object.entries(sanitized.composers)) {
+          if (!composer) continue
+          composers[key] = {
+            draft: composer.draft,
+            reasoningEffort: composer.reasoningEffort,
+            searchEnabled: composer.searchEnabled,
+            attachments: [],
+          }
+        }
+        return {
+          ...current,
+          composers,
+        }
+      },
     }
   )
   if (import.meta.env.DEV) {

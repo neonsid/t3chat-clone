@@ -1,7 +1,10 @@
 import { useShallow } from "zustand/react/shallow"
 
 import { useChatUiStore } from "@/stores/AppStateProvider"
-import { getThreadComposerState } from "@/stores/chat-ui-store"
+import {
+  composerCanSend,
+  getThreadComposerState,
+} from "@/stores/chat-ui-store"
 
 /** Toolbar-only: intentionally omits draft so typing does not re-render chrome. */
 export function useThreadComposerToolbarControls(threadStateKey: string) {
@@ -27,6 +30,21 @@ export function useThreadComposerHasDraft(threadStateKey: string) {
   return useChatUiStore(
     (state) =>
       getThreadComposerState(state, threadStateKey).draft.trim().length > 0
+  )
+}
+
+export function useThreadComposerCanSend(
+  threadStateKey: string,
+  options?: { isLoading?: boolean; disabled?: boolean }
+) {
+  return useChatUiStore((state) =>
+    composerCanSend(getThreadComposerState(state, threadStateKey), options)
+  )
+}
+
+export function useThreadComposerAttachments(threadStateKey: string) {
+  return useChatUiStore(
+    (state) => getThreadComposerState(state, threadStateKey).attachments
   )
 }
 

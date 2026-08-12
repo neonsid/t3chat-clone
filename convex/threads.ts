@@ -249,6 +249,15 @@ export const remove = authedMutation({
 export const deleteBatch = internalMutation({
   args: { threadId: v.id("threads") },
   handler: async (ctx, args) => {
+    const attachmentCleanup =
+      await ctx.runMutation(internal.attachments.beginThreadAttachmentDeletion, {
+        threadId: args.threadId,
+      })
+    if (attachmentCleanup.remaining) {
+      await ctx.scheduler.runAfter(0, internal.threads.deleteBatch, args)
+      return null
+    }
+
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_threadId_and_sequence", (query) =>

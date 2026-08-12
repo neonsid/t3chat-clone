@@ -1,5 +1,7 @@
 import type { ModelMessage, UIMessage } from "@tanstack/ai"
 
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/attachment-limits"
+
 export type ChatRequestMessage = UIMessage | ModelMessage
 
 export function chatMessageText(message: ChatRequestMessage): string {
@@ -22,16 +24,34 @@ export function chatMessageText(message: ChatRequestMessage): string {
   return text.trim()
 }
 
+export function parseAttachmentIds(value: unknown): string[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid attachments")
+  }
+  const ids = value.filter(
+    (entry): entry is string =>
+      typeof entry === "string" && entry.trim().length > 0
+  )
+  if (ids.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    throw new Error("Too many attachments")
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Duplicate attachment ids")
+  }
+  return ids
+}
+
+/** Latest user turn with a stable id. Empty text is allowed when attachments are sent via forwardedProps. */
 export function latestUserChatMessage(messages: ChatRequestMessage[]) {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
-    if (message.role !== "user") continue
+    if (!message || message.role !== "user") continue
 
     const id = "id" in message ? message.id : undefined
     if (typeof id !== "string") continue
 
-    const content = chatMessageText(message)
-    if (content) return { id, content }
+    return { id, content: chatMessageText(message) }
   }
 
   return null
