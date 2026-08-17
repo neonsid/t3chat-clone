@@ -3,6 +3,7 @@ import type { UIEvent } from "react"
 import {
   ArchiveIcon,
   ChevronUpIcon,
+  ClockIcon,
   LoaderCircleIcon,
   PinIcon,
   SearchIcon,
@@ -12,6 +13,7 @@ import { useShallow } from "zustand/react/shallow"
 
 import { ThreadContextMenu } from "@/components/sidebar/ThreadContextMenu"
 import { SidebarAccount } from "@/components/sidebar/SidebarAccount"
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import {
   SIDEBAR_LOAD_MORE_THRESHOLD_PX,
   SIDEBAR_SEARCH_FOCUS_DELAY_MS,
@@ -141,8 +143,52 @@ export function AppSidebar({
     const isActive = thread.id === activeThreadId
     const isPinned = Boolean(thread.pinnedAt)
     const isTitlePending = thread.titleSource === "pending"
+    const isTemporary = Boolean(thread.isTemporary)
     const isBusy = isTitlePending || thread.isStreaming
-    const tooltipContent = isTitlePending ? "Generating title…" : thread.title
+    const tooltipContent = isTemporary
+      ? TEMPORARY_CHAT.label
+      : isTitlePending
+        ? "Generating title…"
+        : thread.title
+
+    const rowButton = (
+      <Tooltip
+        content={tooltipContent}
+        side="right"
+        delay={450}
+        wrapperClassName="w-full"
+      >
+        <SidebarMenuButton
+          isActive={isActive}
+          size="sm"
+          aria-label={isTemporary ? TEMPORARY_CHAT.label : undefined}
+          className={cn(
+            "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground",
+            isBusy && "pe-9"
+          )}
+          onClick={() => handleSelect(thread.id)}
+        >
+          {isTemporary ? (
+            <ClockIcon
+              aria-hidden="true"
+              className="size-3.5 text-sidebar-foreground/80"
+            />
+          ) : isTitlePending ? (
+            <span
+              aria-label="Generating title"
+              className={cn(
+                "sidebar-thread-title-shimmer min-w-0 flex-1",
+                SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS
+              )}
+            />
+          ) : (
+            <span className="sidebar-thread-title min-w-0 flex-1 truncate">
+              {thread.title}
+            </span>
+          )}
+        </SidebarMenuButton>
+      </Tooltip>
+    )
 
     return (
       <SidebarMenuItem
@@ -150,51 +196,32 @@ export function AppSidebar({
         className="sidebar-thread-row"
         data-thread-busy={isBusy ? "true" : undefined}
       >
-        <ThreadContextMenu thread={thread} actions={actions}>
-          <div className="w-full">
-            <Tooltip
-              content={tooltipContent}
-              side="right"
-              delay={450}
-              wrapperClassName="w-full"
-            >
-              <SidebarMenuButton
-                isActive={isActive}
-                size="sm"
-                className={cn(
-                  "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground",
-                  isBusy && "pe-9"
-                )}
-                onClick={() => handleSelect(thread.id)}
-              >
-                {isTitlePending ? (
-                  <span
-                    aria-label="Generating title"
-                    className={cn(
-                      "sidebar-thread-title-shimmer min-w-0 flex-1",
-                      SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS
-                    )}
-                  />
-                ) : (
-                  <span className="sidebar-thread-title min-w-0 flex-1 truncate">
-                    {thread.title}
-                  </span>
-                )}
-              </SidebarMenuButton>
-            </Tooltip>
-          </div>
-        </ThreadContextMenu>
+        {isTemporary ? (
+          <div className="w-full">{rowButton}</div>
+        ) : (
+          <ThreadContextMenu thread={thread} actions={actions}>
+            <div className="w-full">{rowButton}</div>
+          </ThreadContextMenu>
+        )}
 
-        {isBusy ? (
+        {isTemporary ? (
+          isBusy ? (
+            <div className="sidebar-thread-status absolute top-1 right-1 flex size-7 items-center justify-center">
+              <LoaderCircleIcon
+                aria-hidden="true"
+                className="size-3.5 animate-spin text-sidebar-foreground/80"
+              />
+              <span className="sr-only">Assistant is responding</span>
+            </div>
+          ) : null
+        ) : isBusy ? (
           <div className="sidebar-thread-status absolute top-1 right-1 flex size-7 items-center justify-center">
             <LoaderCircleIcon
               aria-hidden="true"
               className="size-3.5 animate-spin text-sidebar-foreground/80"
             />
             <span className="sr-only">
-              {isTitlePending
-                ? "Generating title"
-                : "Assistant is responding"}
+              {isTitlePending ? "Generating title" : "Assistant is responding"}
             </span>
           </div>
         ) : (

@@ -24,8 +24,10 @@ export type PendingSubmission = {
 export type ChatUiState = {
   composers: Partial<Record<string, ThreadComposerState>>
   pendingSubmissions: Partial<Record<string, PendingSubmission>>
+  isTemporaryChat: boolean
   isHydrated: boolean
   markHydrated: () => void
+  setTemporaryChat: (isTemporaryChat: boolean) => void
   setDraft: (key: string, draft: string) => void
   setReasoningEffort: (
     key: string,
@@ -58,6 +60,7 @@ type PersistedComposer = Pick<
 >
 type PersistedChatUiState = {
   composers: Partial<Record<string, PersistedComposer>>
+  isTemporaryChat: boolean
 }
 
 function revokePreviewUrls(attachments: Array<ComposerAttachment>) {
@@ -101,10 +104,11 @@ function sanitizeComposer(value: JsonValue): ThreadComposerState | null {
 }
 
 function sanitizePersistedState(value: JsonValue): PersistedChatUiState {
-  if (!isJsonObject(value)) return { composers: {} }
+  if (!isJsonObject(value)) return { composers: {}, isTemporaryChat: false }
   const composersValue = value.composers
+  const isTemporaryChat = value.isTemporaryChat === true
   if (!isJsonObject(composersValue)) {
-    return { composers: {} }
+    return { composers: {}, isTemporaryChat }
   }
 
   const composers = Object.fromEntries(
@@ -123,7 +127,7 @@ function sanitizePersistedState(value: JsonValue): PersistedChatUiState {
       ]
     })
   )
-  return { composers }
+  return { composers, isTemporaryChat }
 }
 
 function updateComposer(
@@ -190,9 +194,13 @@ export function createChatUiStore() {
     (set, get) => ({
       composers: {},
       pendingSubmissions: {},
+      isTemporaryChat: false,
       isHydrated: false,
       markHydrated() {
         set({ isHydrated: true })
+      },
+      setTemporaryChat(isTemporaryChat) {
+        set({ isTemporaryChat })
       },
       setDraft(key, draft) {
         set((state) => ({ composers: updateComposer(state, key, { draft }) }))
@@ -333,6 +341,7 @@ export function createChatUiStore() {
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
       partialize: (state): PersistedChatUiState => ({
+        isTemporaryChat: state.isTemporaryChat,
         // Exclude attachments entirely — blob URLs and mid-upload state must
         // not survive reload.
         composers: Object.fromEntries(
@@ -359,7 +368,7 @@ export function createChatUiStore() {
             : (persisted as JsonValue)
         const sanitized = persistedJson
           ? sanitizePersistedState(persistedJson)
-          : { composers: {} }
+          : { composers: {}, isTemporaryChat: false }
         // SAFETY: accumulator starts empty and is filled only with sanitized composers.
         const composers = {} as ChatUiState["composers"]
         for (const [key, composer] of Object.entries(sanitized.composers)) {
@@ -374,6 +383,7 @@ export function createChatUiStore() {
         return {
           ...current,
           composers,
+          isTemporaryChat: sanitized.isTemporaryChat,
         }
       },
     }

@@ -157,6 +157,16 @@ describe("chat UI store", () => {
     ).toEqual([])
   })
 
+  test("persists the temporary-chat preference", async () => {
+    const firstStore = createChatUiStore()
+    firstStore.getState().setTemporaryChat(true)
+
+    const secondStore = createChatUiStore()
+    await secondStore.persist.rehydrate()
+
+    expect(secondStore.getState().isTemporaryChat).toBe(true)
+  })
+
   test("marks hydration without persisting the hydration flag", async () => {
     const firstStore = createChatUiStore()
     firstStore.getState().markHydrated()

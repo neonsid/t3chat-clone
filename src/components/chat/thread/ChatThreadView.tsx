@@ -13,6 +13,10 @@ import { useMutation, useQuery } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
 import { asThreadId } from "@/lib/convex-ids"
+import {
+  isTemporaryThreadId,
+  toPersistableTemporaryMessages,
+} from "@/lib/temporary-chat"
 
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
@@ -155,6 +159,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isStreaming,
   isScrollAnchor,
   isStopped,
+  isTemporary,
   generationStats,
   attachments,
 }: {
@@ -162,6 +167,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isStreaming: boolean
   isScrollAnchor: boolean
   isStopped: boolean
+  isTemporary: boolean
   generationStats: AssistantGenerationStats | undefined
   attachments: Array<ThreadMessageAttachment>
 }) {
@@ -171,6 +177,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         message={message}
         isStreaming={isStreaming}
         isStopped={isStopped}
+        isTemporary={isTemporary}
         generationStats={generationStats}
         attachments={attachments}
       />
@@ -207,13 +214,17 @@ export function ChatThreadView({
   const [locallyStoppedMessageIds, setLocallyStoppedMessageIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const isTemporary = isTemporaryThreadId(threadId)
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
     api.attachments.listForThreadMessages,
-    isAuthenticated && threadId !== "guest"
+    isAuthenticated && threadId !== "guest" && !isTemporary
       ? { threadId: asThreadId(threadId) }
       : "skip"
   )
+  const [localAttachmentsByMessageId, setLocalAttachmentsByMessageId] =
+    useState<Map<string, Array<ThreadMessageAttachment>>>(() => new Map())
+  const attachmentIdsByMessageRef = useRef<Record<string, string[]>>({})
   const attachmentsByMessageId = useMemo(() => {
     const grouped = new Map<string, Array<ThreadMessageAttachment>>()
     for (const attachment of threadAttachmentDocs ?? []) {
@@ -228,8 +239,13 @@ export function ChatThreadView({
       if (existing) existing.push(item)
       else grouped.set(attachment.messageId, [item])
     }
+    for (const [messageId, attachments] of localAttachmentsByMessageId) {
+      if (!grouped.has(messageId) && attachments.length > 0) {
+        grouped.set(messageId, attachments)
+      }
+    }
     return grouped
-  }, [threadAttachmentDocs])
+  }, [localAttachmentsByMessageId, threadAttachmentDocs])
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const hasComposerAttachments = useChatUiStore(
@@ -273,9 +289,14 @@ export function ChatThreadView({
     modelId: modelPreferences.selectedModelId,
     reasoningEffort: effectiveReasoningEffort,
     attachmentIds: new Array<string>(),
+    ephemeral: isTemporary,
+    attachmentsByMessageId: attachmentIdsByMessageRef.current,
   })
   forwardedPropsRef.current.modelId = modelPreferences.selectedModelId
   forwardedPropsRef.current.reasoningEffort = effectiveReasoningEffort
+  forwardedPropsRef.current.ephemeral = isTemporary
+  forwardedPropsRef.current.attachmentsByMessageId =
+    attachmentIdsByMessageRef.current
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     threadId,
@@ -388,6 +409,7 @@ export function ChatThreadView({
             stoppedMessageIds.has(message.id) ||
             locallyStoppedMessageIds.has(message.id)
           }
+          isTemporary={isTemporary}
           generationStats={generationStats[message.id]}
           attachments={sentAttachmentsForMessage(
             message.id,
@@ -400,6 +422,7 @@ export function ChatThreadView({
       attachmentsByMessageId,
       generationStats,
       history,
+      isTemporary,
       latestUserMessageId,
       locallyStoppedMessageIds,
       scrollAnchorId,
@@ -441,6 +464,7 @@ export function ChatThreadView({
             isStreaming
             isScrollAnchor={false}
             isStopped={false}
+            isTemporary={isTemporary}
             generationStats={undefined}
             attachments={
               attachmentsByMessageId.get(renderedStreamingMessage.id) ??
@@ -449,6 +473,36 @@ export function ChatThreadView({
           />,
         ]
       : historyRows
+
+  function recordMessageAttachments(
+    messageId: string,
+    attachmentIds: string[],
+    composerAttachments: ReturnType<
+      typeof getThreadComposerState
+    >["attachments"]
+  ) {
+    if (attachmentIds.length === 0) return
+    attachmentIdsByMessageRef.current[messageId] = attachmentIds
+    forwardedPropsRef.current.attachmentsByMessageId =
+      attachmentIdsByMessageRef.current
+    const items =
+      composerAttachments.length > 0
+        ? rememberComposerPreviews(composerAttachments).map((attachment) => ({
+            ...attachment,
+            messageId,
+          }))
+        : sentAttachmentsForMessage(
+            messageId,
+            EMPTY_MESSAGE_ATTACHMENTS,
+            messageId
+          )
+    if (items.length === 0) return
+    setLocalAttachmentsByMessageId((current) => {
+      const next = new Map(current)
+      next.set(messageId, items)
+      return next
+    })
+  }
 
   function submitMessage(content?: string) {
     const composer = getThreadComposerState(chatUi.getState(), threadStateKey)
@@ -462,12 +516,14 @@ export function ChatThreadView({
     }
 
     forwardedPropsRef.current.attachmentIds = attachmentIds
+    const messageId = crypto.randomUUID()
+    recordMessageAttachments(messageId, attachmentIds, composer.attachments)
     rememberComposerPreviews(composer.attachments)
     clearDraft(threadStateKey)
     clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
-      id: crypto.randomUUID(),
+      id: messageId,
       content: text
         ? [{ type: "text", content: text }]
         : [{ type: "text", content: "" }],
@@ -500,7 +556,7 @@ export function ChatThreadView({
     // The server keeps receiving for as long as the abort takes to reach the
     // model, and whichever side writes first owns what the reader sees on their
     // next visit.
-    if (streamingMessage && isAuthenticated) {
+    if (streamingMessage && isAuthenticated && !isTemporary) {
       void stopStreamingMessage({
         threadId: asThreadId(threadId),
         assistantMessageId: streamingMessage.id,
@@ -527,6 +583,11 @@ export function ChatThreadView({
     if (!pending) return
 
     forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+    recordMessageAttachments(
+      pending.messageId,
+      pending.attachmentIds,
+      getThreadComposerState(chatUi.getState(), threadStateKey).attachments
+    )
     clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
@@ -549,6 +610,31 @@ export function ChatThreadView({
       submit: () => submitMessageRef.current(),
       stop: () => stopGenerationRef.current(),
     })
+  }, [threadId])
+
+  const persistableMessagesRef = useRef(() =>
+    toPersistableTemporaryMessages([], {}, new Set())
+  )
+  persistableMessagesRef.current = () =>
+    toPersistableTemporaryMessages(
+      messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: chatMessageText(message),
+        thinking: chatMessageThinking(message),
+        createdAt:
+          "createdAt" in message && message.createdAt instanceof Date
+            ? message.createdAt.getTime()
+            : Date.now(),
+      })),
+      attachmentIdsByMessageRef.current,
+      new Set([...stoppedMessageIds, ...locallyStoppedMessageIds])
+    )
+
+  useLayoutEffect(() => {
+    return chatRuntimeStore
+      .getState()
+      .bindPersistableMessages(() => persistableMessagesRef.current())
   }, [threadId])
 
   // Draft submit queues a pending message then navigates here and requests a

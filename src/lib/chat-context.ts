@@ -130,3 +130,30 @@ export function contextRequiresPdf(
     (message.attachments ?? []).some((attachment) => attachment.kind === "pdf")
   )
 }
+
+export function requestMessagesToContext(
+  messages: Array<{
+    role: string
+    id?: string
+    content: string
+    thinking: string
+  }>,
+  attachmentsByMessageId: Record<string, ChatContextAttachment[]>
+): ChatContextMessage[] {
+  const context: ChatContextMessage[] = []
+  for (const message of messages) {
+    if (message.role !== "user" && message.role !== "assistant") continue
+    const attachments =
+      message.id === undefined ? [] : (attachmentsByMessageId[message.id] ?? [])
+    if (!message.content && !message.thinking && attachments.length === 0) {
+      continue
+    }
+    context.push({
+      role: message.role,
+      content: message.content,
+      thinking: message.thinking || undefined,
+      attachments,
+    })
+  }
+  return context
+}

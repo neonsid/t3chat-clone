@@ -300,6 +300,77 @@ export const mintModelDownloadUrls = action({
   },
 })
 
+export const mintOwnedModelDownloadUrls = action({
+  args: {
+    attachmentIds: v.array(v.string()),
+  },
+  returns: v.array(
+    v.object({
+      attachmentId: v.string(),
+      url: v.string(),
+      mimeType: v.string(),
+      kind: v.union(v.literal("image"), v.literal("pdf")),
+      filename: v.string(),
+      sizeBytes: v.number(),
+    })
+  ),
+  handler: async (
+    ctx,
+    args
+  ): Promise<
+    Array<{
+      attachmentId: string
+      url: string
+      mimeType: string
+      kind: "image" | "pdf"
+      filename: string
+      sizeBytes: number
+    }>
+  > => {
+    const ownerId = await requireViewerId(ctx)
+    if (args.attachmentIds.length === 0) return []
+
+    const uniqueIds = [...new Set(args.attachmentIds)]
+    const r2 = getR2()
+    const results: Array<{
+      attachmentId: string
+      url: string
+      mimeType: string
+      kind: "image" | "pdf"
+      filename: string
+      sizeBytes: number
+    }> = []
+
+    for (const attachmentId of uniqueIds) {
+      const attachment: {
+        objectKey: string
+        mimeType: string
+        filename: string
+        kind: "image" | "pdf"
+        status: string
+        sizeBytes: number
+        attachmentId: string
+      } | null = await ctx.runQuery(internal.attachments.authorizeForOwner, {
+        ownerId,
+        attachmentId,
+      })
+      if (!attachment || attachment.status !== "ready") continue
+      const url: string = await r2.getUrl(attachment.objectKey, {
+        expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
+      })
+      results.push({
+        attachmentId: attachment.attachmentId,
+        url,
+        mimeType: attachment.mimeType,
+        kind: attachment.kind,
+        filename: attachment.filename,
+        sizeBytes: attachment.sizeBytes,
+      })
+    }
+    return results
+  },
+})
+
 export const verifyObject = internalAction({
   args: {
     ownerId: v.string(),

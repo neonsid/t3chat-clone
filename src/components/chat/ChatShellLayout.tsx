@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/tanstack-react-start"
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
-import { useConvex, useConvexAuth } from "convex/react"
+import { useConvex, useConvexAuth, useMutation } from "convex/react"
 import { LazyMotion, domAnimation } from "motion/react"
-import { useCallback, useMemo } from "react"
+import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 
 import { api } from "../../../convex/_generated/api"
 import { ChatShellComposer } from "@/components/chat/ChatShellComposer"
@@ -11,12 +11,22 @@ import {
   ChatShell,
   SidebarControl,
 } from "@/components/chat/shell/ChatShellChrome"
+import { ConvertTemporaryChatDialog } from "@/components/chat/temporary-chat/ConvertTemporaryChatDialog"
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import { AppSidebar } from "@/components/sidebar/AppSidebar"
 import { AppSidebarProvider } from "@/components/sidebar/AppSidebarProvider"
+import {
+  AnimatedToastStack,
+  useAnimatedToastStack,
+} from "@/components/shared/motion/animated-toast-stack"
 import { SidebarInset } from "@/components/shared/ui/sidebar"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
 import { useThreadList } from "@/hooks/useThreadList"
 import { SIGN_IN_PATH } from "@/lib/auth"
+import {
+  createTemporarySidebarThread,
+  createTemporaryThreadId,
+} from "@/lib/temporary-chat"
 import { useChatUiStore, useSidebarUiStore } from "@/stores/AppStateProvider"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
 import {
@@ -27,10 +37,16 @@ import {
 export function ChatShellLayout() {
   const navigate = useNavigate()
   const convex = useConvex()
+  const persistTemporary = useMutation(api.threads.persistTemporary)
   const returnTo = useLocation({ select: (location) => location.href })
   const { user } = useUser()
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const searchQuery = useSidebarUiStore((state) => state.searchQuery)
+  const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
+  const isTemporaryChatPreference = useChatUiStore(
+    (state) => state.isTemporaryChat
+  )
+  const setTemporaryChat = useChatUiStore((state) => state.setTemporaryChat)
   const removeThreadState = useChatUiStore((state) => state.removeThreadState)
   const queuePendingSubmission = useChatUiStore(
     (state) => state.queuePendingSubmission
@@ -39,14 +55,18 @@ export function ChatShellLayout() {
     (state) => state.takePendingSubmission
   )
   const moveThreadState = useChatUiStore((state) => state.moveThreadState)
-  const { isDraft, threadId } = useChatRouteState()
+  const { isDraft, isTemporary, threadId } = useChatRouteState()
   const forceGuestThread = isAuthLoading || !isAuthenticated
   const isRouteDataReady = !isAuthLoading
   const threadStateKey = createThreadStateKey(user?.id, threadId)
-  // Highlight only: the shell never subscribes to the active thread, or every
-  // message update would re-render the sidebar and chrome.
   const sidebarActiveThreadId = isDraft ? "guest" : threadId
   const hasConversation = useChatRuntimeStore((state) => !state.isEmptyThread)
+  const isBusy = useChatRuntimeStore(
+    (state) => state.isLoading || state.activeTurn
+  )
+  const toasts = useAnimatedToastStack({ limit: 1 })
+  const [convertOpen, setConvertOpen] = useState(false)
+  const [convertPending, setConvertPending] = useState(false)
 
   const {
     isSidebarDataReady,
@@ -61,6 +81,21 @@ export function ChatShellLayout() {
     regenerateThreadTitle,
   } = useThreadList({ forceGuestThread, searchQuery })
 
+  const sidebarThreads = useMemo(() => {
+    if (!isTemporary) return threads
+    return [createTemporarySidebarThread(threadId, isBusy), ...threads]
+  }, [isBusy, isTemporary, threadId, threads])
+
+  useLayoutEffect(() => {
+    if (!isChatUiHydrated) return
+    if (!isTemporaryChatPreference || !isDraft) return
+    void navigate({
+      to: "/chat/$threadId",
+      params: { threadId: createTemporaryThreadId() },
+      replace: true,
+    })
+  }, [isChatUiHydrated, isDraft, isTemporaryChatPreference, navigate])
+
   const openThread = useCallback(
     (nextThreadId: string) => {
       void navigate({
@@ -72,8 +107,15 @@ export function ChatShellLayout() {
   )
 
   const createNewThread = useCallback(() => {
+    if (isTemporaryChatPreference) {
+      void navigate({
+        to: "/chat/$threadId",
+        params: { threadId: createTemporaryThreadId() },
+      })
+      return
+    }
     void navigate({ to: "/" })
-  }, [navigate])
+  }, [isTemporaryChatPreference, navigate])
 
   const requireAuthentication = useCallback(() => {
     void navigate({
@@ -84,33 +126,55 @@ export function ChatShellLayout() {
 
   const activateDraftWithMessage = useCallback(
     (content: string, attachmentIds: string[] = []) => {
-      if (!isDraft || !canPersistThread) return
+      if (!isDraft) return
+
+      if (isTemporaryChatPreference) {
+        void (async () => {
+          const createdThreadId = createTemporaryThreadId()
+          try {
+            moveThreadState(
+              createThreadStateKey(user?.id, "guest"),
+              createThreadStateKey(user?.id, createdThreadId)
+            )
+            queuePendingSubmission(createdThreadId, content, attachmentIds)
+            await navigate({
+              to: "/chat/$threadId",
+              params: { threadId: createdThreadId },
+              replace: true,
+            })
+            chatRuntimeStore.getState().requestPendingFlush(createdThreadId)
+          } catch (submissionError) {
+            takePendingSubmission(createdThreadId)
+            chatRuntimeStore.getState().setActiveTurn(false)
+            throw submissionError
+          }
+        })()
+        return
+      }
+
+      if (!canPersistThread) return
 
       void (async () => {
         let createdThreadId: string | null = null
         try {
-          const threadId = await convex.mutation(
+          const createdId = await convex.mutation(
             api.threads.createOrReuseEmpty,
             {}
           )
-          createdThreadId = threadId
+          createdThreadId = createdId
           moveThreadState(
             createThreadStateKey(user?.id, "guest"),
-            createThreadStateKey(user?.id, threadId)
+            createThreadStateKey(user?.id, createdId)
           )
-          queuePendingSubmission(threadId, content, attachmentIds)
+          queuePendingSubmission(createdId, content, attachmentIds)
           await navigate({
             to: "/chat/$threadId",
-            params: { threadId },
+            params: { threadId: createdId },
             replace: true,
           })
-          // Ask the mounted thread view to dispatch the queued first turn once
-          // its useChat client is bound — not from a mount effect.
-          chatRuntimeStore.getState().requestPendingFlush(threadId)
+          chatRuntimeStore.getState().requestPendingFlush(createdId)
         } catch (submissionError) {
           if (createdThreadId) takePendingSubmission(createdThreadId)
-          // The turn never reached a stream, so release the bridged "sending"
-          // state; the thread view can't clear it without a successful handoff.
           chatRuntimeStore.getState().setActiveTurn(false)
           throw submissionError
         }
@@ -120,6 +184,7 @@ export function ChatShellLayout() {
       canPersistThread,
       convex,
       isDraft,
+      isTemporaryChatPreference,
       moveThreadState,
       navigate,
       queuePendingSubmission,
@@ -195,11 +260,89 @@ export function ChatShellLayout() {
     ]
   )
 
+  const isHeaderTemporary =
+    isTemporary || (isDraft && isTemporaryChatPreference)
+  const isTemporaryToggleDisabled =
+    (!isDraft && !isTemporary) || convertPending || (isTemporary && isBusy)
+
+  const handleToggleTemporaryChat = useCallback(() => {
+    if (isTemporaryToggleDisabled) return
+
+    if (isTemporary) {
+      if (!hasConversation) {
+        setTemporaryChat(false)
+        void navigate({ to: "/" })
+        return
+      }
+      setConvertOpen(true)
+      return
+    }
+
+    setTemporaryChat(true)
+  }, [
+    hasConversation,
+    isTemporary,
+    isTemporaryToggleDisabled,
+    navigate,
+    setTemporaryChat,
+  ])
+
+  const handleConvert = useCallback(() => {
+    if (convertPending || isBusy) return
+    const messages = chatRuntimeStore.getState().getPersistableMessages()
+    if (messages.length === 0) {
+      setConvertOpen(false)
+      setTemporaryChat(false)
+      void navigate({ to: "/" })
+      return
+    }
+
+    setConvertPending(true)
+    void (async () => {
+      try {
+        const storedThreadId = await persistTemporary({ messages })
+        moveThreadState(
+          createThreadStateKey(user?.id, threadId),
+          createThreadStateKey(user?.id, storedThreadId)
+        )
+        setTemporaryChat(false)
+        setConvertOpen(false)
+        await navigate({
+          to: "/chat/$threadId",
+          params: { threadId: storedThreadId },
+          replace: true,
+        })
+        toasts.showToast({
+          title: TEMPORARY_CHAT.convertedToast,
+          status: "success",
+        })
+      } catch (error) {
+        toasts.showToast({
+          title:
+            error instanceof Error ? error.message : "Unable to convert chat",
+          status: "error",
+        })
+      } finally {
+        setConvertPending(false)
+      }
+    })()
+  }, [
+    convertPending,
+    isBusy,
+    moveThreadState,
+    navigate,
+    persistTemporary,
+    setTemporaryChat,
+    threadId,
+    toasts,
+    user?.id,
+  ])
+
   return (
     <LazyMotion features={domAnimation}>
       <AppSidebarProvider className="h-dvh min-h-0! overflow-hidden">
         <AppSidebar
-          threads={threads}
+          threads={sidebarThreads}
           activeThreadId={sidebarActiveThreadId}
           isDataReady={isRouteDataReady && isSidebarDataReady}
           paginationStatus={paginationStatus}
@@ -210,20 +353,42 @@ export function ChatShellLayout() {
           hasConversation={hasConversation}
           onCreateThread={createNewThread}
         />
-        <ChatHeaderActions />
+        <ChatHeaderActions
+          isTemporaryChat={isHeaderTemporary}
+          disabled={isTemporaryToggleDisabled}
+          onToggleTemporaryChat={handleToggleTemporaryChat}
+        />
         <ChatShell>
           <SidebarInset className="relative h-full min-h-0 overflow-hidden bg-background">
             <Outlet />
             <ChatShellComposer
               threadStateKey={threadStateKey}
               isDraft={isDraft}
+              isTemporary={isTemporary}
               isAuthenticated={isAuthenticated && canPersistThread}
-              canSubmit={isRouteDataReady && canPersistThread}
+              canSubmit={
+                isRouteDataReady &&
+                (canPersistThread || isTemporaryChatPreference)
+              }
               onDraftSubmit={activateDraftWithMessage}
               onRequireAuthentication={requireAuthentication}
             />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
+              <div className="chat-composer-horizontal-inset relative w-full">
+                <AnimatedToastStack
+                  toasts={toasts.toasts}
+                  onDismiss={toasts.dismissToast}
+                />
+              </div>
+            </div>
           </SidebarInset>
         </ChatShell>
+        <ConvertTemporaryChatDialog
+          open={convertOpen}
+          onOpenChange={setConvertOpen}
+          onConfirm={handleConvert}
+          isPending={convertPending}
+        />
       </AppSidebarProvider>
     </LazyMotion>
   )

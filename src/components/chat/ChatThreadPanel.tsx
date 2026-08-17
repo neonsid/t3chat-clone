@@ -18,7 +18,7 @@ export function ChatThreadPanel() {
   const { isSignedIn, user } = useUser()
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
-  const { isDraft, threadId } = useChatRouteState()
+  const { isDraft, isTemporary, threadId } = useChatRouteState()
   const forceGuestThread = isAuthLoading || !isAuthenticated
   const isRouteDataReady = !isAuthLoading
 
@@ -32,7 +32,7 @@ export function ChatThreadPanel() {
 
   const isChatDataReady = isRouteDataReady && isThreadDataReady
   const activeThreadMissing = Boolean(
-    !isDraft && isThreadDataReady && activeThread === null
+    !isDraft && !isTemporary && isThreadDataReady && activeThread === null
   )
   // Memoized so the placeholder's empty message list and stats keep their
   // identity; ChatThreadView memoizes rows against both.
@@ -76,6 +76,7 @@ export function ChatThreadPanel() {
 
   if (
     !isDraft &&
+    !isTemporary &&
     isRouteDataReady &&
     isChatUiHydrated &&
     isChatDataReady &&
@@ -85,7 +86,13 @@ export function ChatThreadPanel() {
     return <Navigate to="/" replace />
   }
 
-  if (!isDraft && isRouteDataReady && isSignedIn && !isAuthenticated) {
+  if (
+    !isDraft &&
+    !isTemporary &&
+    isRouteDataReady &&
+    isSignedIn &&
+    !isAuthenticated
+  ) {
     return <Navigate to="/" replace />
   }
 
@@ -97,6 +104,7 @@ export function ChatThreadPanel() {
   if (
     !(
       isDraft ||
+      isTemporary ||
       isChatDataReady ||
       wasCurrentThreadReady ||
       currentThreadHadPendingSubmission

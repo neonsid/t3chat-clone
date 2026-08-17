@@ -119,6 +119,33 @@ describe("collectAndPersistStream", () => {
     ])
   })
 
+  it("does not persist when persist is false", async () => {
+    const mutation =
+      vi.fn<
+        (reference: FunctionReference, payload: FinishPayload) => Promise<void>
+      >()
+    const convex: ChatRunConvexClient = {
+      mutation: mutation as ChatRunConvexClient["mutation"],
+    }
+    const source = (async function* () {
+      for (const chunk of textChunks("Hello")) yield chunk
+    })()
+    const stream = collectAndPersistStream({
+      stream: source,
+      convex,
+      modelId: "openai/gpt-5.6-luna",
+      modelName: "GPT-5.6 Luna",
+      reasoningEffort: "instant",
+      startedAt: Date.now(),
+      signal: new AbortController().signal,
+      persist: false,
+    })
+
+    await drain(stream)
+
+    expect(mutation).not.toHaveBeenCalled()
+  })
+
   // The bug this guards: aborting ends the provider iterator instead of
   // throwing, so the loop finished normally and a half-written answer was
   // filed as a complete one — leaving the reader no sign it had been stopped.

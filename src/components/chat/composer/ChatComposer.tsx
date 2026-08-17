@@ -11,6 +11,7 @@ import {
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
 import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import {
   AnimatedToastStack,
   useAnimatedToastStack,
@@ -41,6 +42,7 @@ interface ChatComposerProps {
   isLoading?: boolean
   disabled?: boolean
   placeholder?: string
+  isTemporary?: boolean
   className?: string
 }
 
@@ -53,6 +55,7 @@ export const ChatComposer = memo(function ChatComposer({
   isLoading = false,
   disabled = false,
   placeholder = CHAT_COMPOSER_PLACEHOLDERS.newThread,
+  isTemporary = false,
   className,
 }: ChatComposerProps) {
   // Latest-ref: stable onSubmit for ComposerDraftField without stale closures.
@@ -150,6 +153,11 @@ export const ChatComposer = memo(function ChatComposer({
           onSubmit={handleSubmit}
         >
           <div className="px-4 pt-3 sm:px-5 sm:pt-4">
+            {isTemporary ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {TEMPORARY_CHAT.label}
+              </p>
+            ) : null}
             <ComposerAttachmentChips
               attachments={attachments}
               disabled={disabled || isLoading}
