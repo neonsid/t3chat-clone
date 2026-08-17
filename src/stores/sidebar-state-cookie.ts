@@ -1,6 +1,7 @@
 import { createIsomorphicFn } from "@tanstack/react-start"
 import { getCookie } from "@tanstack/react-start/server"
 
+import { hasDocument } from "@/lib/runtime-env"
 import {
   DEFAULT_SIDEBAR_STATE,
   SIDEBAR_STATE_COOKIE_MAX_AGE_SECONDS,
@@ -34,7 +35,7 @@ export const readSidebarDesktopOpen = createIsomorphicFn()
   )
 
 export function persistSidebarDesktopOpen(desktopOpen: boolean) {
-  if (typeof document === "undefined") return
+  if (!hasDocument()) return
   const value = serializeSidebarDesktopOpen(desktopOpen)
   document.cookie = `${SIDEBAR_STATE_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_STATE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`
 }

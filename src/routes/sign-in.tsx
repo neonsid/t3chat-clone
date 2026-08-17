@@ -10,8 +10,14 @@ import {
 } from "@/lib/auth"
 
 export const Route = createFileRoute("/sign-in")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    redirect_url: getSafeAuthRedirect(search.redirect_url),
+  validateSearch: (search: {
+    readonly redirect_url?: string | ReadonlyArray<string>
+  }) => ({
+    redirect_url: getSafeAuthRedirect(
+      Array.isArray(search.redirect_url)
+        ? search.redirect_url[0]
+        : search.redirect_url
+    ),
   }),
   component: SignInRoute,
 })
@@ -73,7 +79,10 @@ function SignInRoute() {
             </button>
 
             {errorMessage ? (
-              <p className="mt-3 text-center text-sm text-destructive" role="alert">
+              <p
+                className="mt-3 text-center text-sm text-destructive"
+                role="alert"
+              >
                 {errorMessage}
               </p>
             ) : null}

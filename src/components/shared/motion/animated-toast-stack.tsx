@@ -105,30 +105,30 @@ const CONTENT_TRANSITION = {
   ease: EASE_OUT,
 } as const
 
-const STATUS_ICON: Record<ToastStatus, LucideIcon> = {
+const STATUS_ICON = {
   neutral: Bell,
   info: Info,
   loading: LoaderCircle,
   success: Check,
   error: AlertCircle,
-}
+} as const satisfies Record<ToastStatus, LucideIcon>
 
-const STATUS_CLASS: Record<ToastStatus, string> = {
+const STATUS_CLASS = {
   neutral: "text-muted-foreground bg-primary/[0.05]",
   info: "text-primary bg-primary/10",
   loading: "text-primary bg-primary/10",
   success: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400",
   error: "text-destructive bg-destructive/10",
-}
+} as const satisfies Record<ToastStatus, string>
 
-const POSITION_CLASS: Record<ToastPosition, string> = {
+const POSITION_CLASS = {
   "top-left": "left-4 top-4",
   "top-center": "left-1/2 top-4 -translate-x-1/2",
   "top-right": "right-4 top-4",
   "bottom-left": "bottom-6 left-4",
   "bottom-center": "bottom-6 left-1/2 -translate-x-1/2",
   "bottom-right": "bottom-6 right-4",
-}
+} as const satisfies Record<ToastPosition, string>
 
 let idSeed = 0
 
@@ -173,7 +173,7 @@ export function useAnimatedToastStack({
           ? current.filter((item) => item.id !== toast.id)
           : current
         const next = [...withoutSameId, toast]
-        return typeof limit === "number" ? next.slice(-limit) : next
+        return limit === undefined ? next : next.slice(-limit)
       })
       return toast.id
     },

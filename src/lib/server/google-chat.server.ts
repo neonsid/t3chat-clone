@@ -7,6 +7,14 @@ import {
   MAX_MODEL_OUTPUT_TOKENS,
 } from "@/lib/chat-models"
 
+type GoogleChatModelOptions = {
+  maxOutputTokens: number
+  thinkingConfig?: {
+    includeThoughts: true
+    thinkingLevel: (typeof GEMINI_THINKING_LEVELS)[keyof typeof GEMINI_THINKING_LEVELS]
+  }
+}
+
 const googleText = extendAdapter(createGeminiChat, [
   createModel("gemini-flash-latest", [
     "text",
@@ -50,23 +58,24 @@ export const streamGoogleChat: ChatExecutor = ({
       ? GEMINI_THINKING_LEVELS[providerReasoningEffort]
       : undefined
 
+  const modelOptions: GoogleChatModelOptions = {
+    maxOutputTokens: MAX_MODEL_OUTPUT_TOKENS,
+  }
+  if (thinkingLevel) {
+    modelOptions.thinkingConfig = {
+      includeThoughts: true,
+      thinkingLevel,
+    }
+  }
+
   return chat({
     adapter: googleText(
+      // SAFETY: adapterModelId is the Gemini catalog id stored on ChatModelRuntime.
       runtime.adapterModelId as Parameters<typeof googleText>[0],
       apiKey
     ),
     messages: [...messages],
-    modelOptions: {
-      maxOutputTokens: MAX_MODEL_OUTPUT_TOKENS,
-      ...(thinkingLevel
-        ? {
-            thinkingConfig: {
-              includeThoughts: true,
-              thinkingLevel,
-            },
-          }
-        : {}),
-    },
+    modelOptions,
     abortController,
   })
 }

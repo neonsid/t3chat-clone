@@ -21,7 +21,7 @@ export const SUGGESTION_CATEGORIES: ReadonlyArray<{
   { id: "learn", label: "Learn", icon: GraduationCapIcon },
 ]
 
-export const CHAT_SUGGESTIONS: Record<SuggestionCategory, string[]> = {
+export const CHAT_SUGGESTIONS = {
   create: [
     "Write a short story about a robot discovering music",
     "Help me outline a personal website",
@@ -46,7 +46,7 @@ export const CHAT_SUGGESTIONS: Record<SuggestionCategory, string[]> = {
     "Break down how HTTPS certificates work",
     "Give me a 10-minute intro to linear algebra",
   ],
-}
+} as const satisfies Record<SuggestionCategory, ReadonlyArray<string>>
 
 export const BOUNCING_DOT_INDICES = [0, 1, 2] as const
 

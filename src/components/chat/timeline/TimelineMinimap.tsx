@@ -12,6 +12,7 @@ import {
 import { TIMELINE_MINIMAP_MIN_ITEMS } from "@/components/chat/timeline/constants"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
 import { useMountEffect } from "@/hooks/useMountEffect"
+import { hasResizeObserver } from "@/lib/runtime-env"
 import { cn } from "@/lib/utils"
 
 type TimelineMinimapProps = {
@@ -55,9 +56,7 @@ function TimelineMinimapContent({
     measure()
     window.addEventListener("resize", measure)
     const observer =
-      container && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(measure)
-        : null
+      container && hasResizeObserver() ? new ResizeObserver(measure) : null
     if (container) observer?.observe(container)
 
     return () => {

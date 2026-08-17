@@ -70,20 +70,18 @@ export const ATTACHMENT_UNBOUND_TTL_MS = 24 * 60 * 60 * 1000
 export const ATTACHMENT_DELETE_BATCH_SIZE = 32
 export const ATTACHMENT_GC_BATCH_SIZE = 64
 
-export const MIME_TO_KIND: Record<AllowedAttachmentMimeType, AttachmentKind> = {
+export const MIME_TO_KIND = {
   "image/jpeg": "image",
   "image/png": "image",
   "image/gif": "image",
   "image/webp": "image",
   "application/pdf": "pdf",
-}
+} as const satisfies Record<AllowedAttachmentMimeType, AttachmentKind>
 
 export function isAllowedAttachmentMimeType(
   mimeType: string
 ): mimeType is AllowedAttachmentMimeType {
-  return (ALLOWED_ATTACHMENT_MIME_TYPES as ReadonlyArray<string>).includes(
-    mimeType
-  )
+  return ALLOWED_ATTACHMENT_MIME_TYPES.some((allowed) => allowed === mimeType)
 }
 
 export function extensionForMimeType(

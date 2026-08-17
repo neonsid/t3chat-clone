@@ -4,6 +4,13 @@ import { devtools } from "zustand/middleware"
 
 import { isChatModelId } from "@/lib/chat-models"
 import {
+  isJsonBoolean,
+  isJsonObject,
+  isJsonString,
+  parseJsonValue,
+  type JsonValue,
+} from "@/lib/json-value"
+import {
   DEFAULT_COLOR_THEME_ID,
   applyTheme,
   readColorSchemePreference,
@@ -38,19 +45,18 @@ type StoredGuestModelPreferences = {
   preferences: ModelPreferences
 }
 
-function sanitizeGuestPreferences(value: unknown): ModelPreferences {
-  if (!value || typeof value !== "object") return DEFAULT_MODEL_PREFERENCES
-  const candidate = value as Partial<ModelPreferences>
-  const selectedModelId = candidate.selectedModelId
-  if (!selectedModelId || !isChatModelId(selectedModelId)) {
+function sanitizeGuestPreferences(value: JsonValue): ModelPreferences {
+  if (!isJsonObject(value)) return DEFAULT_MODEL_PREFERENCES
+  const selectedModelId = value.selectedModelId
+  if (!isJsonString(selectedModelId) || !isChatModelId(selectedModelId)) {
     return DEFAULT_MODEL_PREFERENCES
   }
 
-  const favoriteModelIds = Array.isArray(candidate.favoriteModelIds)
-    ? [...new Set(candidate.favoriteModelIds)]
+  const favoriteModelIds = Array.isArray(value.favoriteModelIds)
+    ? [...new Set(value.favoriteModelIds)]
         .filter(
           (modelId): modelId is string =>
-            typeof modelId === "string" && isChatModelId(modelId)
+            isJsonString(modelId) && isChatModelId(modelId)
         )
         .slice(0, MAX_FAVORITE_MODELS)
     : [...DEFAULT_MODEL_PREFERENCES.favoriteModelIds]
@@ -58,10 +64,9 @@ function sanitizeGuestPreferences(value: unknown): ModelPreferences {
   return {
     selectedModelId,
     favoriteModelIds,
-    combineResults:
-      typeof candidate.combineResults === "boolean"
-        ? candidate.combineResults
-        : DEFAULT_MODEL_PREFERENCES.combineResults,
+    combineResults: isJsonBoolean(value.combineResults)
+      ? value.combineResults
+      : DEFAULT_MODEL_PREFERENCES.combineResults,
   }
 }
 
@@ -69,11 +74,14 @@ function readGuestPreferences(): ModelPreferences {
   try {
     const raw = window.localStorage.getItem(GUEST_MODEL_PREFERENCES_STORAGE_KEY)
     if (!raw) return DEFAULT_MODEL_PREFERENCES
-    const stored = JSON.parse(raw) as Partial<StoredGuestModelPreferences>
+    const stored = parseJsonValue(raw)
+    if (!isJsonObject(stored)) return DEFAULT_MODEL_PREFERENCES
     if (stored.version !== GUEST_MODEL_PREFERENCES_STORAGE_VERSION) {
       return DEFAULT_MODEL_PREFERENCES
     }
-    return sanitizeGuestPreferences(stored.preferences)
+    const preferences = stored.preferences
+    if (preferences === undefined) return DEFAULT_MODEL_PREFERENCES
+    return sanitizeGuestPreferences(preferences)
   } catch {
     return DEFAULT_MODEL_PREFERENCES
   }

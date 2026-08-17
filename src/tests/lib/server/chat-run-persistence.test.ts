@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 import type { StreamChunk } from "@tanstack/ai"
-import type { ConvexHttpClient } from "convex/browser"
 import { getFunctionName } from "convex/server"
 
-import type { Id } from "../../../../convex/_generated/dataModel"
-import { collectAndPersistStream } from "@/lib/server/chat-run-persistence.server"
+import { asThreadId } from "@/lib/convex-ids"
+import {
+  collectAndPersistStream,
+  type ChatRunConvexClient,
+} from "@/lib/server/chat-run-persistence.server"
 
 type FinishCall = {
   name: string
@@ -21,8 +23,17 @@ type FunctionReference = Parameters<typeof getFunctionName>[0]
 
 // Chunk types are an AG-UI string enum that @tanstack/ai does not re-export,
 // so literals need the cast even though the values match.
-function asStreamChunk(value: Record<string, unknown>) {
-  return value as unknown as StreamChunk
+function asStreamChunk(value: {
+  type: string
+  messageId?: string
+  role?: string
+  delta?: string
+  threadId?: string
+  runId?: string
+  usage?: { completionTokens: number }
+}): StreamChunk {
+  // SAFETY: AG-UI chunk type is a string enum @tanstack/ai does not re-export.
+  return value as StreamChunk
 }
 
 function textChunks(...deltas: string[]): StreamChunk[] {
@@ -52,7 +63,13 @@ function collect(
   onChunkConsumed?: (index: number) => void
 ) {
   const mutation =
-    vi.fn<(reference: FunctionReference, payload: FinishPayload) => void>()
+    vi.fn<
+      (reference: FunctionReference, payload: FinishPayload) => Promise<void>
+    >()
+  // SAFETY: persistence tests only exercise mutation(); the mock is not a ConvexHttpClient.
+  const convex: ChatRunConvexClient = {
+    mutation: mutation as ChatRunConvexClient["mutation"],
+  }
 
   const source = (async function* () {
     for (const [index, chunk] of chunks.entries()) {
@@ -63,8 +80,8 @@ function collect(
 
   const stream = collectAndPersistStream({
     stream: source,
-    convex: { mutation } as unknown as ConvexHttpClient,
-    threadId: "thread-1" as Id<"threads">,
+    convex,
+    threadId: asThreadId("thread-1"),
     runId: "run-1",
     completionSecret: "secret",
     modelId: "openai/gpt-5.6-luna",

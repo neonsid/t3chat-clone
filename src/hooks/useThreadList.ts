@@ -7,7 +7,7 @@ import {
 } from "convex/react"
 
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
+import { asThreadId } from "@/lib/convex-ids"
 import { toChatThread } from "@/lib/threads"
 
 const THREAD_PAGE_SIZE = 20
@@ -81,8 +81,8 @@ export function useThreadList(
       (pinnedDocuments !== undefined && recent.status !== "LoadingFirstPage"))
   )
 
-  const requireThreadId = useCallback((threadId: string): Id<"threads"> => {
-    return threadId as Id<"threads">
+  const requireThreadId = useCallback((threadId: string) => {
+    return asThreadId(threadId)
   }, [])
 
   const requireAuthentication = useCallback(() => {

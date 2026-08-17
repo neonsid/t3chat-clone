@@ -67,7 +67,7 @@ function useContextMenuContext(component: string) {
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
-  if (typeof ref === "function") {
+  if (ref instanceof Function) {
     ref(value)
   } else if (ref) {
     ref.current = value
@@ -108,7 +108,12 @@ function ContextMenuOpenLifecycle({
 }) {
   useMountEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
-      if (!contentRef.current?.contains(event.target as Node)) onDismiss()
+      if (
+        !contentRef.current?.contains(
+          event.target instanceof Node ? event.target : null
+        )
+      )
+        onDismiss()
     }
 
     window.addEventListener("pointerdown", onPointerDown)
@@ -431,7 +436,8 @@ export function ContextMenuContent({
   const moveFocus = (direction: 1 | -1) => {
     const items = getEnabledItems(context.contentRef.current)
     if (items.length === 0) return
-    const current = items.indexOf(document.activeElement as HTMLElement)
+    const active = document.activeElement
+    const current = active instanceof HTMLElement ? items.indexOf(active) : -1
     const next =
       current < 0 ? 0 : (current + direction + items.length) % items.length
     items[next]?.focus()

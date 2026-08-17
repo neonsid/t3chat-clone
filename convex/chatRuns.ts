@@ -301,13 +301,19 @@ export const start = authedMutation({
       !thread.hasMessages &&
       (thread.titleSource === "derived" || thread.titleSource === "pending")
 
-    await ctx.db.patch("threads", thread._id, {
-      ...(shouldGenerateTitle ? { titleSource: "pending" as const } : {}),
+    const threadPatch = {
       updatedAt: now,
-      hasMessages: true,
+      hasMessages: true as const,
       messageCount,
       nextSequence,
-    })
+    }
+    await ctx.db.patch(
+      "threads",
+      thread._id,
+      shouldGenerateTitle
+        ? { ...threadPatch, titleSource: "pending" as const }
+        : threadPatch
+    )
     await ctx.db.insert("chatRuns", {
       ownerId: ctx.viewerId,
       threadId: thread._id,

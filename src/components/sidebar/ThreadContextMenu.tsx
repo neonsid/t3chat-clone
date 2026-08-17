@@ -80,8 +80,8 @@ async function exportThread(
 
 async function shareThread(thread: ChatThread) {
   const url = new URL(`/chat/${thread.id}`, window.location.origin).toString()
-  const share = Reflect.get(navigator, "share")
-  if (typeof share === "function") {
+  const share = navigator.share
+  if (share instanceof Function) {
     await share.call(navigator, { title: thread.title, url })
     return
   }

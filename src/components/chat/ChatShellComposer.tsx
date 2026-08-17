@@ -8,6 +8,7 @@ import {
   CHAT_COMPOSER_PLACEHOLDERS,
 } from "@/components/chat/composer/constants"
 import { rememberComposerPreviews } from "@/lib/attachment-preview-cache"
+import { hasResizeObserver } from "@/lib/runtime-env"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import {
   composerCanSend,
@@ -96,10 +97,9 @@ export function ChatShellComposer({
     }
 
     updateHeight()
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateHeight)
+    const observer = hasResizeObserver()
+      ? new ResizeObserver(updateHeight)
+      : null
     observer?.observe(element)
     window.addEventListener("resize", updateHeight)
 

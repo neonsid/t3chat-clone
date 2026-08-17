@@ -24,9 +24,13 @@ import {
   TOOLTIP_TRANSFORM_ORIGIN,
   TOOLTIP_WARM_WINDOW_MS,
 } from "@/components/shared/motion/constants"
-import type { MotionSide } from "@/components/shared/motion/constants"
+import type {
+  MotionSide,
+  TooltipOffset,
+} from "@/components/shared/motion/constants"
 import { useHoverCapable } from "@/hooks/useHoverCapable"
 import { useWindowEvent } from "@/hooks/useWindowEvent"
+import { hasDocument } from "@/lib/runtime-env"
 import { cn } from "@/lib/utils"
 
 export interface TooltipProps {
@@ -41,7 +45,7 @@ export interface TooltipProps {
 }
 
 function buildVariants(side: MotionSide): Variants {
-  const o = TOOLTIP_OFFSET_FROM[side]
+  const o: TooltipOffset = TOOLTIP_OFFSET_FROM[side]
   return {
     initial: {
       opacity: 0,
@@ -111,12 +115,12 @@ export function Tooltip({
     const r = el.getBoundingClientRect()
     const cx = r.left + r.width / 2
     const cy = r.top + r.height / 2
-    const point: Record<MotionSide, { top: number; left: number }> = {
+    const point = {
       top: { top: r.top - TOOLTIP_GAP_PX, left: cx },
       bottom: { top: r.bottom + TOOLTIP_GAP_PX, left: cx },
       left: { top: cy, left: r.left - TOOLTIP_GAP_PX },
       right: { top: cy, left: r.right + TOOLTIP_GAP_PX },
-    }
+    } satisfies Record<MotionSide, { top: number; left: number }>
     setCoords(point[side])
   }, [side])
 
@@ -149,16 +153,22 @@ export function Tooltip({
 
   if (!isValidElement(children)) return children
 
-  const trigger = cloneElement(
-    children as ReactElement<Record<string, unknown>>,
-    {
-      onMouseEnter: show,
-      onMouseLeave: hide,
-      onFocus: show,
-      onBlur: hide,
-      "aria-describedby": id,
-    }
-  )
+  type TooltipTriggerProps = {
+    onMouseEnter?: () => void
+    onMouseLeave?: () => void
+    onFocus?: () => void
+    onBlur?: () => void
+    "aria-describedby"?: string
+  }
+
+  // SAFETY: isValidElement already confirmed a single element; cloneElement needs the trigger prop bag.
+  const trigger = cloneElement(children as ReactElement<TooltipTriggerProps>, {
+    onMouseEnter: show,
+    onMouseLeave: hide,
+    onFocus: show,
+    onBlur: hide,
+    "aria-describedby": id,
+  })
   const tooltip = (
     <AnimatePresence>
       {open && coords ? (
@@ -196,9 +206,7 @@ export function Tooltip({
       >
         {trigger}
       </span>
-      {typeof document !== "undefined"
-        ? createPortal(tooltip, document.body)
-        : null}
+      {hasDocument() ? createPortal(tooltip, document.body) : null}
     </>
   )
 }
