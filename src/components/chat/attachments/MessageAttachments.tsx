@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useAction } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
+import { AttachmentFileChip } from "@/components/chat/attachments/AttachmentFileChip"
 import { AttachmentLightbox } from "@/components/chat/attachments/AttachmentLightbox"
 import { AttachmentThumbnail } from "@/components/chat/attachments/AttachmentThumbnail"
 import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
@@ -47,22 +48,25 @@ function RemoteAttachmentThumb({
     }
   })
 
+  if (attachment.kind === "pdf") {
+    return (
+      <AttachmentFileChip
+        filename={attachment.filename}
+        onOpen={
+          url
+            ? () => window.open(url, "_blank", "noopener,noreferrer")
+            : undefined
+        }
+      />
+    )
+  }
+
   return (
     <AttachmentThumbnail
       filename={attachment.filename}
       kind={attachment.kind}
       src={url}
-      onOpen={
-        url
-          ? () => {
-              if (attachment.kind === "pdf") {
-                window.open(url, "_blank", "noopener,noreferrer")
-                return
-              }
-              onOpen(url)
-            }
-          : undefined
-      }
+      onOpen={url ? () => onOpen(url) : undefined}
     />
   )
 }

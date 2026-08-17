@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { AttachmentFileChip } from "@/components/chat/attachments/AttachmentFileChip"
 import { AttachmentLightbox } from "@/components/chat/attachments/AttachmentLightbox"
 import { AttachmentThumbnail } from "@/components/chat/attachments/AttachmentThumbnail"
 import type { ComposerAttachment } from "@/stores/types"
@@ -34,53 +35,75 @@ export function ComposerAttachmentChips({
 
   return (
     <>
-      <ul className="mb-3 flex w-fit max-w-full flex-wrap gap-2">
+      <ul className="mb-2 flex w-fit max-w-full flex-wrap gap-2 overflow-visible">
         {attachments.map((attachment) => {
           const previewUrl = attachment.localPreviewUrl
           const canOpen = attachment.kind === "image" && Boolean(previewUrl)
 
+          const progress =
+            attachment.status === "processing"
+              ? 1
+              : attachment.status === "preparing" ||
+                  attachment.status === "uploading"
+                ? attachment.progress
+                : undefined
+          const indeterminate =
+            attachment.status === "preparing" ||
+            (attachment.status === "uploading" && attachment.progress <= 0)
+          const onRemoveChip = () => {
+            if (viewer?.localId === attachment.localId) setViewer(null)
+            onRemove(attachment.localId)
+          }
+
           return (
-            <li key={attachment.localId}>
-              <AttachmentThumbnail
-                filename={attachment.filename}
-                kind={attachment.kind}
-                src={previewUrl}
-                statusLabel={composerStatusLabel(attachment)}
-                failed={attachment.status === "failed"}
-                showPercent={
-                  attachment.kind === "image" &&
-                  attachment.status !== "ready" &&
-                  attachment.status !== "failed"
-                }
-                progress={
-                  attachment.status === "processing"
-                    ? 1
-                    : attachment.status === "preparing" ||
-                        attachment.status === "uploading"
-                      ? attachment.progress
+            <li key={attachment.localId} className="max-w-full min-w-0">
+              {attachment.kind === "pdf" ? (
+                <AttachmentFileChip
+                  filename={attachment.filename}
+                  statusLabel={composerStatusLabel(attachment)}
+                  failed={attachment.status === "failed"}
+                  progress={progress}
+                  indeterminate={indeterminate}
+                  onOpen={
+                    previewUrl
+                      ? () =>
+                          window.open(
+                            previewUrl,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
                       : undefined
-                }
-                indeterminate={
-                  attachment.status === "preparing" ||
-                  (attachment.status === "uploading" &&
-                    attachment.progress <= 0)
-                }
-                onOpen={
-                  canOpen && previewUrl
-                    ? () =>
-                        setViewer({
-                          localId: attachment.localId,
-                          filename: attachment.filename,
-                          url: previewUrl,
-                        })
-                    : undefined
-                }
-                onRemove={() => {
-                  if (viewer?.localId === attachment.localId) setViewer(null)
-                  onRemove(attachment.localId)
-                }}
-                removeDisabled={disabled}
-              />
+                  }
+                  onRemove={onRemoveChip}
+                  removeDisabled={disabled}
+                />
+              ) : (
+                <AttachmentThumbnail
+                  filename={attachment.filename}
+                  kind={attachment.kind}
+                  src={previewUrl}
+                  statusLabel={composerStatusLabel(attachment)}
+                  failed={attachment.status === "failed"}
+                  showPercent={
+                    attachment.status !== "ready" &&
+                    attachment.status !== "failed"
+                  }
+                  progress={progress}
+                  indeterminate={indeterminate}
+                  onOpen={
+                    canOpen && previewUrl
+                      ? () =>
+                          setViewer({
+                            localId: attachment.localId,
+                            filename: attachment.filename,
+                            url: previewUrl,
+                          })
+                      : undefined
+                  }
+                  onRemove={onRemoveChip}
+                  removeDisabled={disabled}
+                />
+              )}
             </li>
           )
         })}

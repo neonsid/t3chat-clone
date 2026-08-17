@@ -161,7 +161,7 @@ export function ReasoningEffortSelect({
           aria-controls={listboxId}
           onClick={() => setOpen((current) => !current)}
           onKeyDown={handleTriggerKeyDown}
-          className="inline-flex items-center gap-1.5 rounded-full border border-foreground/15 bg-accent px-2.5 py-1.5 text-sm text-foreground transition-colors hover:bg-accent/80 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-foreground/15 bg-accent px-2.5 py-1.5 text-sm text-foreground transition-colors hover:bg-accent/80 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
         >
           <ReasoningEffortIcon option={selectedOption} className="size-4" />
           <span>{selectedOption.label}</span>
@@ -228,7 +228,7 @@ export function ReasoningEffortSelect({
                       onFocus={() => setFocusedIndex(index)}
                       onClick={() => selectOption(option)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                        "flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                         selected && "bg-accent/70"
                       )}
                     >

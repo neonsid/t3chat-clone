@@ -5,6 +5,7 @@ import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import {
   ATTACHMENT_UPLOAD_TOAST,
+  ATTACHMENT_UPLOAD_TOAST_GAP_FROM_ATTACH,
   ATTACHMENT_UPLOAD_TOAST_ID,
 } from "@/components/chat/attachments/constants"
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
@@ -142,25 +143,13 @@ export const ChatComposer = memo(function ChatComposer({
         className
       )}
     >
-      <AnimatedToastStack
-        toasts={toasts.toasts}
-        onDismiss={toasts.dismissToast}
-        placement="fixed"
-        position="bottom-right"
-        portal
-        maxVisible={1}
-        className="!bottom-32 max-sm:!bottom-36"
-        classNames={{
-          surface: "rounded-xl p-2.5 shadow-lg",
-        }}
-      />
-      <div className="chat-composer-glass-host relative z-10 w-full rounded-[18px]">
+      <div className="chat-composer-glass-host relative z-10 w-full overflow-visible rounded-[18px]">
         <form
           className="mx-auto w-full max-w-3xl min-w-0"
           data-chat-composer-form="true"
           onSubmit={handleSubmit}
         >
-          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+          <div className="px-4 pt-3 sm:px-5 sm:pt-4">
             <ComposerAttachmentChips
               attachments={attachments}
               disabled={disabled || isLoading}
@@ -169,7 +158,7 @@ export const ChatComposer = memo(function ChatComposer({
                   (attachment) => attachment.localId === localId
                 )
                 void removeAttachment(localId)
-                if (removed?.status === "ready" && removed.kind === "pdf") {
+                if (removed?.status === "ready") {
                   toasts.showToast({
                     id: ATTACHMENT_UPLOAD_TOAST_ID,
                     title: ATTACHMENT_UPLOAD_TOAST.deleted,
@@ -197,6 +186,12 @@ export const ChatComposer = memo(function ChatComposer({
             onStop={onStop}
             onAttachClick={() => fileInputRef.current?.click()}
             attachDisabled={disabled || isLoading}
+            toast={
+              <AnimatedToastStack
+                toasts={toasts.toasts}
+                onDismiss={toasts.dismissToast}
+              />
+            }
           />
           <input
             ref={fileInputRef}
@@ -269,6 +264,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
   onStop,
   onAttachClick,
   attachDisabled,
+  toast,
 }: {
   threadStateKey: string
   effectiveReasoningEffort: ReasoningEffort
@@ -278,73 +274,87 @@ const ComposerToolbar = memo(function ComposerToolbar({
   onStop?: () => void
   onAttachClick: () => void
   attachDisabled: boolean
+  toast: ReactNode
 }) {
   const composer = useThreadComposerToolbarControls(threadStateKey)
   const { isLoading: modelPreferencesLoading } = useModelPreferences()
 
   return (
-    <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
-      <ModelPicker
-        onSelectModel={(modelId) => {
-          if (!isChatModelId(modelId)) return
-          composer.setReasoningEffort(
-            threadStateKey,
-            CHAT_MODEL_CONFIG[modelId].defaultReasoningEffort
-          )
-        }}
-      />
-
-      {!modelPreferencesLoading && supportedReasoningEfforts.length > 1 ? (
-        <ReasoningEffortSelect
-          value={effectiveReasoningEffort}
-          supportedEfforts={supportedReasoningEfforts}
-          onValueChange={(reasoningEffort) =>
-            composer.setReasoningEffort(threadStateKey, reasoningEffort)
-          }
-          disabled={disabled || isLoading}
+    <div className="flex min-w-0 items-center px-3 pb-7 sm:px-4 sm:pb-8">
+      <div className="flex min-w-0 items-center gap-2">
+        <ModelPicker
+          onSelectModel={(modelId) => {
+            if (!isChatModelId(modelId)) return
+            composer.setReasoningEffort(
+              threadStateKey,
+              CHAT_MODEL_CONFIG[modelId].defaultReasoningEffort
+            )
+          }}
         />
-      ) : null}
 
-      <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        <ToolbarToggle
-          pressed={composer.searchEnabled}
-          onPressedChange={(searchEnabled) =>
-            composer.setSearchEnabled(threadStateKey, searchEnabled)
-          }
-          label="Search"
-          icon={<GlobeIcon className="size-3.5" />}
-          disabled={modelPreferencesLoading || disabled}
-          tooltip={
-            composer.searchEnabled ? "Disable web search" : "Search the web"
-          }
-        />
-        <Tooltip content="Attach files">
-          <span
-            className={cn(
-              "inline-flex",
-              (attachDisabled || modelPreferencesLoading) && "cursor-not-allowed"
-            )}
-          >
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-              aria-label="Attach"
-              disabled={attachDisabled || modelPreferencesLoading}
-              onClick={onAttachClick}
+        {!modelPreferencesLoading && supportedReasoningEfforts.length > 1 ? (
+          <ReasoningEffortSelect
+            value={effectiveReasoningEffort}
+            supportedEfforts={supportedReasoningEfforts}
+            onValueChange={(reasoningEffort) =>
+              composer.setReasoningEffort(threadStateKey, reasoningEffort)
+            }
+            disabled={disabled || isLoading}
+          />
+        ) : null}
+
+        <div className="flex min-w-0 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <ToolbarToggle
+            pressed={composer.searchEnabled}
+            onPressedChange={(searchEnabled) =>
+              composer.setSearchEnabled(threadStateKey, searchEnabled)
+            }
+            label="Search"
+            icon={<GlobeIcon className="size-3.5" />}
+            disabled={modelPreferencesLoading || disabled}
+            tooltip={
+              composer.searchEnabled ? "Disable web search" : "Search the web"
+            }
+          />
+          <Tooltip content="Attach files">
+            <span
+              className={cn(
+                "inline-flex",
+                (attachDisabled || modelPreferencesLoading) &&
+                  "cursor-not-allowed"
+              )}
             >
-              <PaperclipIcon className="size-3.5" />
-              Attach
-            </button>
-          </span>
-        </Tooltip>
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                aria-label="Attach"
+                disabled={attachDisabled || modelPreferencesLoading}
+                onClick={onAttachClick}
+              >
+                <PaperclipIcon className="size-3.5" />
+                Attach
+              </button>
+            </span>
+          </Tooltip>
+        </div>
       </div>
 
-      <ComposerSendButton
-        threadStateKey={threadStateKey}
-        isLoading={isLoading}
-        disabled={disabled}
-        onStop={onStop}
-      />
+      <div
+        className={cn(
+          "relative min-w-0 flex-1 self-stretch overflow-visible",
+          ATTACHMENT_UPLOAD_TOAST_GAP_FROM_ATTACH
+        )}
+      >
+        {toast}
+        <div className="flex h-full items-center justify-end">
+          <ComposerSendButton
+            threadStateKey={threadStateKey}
+            isLoading={isLoading}
+            disabled={disabled}
+            onStop={onStop}
+          />
+        </div>
+      </div>
     </div>
   )
 })
@@ -425,7 +435,7 @@ function ToolbarToggle({
         disabled={disabled}
         onClick={() => onPressedChange(!pressed)}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50",
           pressed
             ? "border-foreground/15 bg-accent text-foreground"
             : "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"

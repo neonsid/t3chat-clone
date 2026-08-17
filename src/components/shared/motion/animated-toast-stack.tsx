@@ -1,55 +1,24 @@
 "use client"
-// beui.dev/components/motion/animated-toast-stack
 
-import {
-  AlertCircle,
-  Bell,
-  Check,
-  Info,
-  LoaderCircle,
-  X,
-  type LucideIcon,
-} from "lucide-react"
+import { CircleAlert, CircleCheck, LoaderCircle, X } from "lucide-react"
 import {
   AnimatePresence,
   motion,
   useReducedMotion,
   type Transition,
 } from "motion/react"
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react"
-import { createPortal } from "react-dom"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import { EASE_OUT } from "@/lib/ease"
 import { cn } from "@/lib/utils"
 
 export type ToastStatus = "neutral" | "info" | "loading" | "success" | "error"
-export type ToastPosition =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right"
-
-export type AnimatedToastAction = {
-  label: ReactNode
-  onClick: (toast: AnimatedToast) => void
-}
 
 export type AnimatedToast = {
   id: string
   title: ReactNode
-  description?: ReactNode
   status?: ToastStatus
-  icon?: ReactNode
-  action?: AnimatedToastAction
   duration?: number
   dismissible?: boolean
   createdAt?: number
@@ -59,32 +28,9 @@ export type ToastInput = Omit<AnimatedToast, "id" | "createdAt"> & {
   id?: string
 }
 
-export type ToastClassNames = {
-  root?: string
-  item?: string
-  surface?: string
-  iconWrap?: string
-  content?: string
-  title?: string
-  description?: string
-  action?: string
-  close?: string
-  progress?: string
-}
-
 export interface AnimatedToastStackProps {
   toasts: AnimatedToast[]
   onDismiss?: (id: string) => void
-  position?: ToastPosition
-  placement?: "static" | "fixed" | "absolute"
-  fixed?: boolean
-  portal?: boolean
-  portalRoot?: Element | null
-  maxVisible?: number
-  className?: string
-  classNames?: ToastClassNames
-  icons?: Partial<Record<ToastStatus, ReactNode>>
-  renderToast?: (toast: AnimatedToast) => ReactNode
 }
 
 export interface UseAnimatedToastStackOptions {
@@ -100,35 +46,15 @@ const STACK_SPRING: Transition = {
   mass: 0.75,
 }
 
-const CONTENT_TRANSITION = {
-  duration: 0.28,
-  ease: EASE_OUT,
-} as const
+const TOAST_HEIGHT_CLASS = "h-10"
 
-const STATUS_ICON = {
-  neutral: Bell,
-  info: Info,
-  loading: LoaderCircle,
-  success: Check,
-  error: AlertCircle,
-} as const satisfies Record<ToastStatus, LucideIcon>
-
-const STATUS_CLASS = {
-  neutral: "text-muted-foreground bg-primary/[0.05]",
-  info: "text-primary bg-primary/10",
-  loading: "text-primary bg-primary/10",
-  success: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400",
-  error: "text-destructive bg-destructive/10",
+const TOAST_ICON_TOOLTIP = {
+  loading: "Uploading",
+  success: "Success",
+  error: "Failed",
+  info: "Info",
+  neutral: "Notice",
 } as const satisfies Record<ToastStatus, string>
-
-const POSITION_CLASS = {
-  "top-left": "left-4 top-4",
-  "top-center": "left-1/2 top-4 -translate-x-1/2",
-  "top-right": "right-4 top-4",
-  "bottom-left": "bottom-6 left-4",
-  "bottom-center": "bottom-6 left-1/2 -translate-x-1/2",
-  "bottom-right": "bottom-6 right-4",
-} as const satisfies Record<ToastPosition, string>
 
 let idSeed = 0
 
@@ -143,6 +69,17 @@ function createToast(
     id: input.id ?? `toast-${Date.now()}-${idSeed++}`,
     createdAt: Date.now(),
   }
+}
+
+function StatusIcon({ status }: { status: ToastStatus }) {
+  const className = "size-4"
+  if (status === "loading") {
+    return <LoaderCircle className={`${className} animate-spin`} />
+  }
+  if (status === "error") {
+    return <CircleAlert className={className} />
+  }
+  return <CircleCheck className={className} />
 }
 
 export function useAnimatedToastStack({
@@ -267,253 +204,79 @@ export function useAnimatedToastStack({
 export function AnimatedToastStack({
   toasts,
   onDismiss,
-  position = "bottom-right",
-  placement,
-  fixed = false,
-  portal,
-  portalRoot,
-  maxVisible = 4,
-  className,
-  classNames,
-  icons,
-  renderToast,
 }: AnimatedToastStackProps) {
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null)
-  const visibleToasts = toasts.slice(-maxVisible)
-  const isBottom = position.startsWith("bottom")
-  const resolvedPlacement = placement ?? (fixed ? "fixed" : "static")
-  const shouldPortal = portal ?? resolvedPlacement === "fixed"
+  const visibleToast = toasts.at(-1)
 
-  useEffect(() => {
-    setPortalTarget(shouldPortal ? (portalRoot ?? document.body) : null)
-  }, [portalRoot, shouldPortal])
-
-  const stack = (
+  return (
     <ol
       aria-live="polite"
       aria-atomic="false"
-      className={cn(
-        "pointer-events-none flex w-max max-w-[min(24rem,calc(100vw-2rem))] gap-2",
-        isBottom ? "flex-col-reverse" : "flex-col",
-        position.endsWith("right") && "items-end",
-        position.endsWith("left") && "items-start",
-        position.endsWith("center") && "items-center",
-        resolvedPlacement === "fixed" && "fixed z-[90]",
-        resolvedPlacement === "absolute" && "absolute z-20",
-        resolvedPlacement !== "static" && POSITION_CLASS[position],
-        classNames?.root,
-        className
-      )}
+      className="pointer-events-none absolute right-10 bottom-5 left-0 z-10 mb-0 w-auto translate-y-2 sm:right-[-2.5rem]"
     >
-      <AnimatePresence initial={false} mode="popLayout">
-        {visibleToasts.map((toast, index) => (
+      <AnimatePresence initial={false}>
+        {visibleToast ? (
           <ToastItem
-            key={toast.id}
-            toast={toast}
-            index={index}
+            key={visibleToast.id}
+            toast={visibleToast}
             onDismiss={onDismiss}
-            classNames={classNames}
-            icons={icons}
-            renderToast={renderToast}
           />
-        ))}
+        ) : null}
       </AnimatePresence>
     </ol>
   )
-
-  if (shouldPortal && !portalTarget) {
-    return null
-  }
-
-  if (shouldPortal && portalTarget) {
-    return createPortal(stack, portalTarget)
-  }
-
-  return stack
 }
 
 const ToastItem = memo(function ToastItem({
   toast,
-  index,
   onDismiss,
-  classNames,
-  icons,
-  renderToast,
 }: {
   toast: AnimatedToast
-  index: number
   onDismiss?: (id: string) => void
-  classNames?: ToastClassNames
-  icons?: Partial<Record<ToastStatus, ReactNode>>
-  renderToast?: (toast: AnimatedToast) => ReactNode
 }) {
   const reduce = useReducedMotion()
   const status = toast.status ?? "neutral"
-  const Icon = STATUS_ICON[status]
-  const iconNode = icons?.[status] ?? toast.icon ?? (
-    <Icon className="h-3.5 w-3.5" />
-  )
   const canDismiss = toast.dismissible !== false && Boolean(onDismiss)
 
   return (
     <motion.li
-      layout
-      initial={
-        reduce
-          ? { opacity: 0 }
-          : { opacity: 0, y: 22, scale: 0.96, filter: "blur(10px)" }
-      }
-      animate={
-        reduce
-          ? { opacity: 1 }
-          : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
-      }
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
       exit={
         reduce
           ? { opacity: 0 }
           : {
               opacity: 0,
-              x: 32,
-              scale: 0.96,
-              filter: "blur(8px)",
+              x: 24,
               transition: { duration: 0.18, ease: EASE_OUT },
             }
       }
       transition={STACK_SPRING}
-      drag={canDismiss && !reduce ? "x" : false}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.18}
-      onDragEnd={(_, info) => {
-        if (!canDismiss || !onDismiss) return
-        if (Math.abs(info.offset.x) > 72 || Math.abs(info.velocity.x) > 520) {
-          onDismiss(toast.id)
-        }
-      }}
-      className={cn(
-        "pointer-events-auto relative will-change-transform",
-        classNames?.item
-      )}
-      style={{ zIndex: 20 - index }}
+      className={cn("pointer-events-auto w-full", TOAST_HEIGHT_CLASS)}
     >
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur-xl",
-          classNames?.surface
+          "flex w-full items-center gap-2.5 rounded-[8px] border border-border bg-card px-4 shadow-lg",
+          TOAST_HEIGHT_CLASS
         )}
       >
-        {renderToast ? (
-          renderToast(toast)
-        ) : (
-          <div className="flex items-start gap-3">
-            <motion.span
-              layout
-              className={cn(
-                "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                STATUS_CLASS[status],
-                classNames?.iconWrap
-              )}
-            >
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={status}
-                  initial={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: 8, scale: 0.8, filter: "blur(6px)" }
-                  }
-                  animate={
-                    reduce
-                      ? { opacity: 1 }
-                      : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
-                  }
-                  exit={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: -8, scale: 0.9, filter: "blur(6px)" }
-                  }
-                  transition={CONTENT_TRANSITION}
-                  className="inline-flex"
-                >
-                  {status === "loading" ? (
-                    <span className="inline-flex animate-spin">{iconNode}</span>
-                  ) : (
-                    iconNode
-                  )}
-                </motion.span>
-              </AnimatePresence>
-            </motion.span>
-
-            <div className={cn("min-w-0 flex-1", classNames?.content)}>
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.div
-                  key={`${toast.id}-${status}-${String(toast.title)}`}
-                  initial={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: 8, filter: "blur(6px)" }
-                  }
-                  animate={
-                    reduce
-                      ? { opacity: 1 }
-                      : { opacity: 1, y: 0, filter: "blur(0px)" }
-                  }
-                  exit={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: -8, filter: "blur(6px)" }
-                  }
-                  transition={CONTENT_TRANSITION}
-                >
-                  <p
-                    className={cn(
-                      "truncate text-sm leading-5 font-medium text-foreground",
-                      classNames?.title
-                    )}
-                  >
-                    {toast.title}
-                  </p>
-                  {toast.description ? (
-                    <p
-                      className={cn(
-                        "mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground",
-                        classNames?.description
-                      )}
-                    >
-                      {toast.description}
-                    </p>
-                  ) : null}
-                </motion.div>
-              </AnimatePresence>
-
-              {toast.action ? (
-                <button
-                  type="button"
-                  onClick={() => toast.action?.onClick(toast)}
-                  className={cn(
-                    "mt-2 inline-flex h-7 items-center rounded-full bg-primary/[0.06] px-3 text-xs font-medium text-foreground transition-colors hover:bg-primary/[0.1]",
-                    classNames?.action
-                  )}
-                >
-                  {toast.action.label}
-                </button>
-              ) : null}
-            </div>
-
-            {canDismiss ? (
-              <button
-                type="button"
-                onClick={() => onDismiss?.(toast.id)}
-                aria-label="Dismiss toast"
-                className={cn(
-                  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/[0.06] hover:text-foreground",
-                  classNames?.close
-                )}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-          </div>
-        )}
+        <Tooltip content={TOAST_ICON_TOOLTIP[status]}>
+          <span className="inline-flex size-4 shrink-0 items-center justify-center text-foreground">
+            <StatusIcon status={status} />
+          </span>
+        </Tooltip>
+        <p className="min-w-0 flex-1 truncate text-sm leading-none font-medium text-foreground">
+          {toast.title}
+        </p>
+        {canDismiss ? (
+          <button
+            type="button"
+            onClick={() => onDismiss?.(toast.id)}
+            aria-label="Dismiss toast"
+            className="inline-flex size-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
       </div>
     </motion.li>
   )
