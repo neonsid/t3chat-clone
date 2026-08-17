@@ -1,14 +1,12 @@
+import { hasWindow } from "@/lib/runtime-env"
+
 export const SIGN_IN_PATH = "/sign-in"
 export const SSO_CALLBACK_PATH = "/sso-callback"
 export const DEFAULT_AUTH_REDIRECT = "/"
 export const AUTH_REDIRECT_STORAGE_KEY = "t3chat.auth.redirect"
 
-export function getSafeAuthRedirect(value: unknown) {
-  if (
-    typeof value !== "string" ||
-    !value.startsWith("/") ||
-    value.startsWith("//")
-  ) {
+export function getSafeAuthRedirect(value: string | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return DEFAULT_AUTH_REDIRECT
   }
 
@@ -24,14 +22,14 @@ export function getSafeAuthRedirect(value: unknown) {
 }
 
 export function rememberAuthRedirect(redirectUrl: string) {
-  if (typeof window === "undefined") return
+  if (!hasWindow()) return
   window.sessionStorage.setItem(AUTH_REDIRECT_STORAGE_KEY, redirectUrl)
 }
 
 export function consumeAuthRedirect() {
-  if (typeof window === "undefined") return DEFAULT_AUTH_REDIRECT
+  if (!hasWindow()) return DEFAULT_AUTH_REDIRECT
 
   const stored = window.sessionStorage.getItem(AUTH_REDIRECT_STORAGE_KEY)
   window.sessionStorage.removeItem(AUTH_REDIRECT_STORAGE_KEY)
-  return getSafeAuthRedirect(stored)
+  return getSafeAuthRedirect(stored ?? undefined)
 }

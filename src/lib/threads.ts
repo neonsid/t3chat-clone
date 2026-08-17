@@ -190,7 +190,10 @@ export function createMessageProjectionCache(): MessageProjectionCache {
   let messageCache = new Map<string, UIMessage>()
   let statsCache = new Map<string, AssistantGenerationStats>()
   let lastMessages: UIMessage[] = []
-  let lastStats: Record<string, AssistantGenerationStats> = {}
+  // SAFETY: accumulator starts empty and is filled only with projected generation stats.
+  let lastStats = {} as {
+    [messageId: string]: AssistantGenerationStats
+  }
   let lastStoppedIds: ReadonlySet<string> = new Set()
 
   return {
@@ -215,7 +218,8 @@ export function createMessageProjectionCache(): MessageProjectionCache {
 
     generationStats(documents) {
       const nextCache = new Map<string, AssistantGenerationStats>()
-      const next: Record<string, AssistantGenerationStats> = {}
+      // SAFETY: accumulator starts empty and is filled only with projected generation stats.
+      const next = {} as { [messageId: string]: AssistantGenerationStats }
       for (const document of documents) {
         const projected = toAssistantGenerationStats(document)
         if (!projected) continue

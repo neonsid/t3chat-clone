@@ -4,11 +4,8 @@ import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 export const REASONING_EFFORTS = ["instant", "low", "medium", "high"] as const
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
 
-export function isReasoningEffort(value: unknown): value is ReasoningEffort {
-  return (
-    typeof value === "string" &&
-    REASONING_EFFORTS.some((effort) => effort === value)
-  )
+export function isReasoningEffort(value: string): value is ReasoningEffort {
+  return REASONING_EFFORTS.some((effort) => effort === value)
 }
 export type ProviderReasoningEffort =
   "none" | "minimal" | Exclude<ReasoningEffort, "instant">
@@ -237,6 +234,7 @@ function reasoningProfileFor(
   }
 }
 
+// SAFETY: Object.fromEntries erases the model-id key union; keys are exactly the adapter maps.
 const GOOGLE_CHAT_MODEL_CONFIG = Object.fromEntries(
   Object.entries(GOOGLE_ADAPTER_MODEL_IDS).map(([modelId, adapterModelId]) => [
     modelId,
@@ -245,8 +243,9 @@ const GOOGLE_CHAT_MODEL_CONFIG = Object.fromEntries(
       ...reasoningProfileFor(modelId, "minimal"),
     },
   ])
-) as Record<keyof typeof GOOGLE_ADAPTER_MODEL_IDS, ChatModelConfig>
+) as { [K in keyof typeof GOOGLE_ADAPTER_MODEL_IDS]: ChatModelConfig }
 
+// SAFETY: Object.fromEntries erases the model-id key union; keys are exactly OPENROUTER_ADAPTER_MODELS.
 const OPENROUTER_CHAT_MODEL_CONFIG = Object.fromEntries(
   Object.entries(OPENROUTER_ADAPTER_MODELS).map(([modelId, runtime]) => [
     modelId,
@@ -255,18 +254,17 @@ const OPENROUTER_CHAT_MODEL_CONFIG = Object.fromEntries(
       ...reasoningProfileFor(modelId, "none"),
     },
   ])
-) as Record<keyof typeof OPENROUTER_ADAPTER_MODELS, ChatModelConfig>
+) as { [K in keyof typeof OPENROUTER_ADAPTER_MODELS]: ChatModelConfig }
 
 /**
  * Browser-safe executable model registry. Server-only adapter instances and
  * API keys live in src/lib/server/chat-model-executors.server.ts.
  */
-export const CHAT_MODEL_CONFIG: Readonly<Record<ChatModelId, ChatModelConfig>> =
-  {
-    ...OPENAI_CHAT_MODEL_CONFIG,
-    ...GOOGLE_CHAT_MODEL_CONFIG,
-    ...OPENROUTER_CHAT_MODEL_CONFIG,
-  }
+export const CHAT_MODEL_CONFIG = {
+  ...OPENAI_CHAT_MODEL_CONFIG,
+  ...GOOGLE_CHAT_MODEL_CONFIG,
+  ...OPENROUTER_CHAT_MODEL_CONFIG,
+} satisfies { [K in ChatModelId]: ChatModelConfig }
 
 const chatModelIds = new Set<string>(Object.keys(CHAT_MODEL_CONFIG))
 

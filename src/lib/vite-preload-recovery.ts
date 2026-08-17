@@ -1,9 +1,10 @@
+import { hasWindow } from "@/lib/runtime-env"
+
 const RELOAD_GUARD_KEY = "vite-preload-recovery"
 
 let installed = false
 
-function isChunkLoadFailure(error: unknown) {
-  if (!(error instanceof Error)) return false
+function isChunkLoadFailure(error: Error) {
   return (
     error.message.includes("Failed to fetch dynamically imported module") ||
     error.message.includes("Importing a module script failed") ||
@@ -12,7 +13,7 @@ function isChunkLoadFailure(error: unknown) {
 }
 
 function reloadOnce() {
-  if (typeof window === "undefined") return
+  if (!hasWindow()) return
   if (sessionStorage.getItem(RELOAD_GUARD_KEY) === "1") return
   sessionStorage.setItem(RELOAD_GUARD_KEY, "1")
   window.location.reload()
@@ -20,7 +21,7 @@ function reloadOnce() {
 
 /** Recover from stale Vite/dep-optimized chunks (common after HMR or redeploy). */
 export function installVitePreloadRecovery() {
-  if (typeof window === "undefined" || installed) return
+  if (!hasWindow() || installed) return
   installed = true
 
   window.addEventListener("vite:preloadError", (event) => {
@@ -29,7 +30,9 @@ export function installVitePreloadRecovery() {
   })
 
   window.addEventListener("unhandledrejection", (event) => {
-    if (!isChunkLoadFailure(event.reason)) return
+    if (!(event.reason instanceof Error) || !isChunkLoadFailure(event.reason)) {
+      return
+    }
     event.preventDefault()
     reloadOnce()
   })

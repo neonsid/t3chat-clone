@@ -12,7 +12,7 @@ import type { UIMessage } from "@tanstack/ai-react"
 import { useMutation, useQuery } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
-import type { Id } from "../../../../convex/_generated/dataModel"
+import { asThreadId } from "@/lib/convex-ids"
 
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
@@ -211,7 +211,7 @@ export function ChatThreadView({
   const threadAttachmentDocs = useQuery(
     api.attachments.listForThreadMessages,
     isAuthenticated && threadId !== "guest"
-      ? { threadId: threadId as Id<"threads"> }
+      ? { threadId: asThreadId(threadId) }
       : "skip"
   )
   const attachmentsByMessageId = useMemo(() => {
@@ -272,7 +272,7 @@ export function ChatThreadView({
   const forwardedPropsRef = useRef({
     modelId: modelPreferences.selectedModelId,
     reasoningEffort: effectiveReasoningEffort,
-    attachmentIds: [] as string[],
+    attachmentIds: new Array<string>(),
   })
   forwardedPropsRef.current.modelId = modelPreferences.selectedModelId
   forwardedPropsRef.current.reasoningEffort = effectiveReasoningEffort
@@ -320,9 +320,10 @@ export function ChatThreadView({
       id: pendingSubmission?.messageId ?? "optimistic-user",
       role: "user",
       parts: [
-        ...(optimisticUserContent
-          ? [{ type: "text" as const, content: optimisticUserContent }]
-          : [{ type: "text" as const, content: "" }]),
+        {
+          type: "text" as const,
+          content: optimisticUserContent || "",
+        },
       ],
       createdAt: new Date(),
     }
@@ -345,7 +346,7 @@ export function ChatThreadView({
   const minimapItems = useMemo(
     () => deriveTimelineMinimapItems(messages),
     // Mid-stream text growth must not rebuild the minimap; revision ignores it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by minimapRevision
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- keyed by minimapRevision
     [minimapRevision]
   )
 
@@ -501,7 +502,7 @@ export function ChatThreadView({
     // next visit.
     if (streamingMessage && isAuthenticated) {
       void stopStreamingMessage({
-        threadId: threadId as Id<"threads">,
+        threadId: asThreadId(threadId),
         assistantMessageId: streamingMessage.id,
         content: chatMessageText(streamingMessage),
         thinking: chatMessageThinking(streamingMessage) || undefined,

@@ -4,6 +4,7 @@ import { DownloadIcon, ExternalLinkIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/shared/ui/button"
 import { Tooltip } from "@/components/shared/motion/tooltip"
+import { hasDocument } from "@/lib/runtime-env"
 import { ATTACHMENT_VIEWER } from "@/components/chat/attachments/constants"
 
 async function downloadNamedFile(url: string, filename: string) {
@@ -34,7 +35,7 @@ export function AttachmentLightbox({
   onOpenChange: (open: boolean) => void
 }) {
   const [container] = useState<HTMLElement | null>(() =>
-    typeof document === "undefined" ? null : document.body
+    hasDocument() ? document.body : null
   )
 
   return (

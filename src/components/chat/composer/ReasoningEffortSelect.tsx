@@ -87,7 +87,13 @@ export function ReasoningEffortSelect({
   )
   const selectedOption = availableOptions[selectedIndex]
   useWindowEvent("pointerdown", (event) => {
-    if (open && !rootRef.current?.contains(event.target as Node)) setOpen(false)
+    if (
+      open &&
+      !rootRef.current?.contains(
+        event.target instanceof Node ? event.target : null
+      )
+    )
+      setOpen(false)
   })
   useWindowEvent("keydown", (event) => {
     if (!open || event.key !== "Escape") return

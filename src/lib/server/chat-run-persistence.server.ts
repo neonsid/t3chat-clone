@@ -6,6 +6,8 @@ import type { Id } from "../../../convex/_generated/dataModel"
 import { MAX_MESSAGE_CONTENT_LENGTH } from "../../../convex/constants"
 import type { ReasoningEffort } from "@/lib/chat-models"
 
+export type ChatRunConvexClient = Pick<ConvexHttpClient, "mutation">
+
 function appendThinking(current: string, delta: string) {
   if (!delta) return current
   const remaining = MAX_MESSAGE_CONTENT_LENGTH - current.length
@@ -30,7 +32,7 @@ export function collectAndPersistStream({
   signal,
 }: {
   stream: AsyncIterable<StreamChunk>
-  convex: ConvexHttpClient
+  convex: ChatRunConvexClient
   threadId: Id<"threads">
   runId: string
   completionSecret: string

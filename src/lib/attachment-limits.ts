@@ -32,20 +32,18 @@ export const ATTACHMENT_ACCEPT =
 
 export type AttachmentKind = "image" | "pdf"
 
-export const MIME_TO_KIND: Record<AllowedAttachmentMimeType, AttachmentKind> = {
+export const MIME_TO_KIND = {
   "image/jpeg": "image",
   "image/png": "image",
   "image/gif": "image",
   "image/webp": "image",
   "application/pdf": "pdf",
-}
+} as const satisfies Record<AllowedAttachmentMimeType, AttachmentKind>
 
 export function isAllowedAttachmentMimeType(
   mimeType: string
 ): mimeType is AllowedAttachmentMimeType {
-  return (ALLOWED_ATTACHMENT_MIME_TYPES as ReadonlyArray<string>).includes(
-    mimeType
-  )
+  return ALLOWED_ATTACHMENT_MIME_TYPES.some((allowed) => allowed === mimeType)
 }
 
 export function normalizeAttachmentMimeType(
@@ -62,14 +60,16 @@ export function normalizeAttachmentMimeType(
   return null
 }
 
-export function validateAttachmentFile(file: File): {
-  ok: true
-  mimeType: AllowedAttachmentMimeType
-  kind: AttachmentKind
-} | {
-  ok: false
-  error: string
-} {
+export function validateAttachmentFile(file: File):
+  | {
+      ok: true
+      mimeType: AllowedAttachmentMimeType
+      kind: AttachmentKind
+    }
+  | {
+      ok: false
+      error: string
+    } {
   const mimeType = normalizeAttachmentMimeType(file)
   if (!mimeType) {
     return {

@@ -3,6 +3,12 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware"
 
 import { isReasoningEffort } from "@/lib/chat-models"
 import {
+  isJsonBoolean,
+  isJsonObject,
+  isJsonString,
+  type JsonValue,
+} from "@/lib/json-value"
+import {
   CHAT_UI_STORAGE_KEY,
   CHAT_UI_STORAGE_VERSION,
   DEFAULT_THREAD_COMPOSER_STATE,
@@ -71,35 +77,38 @@ function isDefaultComposerState(state: ThreadComposerState): boolean {
   )
 }
 
-function sanitizeComposer(value: unknown): ThreadComposerState | null {
-  if (!value || typeof value !== "object") return null
-  const candidate = value as Partial<ThreadComposerState>
+function sanitizeComposer(value: JsonValue): ThreadComposerState | null {
+  if (!isJsonObject(value)) return null
+  const draft = value.draft
+  const reasoningEffort = value.reasoningEffort
+  const searchEnabled = value.searchEnabled
   if (
-    typeof candidate.draft !== "string" ||
-    !isReasoningEffort(candidate.reasoningEffort) ||
-    typeof candidate.searchEnabled !== "boolean"
+    !isJsonString(draft) ||
+    !isJsonString(reasoningEffort) ||
+    !isReasoningEffort(reasoningEffort) ||
+    !isJsonBoolean(searchEnabled)
   ) {
     return null
   }
 
   return {
-    draft: candidate.draft,
-    reasoningEffort: candidate.reasoningEffort,
-    searchEnabled: candidate.searchEnabled,
+    draft,
+    reasoningEffort,
+    searchEnabled,
     // Never restore in-flight uploads from session storage.
     attachments: [],
   }
 }
 
-function sanitizePersistedState(value: unknown): PersistedChatUiState {
-  if (!value || typeof value !== "object") return { composers: {} }
-  const candidate = value as { composers?: unknown }
-  if (!candidate.composers || typeof candidate.composers !== "object") {
+function sanitizePersistedState(value: JsonValue): PersistedChatUiState {
+  if (!isJsonObject(value)) return { composers: {} }
+  const composersValue = value.composers
+  if (!isJsonObject(composersValue)) {
     return { composers: {} }
   }
 
   const composers = Object.fromEntries(
-    Object.entries(candidate.composers).flatMap(([key, composer]) => {
+    Object.entries(composersValue).flatMap(([key, composer]) => {
       const sanitized = sanitizeComposer(composer)
       if (!sanitized || isDefaultComposerState(sanitized)) return []
       return [
@@ -121,14 +130,14 @@ function updateComposer(
   state: ChatUiState,
   key: string,
   patch: Partial<ThreadComposerState>
-): Partial<Record<string, ThreadComposerState>> {
+) {
   const current = state.composers[key] ?? DEFAULT_THREAD_COMPOSER_STATE
   const next = {
     ...current,
     attachments: current.attachments,
     ...patch,
   }
-  const composers: Partial<Record<string, ThreadComposerState>> = {
+  const composers = {
     ...state.composers,
   }
 
@@ -343,8 +352,16 @@ export function createChatUiStore() {
         ),
       }),
       merge: (persisted, current): ChatUiState => {
-        const sanitized = sanitizePersistedState(persisted)
-        const composers: Partial<Record<string, ThreadComposerState>> = {}
+        // SAFETY: zustand persist returns JSON.parse output from sessionStorage.
+        const persistedJson: JsonValue | null =
+          persisted === undefined || persisted === null
+            ? null
+            : (persisted as JsonValue)
+        const sanitized = persistedJson
+          ? sanitizePersistedState(persistedJson)
+          : { composers: {} }
+        // SAFETY: accumulator starts empty and is filled only with sanitized composers.
+        const composers = {} as ChatUiState["composers"]
         for (const [key, composer] of Object.entries(sanitized.composers)) {
           if (!composer) continue
           composers[key] = {

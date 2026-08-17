@@ -95,11 +95,18 @@ export function contextToModelMessages(
       modelContent = ""
     }
 
-    selected.push({
-      role: message.role,
-      content: modelContent,
-      ...(thinking ? { thinking: [{ content: thinking }] } : {}),
-    })
+    selected.push(
+      thinking
+        ? {
+            role: message.role,
+            content: modelContent,
+            thinking: [{ content: thinking }],
+          }
+        : {
+            role: message.role,
+            content: modelContent,
+          }
+    )
     characterCount += characterCost
   }
 

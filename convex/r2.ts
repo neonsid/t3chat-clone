@@ -338,7 +338,7 @@ export const verifyObject = internalAction({
 
       const contentLength = head.ContentLength
       if (
-        typeof contentLength !== "number" ||
+        contentLength === undefined ||
         contentLength !== attachment.sizeBytes
       ) {
         await ctx.runMutation(internal.attachments.markFailed, {

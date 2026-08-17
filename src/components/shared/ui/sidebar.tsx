@@ -32,6 +32,19 @@ import { useWindowEvent } from "@/hooks/useWindowEvent"
 
 type SidebarOpenUpdater = boolean | ((open: boolean) => boolean)
 
+type SidebarTooltipConfig = Omit<
+  React.ComponentProps<typeof Tooltip>,
+  "children" | "content"
+> & {
+  children: React.ReactNode
+}
+
+function isSidebarTooltipConfig(
+  tooltip: string | SidebarTooltipConfig
+): tooltip is SidebarTooltipConfig {
+  return tooltip.constructor !== String
+}
+
 type SidebarStateContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
@@ -109,15 +122,14 @@ function SidebarProvider({
   setOpenMobilePropRef.current = setOpenMobileProp
 
   const setOpen = React.useCallback((value: SidebarOpenUpdater) => {
-    const openState =
-      typeof value === "function" ? value(openRef.current) : value
+    const openState = value instanceof Function ? value(openRef.current) : value
     if (setOpenPropRef.current) setOpenPropRef.current(openState)
     else _setOpen(openState)
   }, [])
 
   const setOpenMobile = React.useCallback((value: SidebarOpenUpdater) => {
     const openState =
-      typeof value === "function" ? value(openMobileRef.current) : value
+      value instanceof Function ? value(openMobileRef.current) : value
     if (setOpenMobilePropRef.current) setOpenMobilePropRef.current(openState)
     else _setOpenMobile(openState)
   }, [])
@@ -166,6 +178,7 @@ function SidebarProvider({
       <SidebarActionsContext.Provider value={actionsValue}>
         <div
           data-slot="sidebar-wrapper"
+          // SAFETY: CSS custom properties are valid style fields missing from CSSProperties.
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH,
@@ -226,6 +239,7 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          // SAFETY: CSS custom properties are valid style fields missing from CSSProperties.
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -551,11 +565,7 @@ function SidebarMenuButton({
 }: useRender.ComponentProps<"button"> &
   React.ComponentProps<"button"> & {
     isActive?: boolean
-    tooltip?:
-      | string
-      | (Omit<React.ComponentProps<typeof Tooltip>, "children" | "content"> & {
-          children: React.ReactNode
-        })
+    tooltip?: string | SidebarTooltipConfig
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   // Avoid subscribing to open state on the common path (thread rows). Only the
   // collapsed-icon tooltip branch needs state/isMobile.
@@ -625,11 +635,7 @@ function SidebarMenuButtonWithTooltip({
 }: useRender.ComponentProps<"button"> &
   React.ComponentProps<"button"> & {
     isActive?: boolean
-    tooltip:
-      | string
-      | (Omit<React.ComponentProps<typeof Tooltip>, "children" | "content"> & {
-          children: React.ReactNode
-        })
+    tooltip: string | SidebarTooltipConfig
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebarState()
   const comp = (
@@ -647,8 +653,9 @@ function SidebarMenuButtonWithTooltip({
     return comp
   }
 
-  const { children: content, ...tooltipProps } =
-    typeof tooltip === "string" ? { children: tooltip } : tooltip
+  const { children: content, ...tooltipProps } = isSidebarTooltipConfig(tooltip)
+    ? tooltip
+    : { children: tooltip }
 
   return (
     <Tooltip
@@ -737,6 +744,7 @@ function SidebarMenuSkeleton({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
+        // SAFETY: CSS custom properties are valid style fields missing from CSSProperties.
         style={
           {
             "--skeleton-width": width,

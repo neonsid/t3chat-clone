@@ -4,22 +4,20 @@ import { createFileRoute } from "@tanstack/react-router"
 import { ConvexHttpClient } from "convex/browser"
 
 import { api } from "../../../convex/_generated/api"
-import type { Id } from "../../../convex/_generated/dataModel"
+import { asThreadId } from "@/lib/convex-ids"
 import {
   getChatModelById,
   isReasoningEffort,
   resolveChatModel,
 } from "@/lib/chat-models"
+import { isJsonString, type JsonValue } from "@/lib/json-value"
 import {
   contextRequiresPdf,
   contextRequiresVision,
   contextToModelMessages,
   type ChatContextMessage,
 } from "@/lib/chat-context"
-import {
-  latestUserChatMessage,
-  parseAttachmentIds,
-} from "@/lib/chat-messages"
+import { latestUserChatMessage, parseAttachmentIds } from "@/lib/chat-messages"
 import {
   getMissingRuntimeKey,
   streamChatModel,
@@ -55,10 +53,19 @@ export const Route = createFileRoute("/api/chat")({
             : errorResponse("Invalid chat request", 400)
         }
 
-        const modelId = params.forwardedProps.modelId
-        const reasoningEffort = params.forwardedProps.reasoningEffort
+        // SAFETY: TanStack forwardedProps is an untyped JSON bag from the client.
+        const forwarded = params.forwardedProps as {
+          modelId?: JsonValue
+          reasoningEffort?: JsonValue
+          attachmentIds?: JsonValue
+        }
+        const modelId = forwarded.modelId
+        const reasoningEffort = forwarded.reasoningEffort
         if (
-          typeof modelId !== "string" ||
+          modelId === undefined ||
+          reasoningEffort === undefined ||
+          !isJsonString(modelId) ||
+          !isJsonString(reasoningEffort) ||
           !isReasoningEffort(reasoningEffort)
         ) {
           return errorResponse("Invalid model options", 400)
@@ -71,9 +78,7 @@ export const Route = createFileRoute("/api/chat")({
 
         let attachmentIds: string[]
         try {
-          attachmentIds = parseAttachmentIds(
-            params.forwardedProps.attachmentIds
-          )
+          attachmentIds = parseAttachmentIds(forwarded.attachmentIds)
         } catch (error) {
           return errorResponse(
             error instanceof Error ? error.message : "Invalid attachments",
@@ -93,7 +98,7 @@ export const Route = createFileRoute("/api/chat")({
         if (!convexUrl)
           return errorResponse("VITE_CONVEX_URL not configured", 500)
         const convex = new ConvexHttpClient(convexUrl, { auth: token })
-        const threadId = params.threadId as Id<"threads">
+        const threadId = asThreadId(params.threadId)
         const completionSecret = crypto.randomUUID()
         let runAccepted = false
 
@@ -131,11 +136,8 @@ export const Route = createFileRoute("/api/chat")({
 
           const contextAttachmentIds = [
             ...new Set(
-              context.flatMap(
-                (message: (typeof context)[number]) =>
-                  message.attachments.map(
-                    (attachment) => attachment.attachmentId
-                  )
+              context.flatMap((message: (typeof context)[number]) =>
+                message.attachments.map((attachment) => attachment.attachmentId)
               )
             ),
           ]
@@ -147,12 +149,10 @@ export const Route = createFileRoute("/api/chat")({
                 })
               : []
           const urlByAttachmentId = new Map(
-            signedDownloads.map(
-              (entry: (typeof signedDownloads)[number]) => [
-                entry.attachmentId,
-                entry.url,
-              ]
-            )
+            signedDownloads.map((entry: (typeof signedDownloads)[number]) => [
+              entry.attachmentId,
+              entry.url,
+            ])
           )
 
           const messagesWithUrls: ChatContextMessage[] = context.map(

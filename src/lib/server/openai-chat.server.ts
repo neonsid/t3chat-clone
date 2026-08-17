@@ -5,8 +5,16 @@ import { OpenAITextAdapter, openaiText } from "@tanstack/ai-openai"
 import type { ChatExecutor } from "@/lib/server/chat-executor-types"
 import { openaiInputFileFromDocumentPart } from "@/lib/server/openai-document-input"
 import { MAX_MODEL_OUTPUT_TOKENS } from "@/lib/chat-models"
+import type { ProviderReasoningEffort } from "@/lib/chat-models"
 
 type OpenAIChatModelId = Parameters<typeof openaiText>[0]
+type OpenAIChatModelOptions = {
+  max_output_tokens: number
+  reasoning?: {
+    effort: ProviderReasoningEffort
+    summary?: "auto"
+  }
+}
 
 class OpenAITextAdapterWithDocuments extends OpenAITextAdapter<OpenAIChatModelId> {
   protected override convertContentPartToInput(part: ContentPart) {
@@ -29,25 +37,24 @@ export const streamOpenAIChat: ChatExecutor = ({
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured")
   const adapter = new OpenAITextAdapterWithDocuments(
     { apiKey },
+    // SAFETY: adapterModelId is the OpenAI catalog id stored on ChatModelRuntime.
     runtime.adapterModelId as OpenAIChatModelId
   )
+
+  const modelOptions: OpenAIChatModelOptions = {
+    max_output_tokens: MAX_MODEL_OUTPUT_TOKENS,
+  }
+  if (providerReasoningEffort) {
+    modelOptions.reasoning = { effort: providerReasoningEffort }
+    if (providerReasoningEffort !== "none") {
+      modelOptions.reasoning.summary = "auto"
+    }
+  }
 
   return chat({
     adapter,
     messages: [...messages],
-    modelOptions: {
-      max_output_tokens: MAX_MODEL_OUTPUT_TOKENS,
-      ...(providerReasoningEffort
-        ? {
-            reasoning: {
-              effort: providerReasoningEffort,
-              ...(providerReasoningEffort === "none"
-                ? {}
-                : { summary: "auto" as const }),
-            },
-          }
-        : {}),
-    },
+    modelOptions,
     abortController,
   })
 }

@@ -36,6 +36,7 @@ export async function generateThreadTitle(firstMessage: string): Promise<{
       throw new Error(`OpenAI title request failed (${response.status})`)
     }
 
+    // SAFETY: OpenAI completions JSON is read only along the choices/message/content path.
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string | null } }>
     }

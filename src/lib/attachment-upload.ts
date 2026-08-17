@@ -15,8 +15,8 @@ function createLocalId() {
   return crypto.randomUUID()
 }
 
-function uploadErrorMessage(error: unknown) {
-  if (!(error instanceof Error) || !error.message) return "Upload failed"
+function uploadErrorMessage(error: Error) {
+  if (!error.message) return "Upload failed"
   const message = error.message
   if (
     message.length > 48 ||
@@ -154,7 +154,11 @@ export async function uploadComposerAttachment(options: {
       return
     }
 
-    onUpdate({ status: "failed", errorMessage: uploadErrorMessage(error) })
+    onUpdate({
+      status: "failed",
+      errorMessage:
+        error instanceof Error ? uploadErrorMessage(error) : "Upload failed",
+    })
   }
 }
 

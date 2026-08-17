@@ -18,10 +18,7 @@ type ModelCapabilityVisual = {
   readonly className: string
 }
 
-export const MODEL_CAPABILITY_VISUALS: Record<
-  ModelCapability,
-  ModelCapabilityVisual
-> = {
+export const MODEL_CAPABILITY_VISUALS = {
   fast: {
     icon: ZapIcon,
     className: "bg-amber-500/12 text-amber-400",
@@ -50,7 +47,7 @@ export const MODEL_CAPABILITY_VISUALS: Record<
     icon: FileTextIcon,
     className: "bg-indigo-500/12 text-indigo-400",
   },
-}
+} as const satisfies Record<ModelCapability, ModelCapabilityVisual>
 
 export const MODEL_CAPABILITY_LABELS = new Map(
   MODEL_CAPABILITIES.map((capability) => [capability.id, capability.label])

@@ -7,28 +7,22 @@ type ReasoningDetail = {
 type OpenRouterStreamDelta = {
   reasoning?: string | null
   reasoningDetails?: ReasoningDetail[]
-  [key: string]: unknown
 }
 
 type OpenRouterStreamChoice = {
   delta?: OpenRouterStreamDelta | null
-  [key: string]: unknown
 }
 
 export type OpenRouterStreamChunk = {
   choices?: OpenRouterStreamChoice[]
-  [key: string]: unknown
 }
 
 function reasoningDetailsText(details: ReasoningDetail[]) {
   let text = ""
   for (const detail of details) {
-    if (detail.type === "reasoning.text" && typeof detail.text === "string") {
+    if (detail.type === "reasoning.text" && detail.text) {
       text += detail.text
-    } else if (
-      detail.type === "reasoning.summary" &&
-      typeof detail.summary === "string"
-    ) {
+    } else if (detail.type === "reasoning.summary" && detail.summary) {
       text += detail.summary
     }
   }
@@ -51,10 +45,7 @@ export function enrichOpenRouterReasoningChunk<T extends OpenRouterStreamChunk>(
     const delta = choice.delta
     if (!delta) return choice
 
-    const flat =
-      typeof delta.reasoning === "string" && delta.reasoning.length > 0
-        ? delta.reasoning
-        : ""
+    const flat = delta.reasoning ? delta.reasoning : ""
     if (!flat) return choice
 
     const details = Array.isArray(delta.reasoningDetails)

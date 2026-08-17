@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import type { Doc, Id } from "../../../convex/_generated/dataModel"
+import type { Doc } from "../../../convex/_generated/dataModel"
+import { asMessageId, asThreadId } from "@/lib/convex-ids"
 import { createMessageProjectionCache, toChatMessages } from "@/lib/threads"
 
 const storedMessageBase = {
-  _id: "message-id" as Id<"messages">,
+  _id: asMessageId("message-id"),
   _creationTime: 1,
-  threadId: "thread-id" as Id<"threads">,
+  threadId: asThreadId("thread-id"),
   messageId: "message-1",
   sequence: 0,
   role: "assistant" as const,

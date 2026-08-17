@@ -1,6 +1,7 @@
 import type { ModelMessage, UIMessage } from "@tanstack/ai"
 
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/attachment-limits"
+import { isJsonString, type JsonValue } from "@/lib/json-value"
 
 export type ChatRequestMessage = UIMessage | ModelMessage
 
@@ -14,24 +15,23 @@ export function chatMessageText(message: ChatRequestMessage): string {
   }
 
   const content = message.content
-  if (typeof content === "string") return content.trim()
-  if (!Array.isArray(content)) return ""
-
-  let text = ""
-  for (const part of content) {
-    if (part.type === "text") text += part.content
+  if (Array.isArray(content)) {
+    let text = ""
+    for (const part of content) {
+      if (part.type === "text") text += part.content
+    }
+    return text.trim()
   }
-  return text.trim()
+  return content?.trim() ?? ""
 }
 
-export function parseAttachmentIds(value: unknown): string[] {
+export function parseAttachmentIds(value: JsonValue | undefined): string[] {
   if (value === undefined) return []
   if (!Array.isArray(value)) {
     throw new Error("Invalid attachments")
   }
   const ids = value.filter(
-    (entry): entry is string =>
-      typeof entry === "string" && entry.trim().length > 0
+    (entry): entry is string => isJsonString(entry) && entry.trim().length > 0
   )
   if (ids.length > MAX_ATTACHMENTS_PER_MESSAGE) {
     throw new Error("Too many attachments")
@@ -48,8 +48,8 @@ export function latestUserChatMessage(messages: ChatRequestMessage[]) {
     const message = messages[index]
     if (!message || message.role !== "user") continue
 
-    const id = "id" in message ? message.id : undefined
-    if (typeof id !== "string") continue
+    if (!("id" in message) || message.id === undefined) continue
+    const { id } = message
 
     return { id, content: chatMessageText(message) }
   }
