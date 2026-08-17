@@ -1,5 +1,3 @@
-import ky, { HTTPError } from "ky"
-
 import { api } from "../../convex/_generated/api"
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -17,9 +15,24 @@ function createLocalId() {
   return crypto.randomUUID()
 }
 
-export function createPreparingAttachment(file: File): ComposerAttachment | {
-  error: string
-} {
+function uploadErrorMessage(error: unknown) {
+  if (!(error instanceof Error) || !error.message) return "Upload failed"
+  const message = error.message
+  if (
+    message.length > 48 ||
+    /https?:\/\//i.test(message) ||
+    /network error/i.test(message)
+  ) {
+    return "Upload failed"
+  }
+  return message
+}
+
+export function createPreparingAttachment(file: File):
+  | ComposerAttachment
+  | {
+      error: string
+    } {
   const validated = validateAttachmentFile(file)
   if (!validated.ok) return { error: validated.error }
 
@@ -36,52 +49,52 @@ export function createPreparingAttachment(file: File): ComposerAttachment | {
   }
 }
 
-async function putWithOptionalProgress(options: {
+function putFileToSignedUrl(options: {
   putUrl: string
   file: File
   mimeType: string
   signal?: AbortSignal
   onProgress?: (progress: number) => void
 }) {
-  const progressState = { sawProgress: false }
-  try {
-    await ky.put(options.putUrl, {
-      body: options.file,
-      headers: { "Content-Type": options.mimeType },
-      signal: options.signal,
-      timeout: false,
-      retry: 0,
-      onUploadProgress: (progress) => {
-        progressState.sawProgress = true
-        if (progress.totalBytes > 0) {
-          options.onProgress?.(
-            Math.min(1, progress.transferredBytes / progress.totalBytes)
-          )
-        }
-      },
-    })
-    return { sawProgress: progressState.sawProgress }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw error
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const onAbort = () => {
+      xhr.abort()
     }
-    if (
-      progressState.sawProgress &&
-      options.signal !== undefined &&
-      !options.signal.aborted
-    ) {
-      // Explicit one-shot retry without progress (HTTP/2 progress quirks).
-      await ky.put(options.putUrl, {
-        body: options.file,
-        headers: { "Content-Type": options.mimeType },
-        signal: options.signal,
-        timeout: false,
-        retry: 0,
-      })
-      return { sawProgress: false }
+
+    xhr.open("PUT", options.putUrl)
+    xhr.setRequestHeader("Content-Type", options.mimeType)
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) return
+      options.onProgress?.(Math.min(1, event.loaded / event.total))
     }
-    throw error
-  }
+    xhr.onload = () => {
+      options.signal?.removeEventListener("abort", onAbort)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+        return
+      }
+      reject(new Error("Upload failed"))
+    }
+    xhr.onerror = () => {
+      options.signal?.removeEventListener("abort", onAbort)
+      reject(new Error("Upload failed"))
+    }
+    xhr.onabort = () => {
+      options.signal?.removeEventListener("abort", onAbort)
+      reject(new DOMException("Aborted", "AbortError"))
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"))
+        return
+      }
+      options.signal.addEventListener("abort", onAbort)
+    }
+
+    xhr.send(options.file)
+  })
 }
 
 export async function uploadComposerAttachment(options: {
@@ -106,7 +119,8 @@ export async function uploadComposerAttachment(options: {
       await convex
         .mutation(api.attachments.discard, { attachmentId })
         .catch(() => undefined)
-      throw new DOMException("Aborted", "AbortError")
+      onUpdate({ status: "failed", errorMessage: "Upload cancelled" })
+      return
     }
 
     onUpdate({
@@ -119,7 +133,7 @@ export async function uploadComposerAttachment(options: {
       attachmentId,
     })
 
-    await putWithOptionalProgress({
+    await putFileToSignedUrl({
       putUrl,
       file,
       mimeType,
@@ -136,16 +150,11 @@ export async function uploadComposerAttachment(options: {
           .mutation(api.attachments.discard, { attachmentId })
           .catch(() => undefined)
       }
-      throw error
+      onUpdate({ status: "failed", errorMessage: "Upload cancelled" })
+      return
     }
 
-    const message =
-      error instanceof HTTPError
-        ? "Upload failed"
-        : error instanceof Error
-          ? error.message
-          : "Upload failed"
-    onUpdate({ status: "failed", errorMessage: message })
+    onUpdate({ status: "failed", errorMessage: uploadErrorMessage(error) })
   }
 }
 

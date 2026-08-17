@@ -7,6 +7,7 @@ import {
   CHAT_COMPOSER_OVERLAY_HEIGHT,
   CHAT_COMPOSER_PLACEHOLDERS,
 } from "@/components/chat/composer/constants"
+import { rememberComposerPreviews } from "@/lib/attachment-preview-cache"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import {
   composerCanSend,
@@ -27,10 +28,7 @@ type ChatShellComposerProps = {
 function publishComposerOverlayHeight(overlay: HTMLElement, heightPx: number) {
   const shell = overlay.closest("[data-chat-shell]")
   if (!(shell instanceof HTMLElement)) return
-  shell.style.setProperty(
-    CHAT_COMPOSER_OVERLAY_HEIGHT.cssVar,
-    `${heightPx}px`
-  )
+  shell.style.setProperty(CHAT_COMPOSER_OVERLAY_HEIGHT.cssVar, `${heightPx}px`)
 }
 
 export function ChatShellComposer({
@@ -44,6 +42,7 @@ export function ChatShellComposer({
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
   const chatUi = useChatUiStoreApi()
   const clearDraft = useChatUiStore((state) => state.clearDraft)
+  const clearAttachments = useChatUiStore((state) => state.clearAttachments)
   const {
     isLoading,
     activeTurn,
@@ -127,7 +126,9 @@ export function ChatShellComposer({
     if (isDraft) {
       if (!canSubmit) return
       setActiveTurn(true, content)
+      rememberComposerPreviews(composer.attachments)
       clearDraft(threadStateKey)
+      clearAttachments(threadStateKey, { revoke: false })
       onDraftSubmit(content, attachmentIds)
       return
     }

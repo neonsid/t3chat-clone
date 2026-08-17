@@ -112,6 +112,27 @@ describe("chat UI store", () => {
     })
   })
 
+  test("clears composer attachments immediately", () => {
+    const store = createChatUiStore()
+    const key = createThreadStateKey("user-1", "thread-1")
+    store.getState().setAttachments(key, [
+      {
+        localId: "local-1",
+        attachmentId: "att-1",
+        filename: "photo.png",
+        mimeType: "image/png",
+        kind: "image",
+        sizeBytes: 12,
+        status: "ready",
+        progress: 1,
+      },
+    ])
+    store.getState().clearAttachments(key)
+    expect(getThreadComposerState(store.getState(), key).attachments).toEqual(
+      []
+    )
+  })
+
   test("does not persist composer attachments", async () => {
     const firstStore = createChatUiStore()
     const key = createThreadStateKey("user-1", "thread-1")

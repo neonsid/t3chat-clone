@@ -68,11 +68,14 @@ export function useComposerAttachments(threadStateKey: string) {
     abortControllers.current.clear()
   })
 
+  // useEffectEvent must stay out of the dep list — including it retriggers
+  // cleanup on re-render and aborts the in-flight createUploadIntent, which
+  // leaves chips stuck on "Preparing…".
   useEffect(() => {
     return () => {
       abortAll()
     }
-  }, [abortAll, threadStateKey])
+  }, [threadStateKey])
 
   async function addFiles(
     files: FileList | File[],
@@ -124,7 +127,6 @@ export function useComposerAttachments(threadStateKey: string) {
         attachment: entry.attachment,
         signal: controller.signal,
         onUpdate: (patch) => {
-          if (controller.signal.aborted) return
           chatUi
             .getState()
             .updateAttachment(threadStateKey, entry.attachment.localId, patch)

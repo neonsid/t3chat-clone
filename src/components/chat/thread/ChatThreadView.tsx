@@ -1,7 +1,15 @@
-import { memo, useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
+import {
+  memo,
+  useCallback,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
-import { useMutation } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
 import type { Id } from "../../../../convex/_generated/dataModel"
@@ -9,6 +17,7 @@ import type { Id } from "../../../../convex/_generated/dataModel"
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
+import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
 import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
@@ -39,13 +48,20 @@ import {
   resolveChatModel,
 } from "@/lib/chat-models"
 import {
+  rememberComposerPreviews,
+  sentAttachmentsForMessage,
+} from "@/lib/attachment-preview-cache"
+import {
   chatMessageHasContent,
   chatMessageText,
   chatMessageThinking,
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
-import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
+import {
+  chatRuntimeStore,
+  useChatRuntimeStore,
+} from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import {
   composerCanSend,
@@ -118,7 +134,11 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
   )
 
   return (
-    <TimelineMinimap items={items} bottomInset={bottomInset} onSelect={onSelect} />
+    <TimelineMinimap
+      items={items}
+      bottomInset={bottomInset}
+      onSelect={onSelect}
+    />
   )
 })
 
@@ -128,18 +148,22 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
  * subtree — memoizing further up can't help, because the message list is the
  * very prop that changes.
  */
+const EMPTY_MESSAGE_ATTACHMENTS: Array<ThreadMessageAttachment> = []
+
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
   isScrollAnchor,
   isStopped,
   generationStats,
+  attachments,
 }: {
   message: UIMessage
   isStreaming: boolean
   isScrollAnchor: boolean
   isStopped: boolean
   generationStats: AssistantGenerationStats | undefined
+  attachments: Array<ThreadMessageAttachment>
 }) {
   return (
     <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
@@ -148,6 +172,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         isStreaming={isStreaming}
         isStopped={isStopped}
         generationStats={generationStats}
+        attachments={attachments}
       />
     </MessageScrollerItem>
   )
@@ -183,6 +208,28 @@ export function ChatThreadView({
     ReadonlySet<string>
   >(() => new Set())
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
+  const threadAttachmentDocs = useQuery(
+    api.attachments.listForThreadMessages,
+    isAuthenticated && threadId !== "guest"
+      ? { threadId: threadId as Id<"threads"> }
+      : "skip"
+  )
+  const attachmentsByMessageId = useMemo(() => {
+    const grouped = new Map<string, Array<ThreadMessageAttachment>>()
+    for (const attachment of threadAttachmentDocs ?? []) {
+      if (!attachment.messageId) continue
+      const existing = grouped.get(attachment.messageId)
+      const item = {
+        attachmentId: attachment.attachmentId,
+        messageId: attachment.messageId,
+        filename: attachment.filename,
+        kind: attachment.kind,
+      }
+      if (existing) existing.push(item)
+      else grouped.set(attachment.messageId, [item])
+    }
+    return grouped
+  }, [threadAttachmentDocs])
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const hasComposerAttachments = useChatUiStore(
@@ -341,11 +388,18 @@ export function ChatThreadView({
             locallyStoppedMessageIds.has(message.id)
           }
           generationStats={generationStats[message.id]}
+          attachments={sentAttachmentsForMessage(
+            message.id,
+            attachmentsByMessageId.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+            latestUserMessageId
+          )}
         />
       )),
     [
+      attachmentsByMessageId,
       generationStats,
       history,
+      latestUserMessageId,
       locallyStoppedMessageIds,
       scrollAnchorId,
       stoppedMessageIds,
@@ -387,6 +441,10 @@ export function ChatThreadView({
             isScrollAnchor={false}
             isStopped={false}
             generationStats={undefined}
+            attachments={
+              attachmentsByMessageId.get(renderedStreamingMessage.id) ??
+              EMPTY_MESSAGE_ATTACHMENTS
+            }
           />,
         ]
       : historyRows
@@ -403,7 +461,9 @@ export function ChatThreadView({
     }
 
     forwardedPropsRef.current.attachmentIds = attachmentIds
+    rememberComposerPreviews(composer.attachments)
     clearDraft(threadStateKey)
+    clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
@@ -412,12 +472,9 @@ export function ChatThreadView({
         : [{ type: "text", content: "" }],
     }).then(
       () => {
-        // Stream accepted — safe to clear chips (server bound the ids).
-        clearAttachments(threadStateKey)
         forwardedPropsRef.current.attachmentIds = []
       },
       () => {
-        // Early failure: keep chips / attachmentIds for retry.
         forwardedPropsRef.current.attachmentIds = attachmentIds
       }
     )
@@ -469,6 +526,7 @@ export function ChatThreadView({
     if (!pending) return
 
     forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+    clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: pending.messageId,
@@ -477,7 +535,6 @@ export function ChatThreadView({
         : [{ type: "text", content: "" }],
     }).then(
       () => {
-        clearAttachments(threadStateKey)
         forwardedPropsRef.current.attachmentIds = []
       },
       () => {
@@ -500,7 +557,9 @@ export function ChatThreadView({
     if (!isReady || !isAuthenticated) return
     return chatRuntimeStore
       .getState()
-      .registerPendingFlusher(threadId, () => flushPendingSubmissionRef.current())
+      .registerPendingFlusher(threadId, () =>
+        flushPendingSubmissionRef.current()
+      )
   }, [threadId, isReady, isAuthenticated])
 
   useLayoutEffect(() => {
@@ -510,7 +569,9 @@ export function ChatThreadView({
       isReady,
       isEmptyThread,
       effectiveReasoningEffort,
-      supportedReasoningEfforts: modelConfig.supportedReasoningEfforts,
+      supportedReasoningEfforts: modelPreferences.isLoading
+        ? []
+        : modelConfig.supportedReasoningEfforts,
       modelLoading: modelPreferences.isLoading,
     })
   }, [

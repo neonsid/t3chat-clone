@@ -33,7 +33,7 @@ export type ChatUiState = {
     patch: Partial<ComposerAttachment>
   ) => void
   removeAttachment: (key: string, localId: string) => void
-  clearAttachments: (key: string) => void
+  clearAttachments: (key: string, options?: { revoke?: boolean }) => void
   clearDraft: (key: string) => void
   moveThreadState: (fromKey: string, toKey: string) => void
   removeThreadState: (key: string) => void
@@ -168,9 +168,7 @@ export function composerCanSend(
   return hasText || readyCount > 0
 }
 
-export function readyAttachmentIds(
-  composer: ThreadComposerState
-): string[] {
+export function readyAttachmentIds(composer: ThreadComposerState): string[] {
   return composer.attachments.flatMap((attachment) =>
     attachment.status === "ready" && attachment.attachmentId
       ? [attachment.attachmentId]
@@ -255,12 +253,12 @@ export function createChatUiStore() {
           }
         })
       },
-      clearAttachments(key) {
+      clearAttachments(key, options) {
         set((state) => {
           const current =
             state.composers[key]?.attachments ??
             DEFAULT_THREAD_COMPOSER_STATE.attachments
-          revokePreviewUrls(current)
+          if (options?.revoke !== false) revokePreviewUrls(current)
           return {
             composers: updateComposer(state, key, { attachments: [] }),
           }

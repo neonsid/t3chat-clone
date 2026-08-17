@@ -1,13 +1,12 @@
 import { memo, useCallback, useEffect, useRef } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
-import {
-  ArrowUpIcon,
-  GlobeIcon,
-  PaperclipIcon,
-  SquareIcon,
-} from "lucide-react"
+import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
+import {
+  ATTACHMENT_UPLOAD_TOAST,
+  ATTACHMENT_UPLOAD_TOAST_ID,
+} from "@/components/chat/attachments/constants"
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
 import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
@@ -17,12 +16,16 @@ import {
 } from "@/components/shared/motion/animated-toast-stack"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useComposerAttachments } from "@/hooks/useComposerAttachments"
+import { useModelPreferences } from "@/hooks/useModelPreferences"
 import {
   useThreadComposerCanSend,
   useThreadComposerDraft,
   useThreadComposerToolbarControls,
 } from "@/hooks/useThreadComposerState"
-import { ATTACHMENT_ACCEPT } from "@/lib/attachment-limits"
+import {
+  ATTACHMENT_ACCEPT,
+  normalizeAttachmentMimeType,
+} from "@/lib/attachment-limits"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
@@ -59,13 +62,10 @@ export const ChatComposer = memo(function ChatComposer({
     onSubmitRef.current()
   }, [])
 
-  const {
-    attachments,
-    addFiles,
-    removeAttachment,
-  } = useComposerAttachments(threadStateKey)
-  const toasts = useAnimatedToastStack({ limit: 4 })
-  const uploadToastId = useRef<string | null>(null)
+  const { attachments, addFiles, removeAttachment } =
+    useComposerAttachments(threadStateKey)
+  const toasts = useAnimatedToastStack({ limit: 1 })
+  const uploadToastActive = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -76,19 +76,17 @@ export const ChatComposer = memo(function ChatComposer({
   async function handleFilesSelected(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return
 
+    const pdfCount = Array.from(fileList).filter(
+      (file) => normalizeAttachmentMimeType(file) === "application/pdf"
+    ).length
+
     await addFiles(fileList, {
-      onPreparing: () => {
+      onBatchStart: () => {
+        if (pdfCount === 0) return
+        uploadToastActive.current = true
         toasts.showToast({
-          title: "Preparing attachments...",
-          status: "loading",
-          duration: 1800,
-          dismissible: true,
-        })
-      },
-      onBatchStart: (count) => {
-        uploadToastId.current = toasts.showToast({
-          id: uploadToastId.current ?? undefined,
-          title: `Uploading ${count} file${count === 1 ? "" : "s"}`,
+          id: ATTACHMENT_UPLOAD_TOAST_ID,
+          title: ATTACHMENT_UPLOAD_TOAST.uploading(pdfCount),
           status: "loading",
           duration: 0,
           dismissible: false,
@@ -96,6 +94,7 @@ export const ChatComposer = memo(function ChatComposer({
       },
       onRejected: (message) => {
         toasts.showToast({
+          id: ATTACHMENT_UPLOAD_TOAST_ID,
           title: message,
           status: "error",
           duration: 3600,
@@ -118,17 +117,22 @@ export const ChatComposer = memo(function ChatComposer({
     )
 
   useEffect(() => {
-    if (!uploadToastId.current || busyUploading || !allSettled) return
-    const failed = attachments.some(
+    if (!uploadToastActive.current || busyUploading || !allSettled) return
+    uploadToastActive.current = false
+    const failedCount = attachments.filter(
       (attachment) => attachment.status === "failed"
-    )
-    toasts.updateToast(uploadToastId.current, {
-      title: failed ? "Some uploads failed" : "Attachments ready",
-      status: failed ? "error" : "success",
+    ).length
+    toasts.updateToast(ATTACHMENT_UPLOAD_TOAST_ID, {
+      title:
+        failedCount === 0
+          ? ATTACHMENT_UPLOAD_TOAST.ready
+          : attachments.length === 1
+            ? ATTACHMENT_UPLOAD_TOAST.failed
+            : ATTACHMENT_UPLOAD_TOAST.someFailed,
+      status: failedCount > 0 ? "error" : "success",
       duration: 2800,
       dismissible: true,
     })
-    uploadToastId.current = null
   }, [allSettled, attachments, busyUploading, toasts])
 
   return (
@@ -141,9 +145,14 @@ export const ChatComposer = memo(function ChatComposer({
       <AnimatedToastStack
         toasts={toasts.toasts}
         onDismiss={toasts.dismissToast}
-        placement="absolute"
+        placement="fixed"
         position="bottom-right"
-        className="bottom-full mb-3"
+        portal
+        maxVisible={1}
+        className="!bottom-32 max-sm:!bottom-36"
+        classNames={{
+          surface: "rounded-xl p-2.5 shadow-lg",
+        }}
       />
       <div className="chat-composer-glass-host relative z-10 w-full rounded-[18px]">
         <form
@@ -156,7 +165,18 @@ export const ChatComposer = memo(function ChatComposer({
               attachments={attachments}
               disabled={disabled || isLoading}
               onRemove={(localId) => {
+                const removed = attachments.find(
+                  (attachment) => attachment.localId === localId
+                )
                 void removeAttachment(localId)
+                if (removed?.status === "ready" && removed.kind === "pdf") {
+                  toasts.showToast({
+                    id: ATTACHMENT_UPLOAD_TOAST_ID,
+                    title: ATTACHMENT_UPLOAD_TOAST.deleted,
+                    status: "success",
+                    duration: 2800,
+                  })
+                }
               }}
             />
             <ComposerDraftField
@@ -260,6 +280,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
   attachDisabled: boolean
 }) {
   const composer = useThreadComposerToolbarControls(threadStateKey)
+  const { isLoading: modelPreferencesLoading } = useModelPreferences()
 
   return (
     <div className="flex min-w-0 items-center gap-2 px-3 pb-7 sm:px-4 sm:pb-8">
@@ -273,7 +294,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
         }}
       />
 
-      {supportedReasoningEfforts.length > 1 ? (
+      {!modelPreferencesLoading && supportedReasoningEfforts.length > 1 ? (
         <ReasoningEffortSelect
           value={effectiveReasoningEffort}
           supportedEfforts={supportedReasoningEfforts}
@@ -292,21 +313,29 @@ const ComposerToolbar = memo(function ComposerToolbar({
           }
           label="Search"
           icon={<GlobeIcon className="size-3.5" />}
+          disabled={modelPreferencesLoading || disabled}
           tooltip={
             composer.searchEnabled ? "Disable web search" : "Search the web"
           }
         />
         <Tooltip content="Attach files">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-            aria-label="Attach"
-            disabled={attachDisabled}
-            onClick={onAttachClick}
+          <span
+            className={cn(
+              "inline-flex",
+              (attachDisabled || modelPreferencesLoading) && "cursor-not-allowed"
+            )}
           >
-            <PaperclipIcon className="size-3.5" />
-            Attach
-          </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              aria-label="Attach"
+              disabled={attachDisabled || modelPreferencesLoading}
+              onClick={onAttachClick}
+            >
+              <PaperclipIcon className="size-3.5" />
+              Attach
+            </button>
+          </span>
         </Tooltip>
       </div>
 
@@ -379,28 +408,33 @@ function ToolbarToggle({
   label,
   icon,
   tooltip,
+  disabled = false,
 }: {
   pressed: boolean
   onPressedChange: (next: boolean) => void
   label: string
   icon: ReactNode
   tooltip?: ReactNode
+  disabled?: boolean
 }) {
   const button = (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={() => onPressedChange(!pressed)}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors",
-        pressed
-          ? "border-foreground/15 bg-accent text-foreground"
-          : "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
-      )}
-    >
-      {icon}
-      {label}
-    </button>
+    <span className={cn("inline-flex", disabled && "cursor-not-allowed")}>
+      <button
+        type="button"
+        aria-pressed={pressed}
+        disabled={disabled}
+        onClick={() => onPressedChange(!pressed)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50",
+          pressed
+            ? "border-foreground/15 bg-accent text-foreground"
+            : "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+        )}
+      >
+        {icon}
+        {label}
+      </button>
+    </span>
   )
 
   return tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button

@@ -150,9 +150,9 @@ export function useAnimatedToastStack({
   defaultDuration = 4200,
   limit,
 }: UseAnimatedToastStackOptions = {}) {
-  const toastTimers = useRef<
-    Map<string, { timer: number; signature: string }>
-  >(new Map())
+  const toastTimers = useRef<Map<string, { timer: number; signature: string }>>(
+    new Map()
+  )
   const [toasts, setToasts] = useState<AnimatedToast[]>(() =>
     initialToasts.map((toast) => createToast(toast, defaultDuration))
   )
@@ -169,7 +169,10 @@ export function useAnimatedToastStack({
     (input: ToastInput) => {
       const toast = createToast(input, defaultDuration)
       setToasts((current) => {
-        const next = [...current, toast]
+        const withoutSameId = input.id
+          ? current.filter((item) => item.id !== toast.id)
+          : current
+        const next = [...withoutSameId, toast]
         return typeof limit === "number" ? next.slice(-limit) : next
       })
       return toast.id
@@ -290,8 +293,11 @@ export function AnimatedToastStack({
       aria-live="polite"
       aria-atomic="false"
       className={cn(
-        "pointer-events-none flex w-[calc(100vw-2rem)] max-w-sm gap-2",
+        "pointer-events-none flex w-max max-w-[min(24rem,calc(100vw-2rem))] gap-2",
         isBottom ? "flex-col-reverse" : "flex-col",
+        position.endsWith("right") && "items-end",
+        position.endsWith("left") && "items-start",
+        position.endsWith("center") && "items-center",
         resolvedPlacement === "fixed" && "fixed z-[90]",
         resolvedPlacement === "absolute" && "absolute z-20",
         resolvedPlacement !== "static" && POSITION_CLASS[position],
@@ -344,8 +350,9 @@ const ToastItem = memo(function ToastItem({
   const reduce = useReducedMotion()
   const status = toast.status ?? "neutral"
   const Icon = STATUS_ICON[status]
-  const iconNode =
-    icons?.[status] ?? toast.icon ?? <Icon className="h-3.5 w-3.5" />
+  const iconNode = icons?.[status] ?? toast.icon ?? (
+    <Icon className="h-3.5 w-3.5" />
+  )
   const canDismiss = toast.dismissible !== false && Boolean(onDismiss)
 
   return (
@@ -459,7 +466,7 @@ const ToastItem = memo(function ToastItem({
                 >
                   <p
                     className={cn(
-                      "truncate text-sm font-medium leading-5 text-foreground",
+                      "truncate text-sm leading-5 font-medium text-foreground",
                       classNames?.title
                     )}
                   >

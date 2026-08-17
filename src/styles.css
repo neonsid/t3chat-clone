@@ -424,9 +424,7 @@ html[data-theme-id="t3-chat"]
     );
   }
 
-  .sidebar-thread-row:is(:hover, :focus-within):not(
-      [data-thread-busy="true"]
-    )
+  .sidebar-thread-row:is(:hover, :focus-within):not([data-thread-busy="true"])
     .sidebar-thread-actions {
     pointer-events: auto;
     opacity: 1;
@@ -532,6 +530,13 @@ html[data-theme-id="t3-chat"]
   .dark .dropdown-glass {
     box-shadow: 0 18px 44px -18px rgb(0 0 0 / 80%);
   }
+}
+
+/* Composer overlay uses translate, which would trap a nested lightbox. Hide
+   it while the body-portaled viewer is open so it cannot paint on top. */
+body:has([data-attachment-lightbox]) [data-chat-composer-overlay] {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .chat-surface [data-streamdown="code-block"] {

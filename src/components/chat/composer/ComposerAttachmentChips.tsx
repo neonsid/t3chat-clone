@@ -1,23 +1,18 @@
-import { FileTextIcon, XIcon } from "lucide-react"
+import { useState } from "react"
 
+import { AttachmentLightbox } from "@/components/chat/attachments/AttachmentLightbox"
+import { AttachmentThumbnail } from "@/components/chat/attachments/AttachmentThumbnail"
 import type { ComposerAttachment } from "@/stores/types"
-import { cn } from "@/lib/utils"
 
-function statusLabel(attachment: ComposerAttachment) {
-  switch (attachment.status) {
-    case "preparing":
-      return "Preparing…"
-    case "uploading":
-      return attachment.progress > 0
-        ? `${Math.round(attachment.progress * 100)}%`
-        : "Uploading…"
-    case "processing":
-      return "Processing…"
-    case "ready":
-      return "Ready"
-    case "failed":
-      return attachment.errorMessage ?? "Failed"
+function composerStatusLabel(attachment: ComposerAttachment) {
+  if (attachment.kind === "image" && attachment.status !== "failed") {
+    return undefined
   }
+  if (attachment.status === "failed") {
+    return attachment.errorMessage ?? "Failed"
+  }
+  if (attachment.status === "processing") return "Processing…"
+  return undefined
 }
 
 export function ComposerAttachmentChips({
@@ -29,85 +24,77 @@ export function ComposerAttachmentChips({
   onRemove: (localId: string) => void
   disabled?: boolean
 }) {
+  const [viewer, setViewer] = useState<{
+    localId: string
+    filename: string
+    url: string
+  } | null>(null)
+
   if (attachments.length === 0) return null
 
   return (
-    <ul className="mb-3 flex flex-wrap gap-2">
-      {attachments.map((attachment) => {
-        const percent =
-          attachment.status === "uploading"
-            ? Math.round(attachment.progress * 100)
-            : attachment.status === "ready" ||
-                attachment.status === "processing"
-              ? 100
-              : 0
-        const indeterminate =
-          attachment.status === "preparing" ||
-          attachment.status === "processing" ||
-          (attachment.status === "uploading" && attachment.progress <= 0)
+    <>
+      <ul className="mb-3 flex w-fit max-w-full flex-wrap gap-2">
+        {attachments.map((attachment) => {
+          const previewUrl = attachment.localPreviewUrl
+          const canOpen = attachment.kind === "image" && Boolean(previewUrl)
 
-        return (
-          <li
-            key={attachment.localId}
-            className={cn(
-              "relative flex max-w-[11rem] items-center gap-2 overflow-hidden rounded-xl border border-border/70 bg-background/70 pe-1 ps-1.5 py-1",
-              attachment.status === "failed" && "border-destructive/40"
-            )}
-          >
-            <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted">
-              {attachment.kind === "image" && attachment.localPreviewUrl ? (
-                <img
-                  src={attachment.localPreviewUrl}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                <div className="flex size-full items-center justify-center text-muted-foreground">
-                  <FileTextIcon className="size-4" />
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1 py-0.5">
-              <p className="truncate text-xs text-muted-foreground">
-                {attachment.filename}
-              </p>
-              <p
-                className={cn(
-                  "text-[11px] tabular-nums",
-                  attachment.status === "failed"
-                    ? "text-destructive"
-                    : "text-muted-foreground/80"
-                )}
-              >
-                {statusLabel(attachment)}
-              </p>
-              {attachment.status !== "ready" &&
-              attachment.status !== "failed" ? (
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-border/80">
-                  <div
-                    className={cn(
-                      "h-full rounded-full bg-primary/70 transition-[width]",
-                      indeterminate && "w-1/3 animate-pulse"
-                    )}
-                    style={
-                      indeterminate ? undefined : { width: `${percent}%` }
-                    }
-                  />
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              aria-label={`Remove ${attachment.filename}`}
-              disabled={disabled}
-              onClick={() => onRemove(attachment.localId)}
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+          return (
+            <li key={attachment.localId}>
+              <AttachmentThumbnail
+                filename={attachment.filename}
+                kind={attachment.kind}
+                src={previewUrl}
+                statusLabel={composerStatusLabel(attachment)}
+                failed={attachment.status === "failed"}
+                showPercent={
+                  attachment.kind === "image" &&
+                  attachment.status !== "ready" &&
+                  attachment.status !== "failed"
+                }
+                progress={
+                  attachment.status === "processing"
+                    ? 1
+                    : attachment.status === "preparing" ||
+                        attachment.status === "uploading"
+                      ? attachment.progress
+                      : undefined
+                }
+                indeterminate={
+                  attachment.status === "preparing" ||
+                  (attachment.status === "uploading" &&
+                    attachment.progress <= 0)
+                }
+                onOpen={
+                  canOpen && previewUrl
+                    ? () =>
+                        setViewer({
+                          localId: attachment.localId,
+                          filename: attachment.filename,
+                          url: previewUrl,
+                        })
+                    : undefined
+                }
+                onRemove={() => {
+                  if (viewer?.localId === attachment.localId) setViewer(null)
+                  onRemove(attachment.localId)
+                }}
+                removeDisabled={disabled}
+              />
+            </li>
+          )
+        })}
+      </ul>
+      {viewer ? (
+        <AttachmentLightbox
+          open
+          filename={viewer.filename}
+          url={viewer.url}
+          onOpenChange={(open) => {
+            if (!open) setViewer(null)
+          }}
+        />
+      ) : null}
+    </>
   )
 }

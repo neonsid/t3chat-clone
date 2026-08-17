@@ -76,4 +76,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
 };

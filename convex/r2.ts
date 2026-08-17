@@ -5,12 +5,12 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { R2 } from "@convex-dev/r2"
 import { ConvexError, v } from "convex/values"
 
-import { internal } from "./_generated/api"
+import { components, internal } from "./_generated/api"
 import { action, internalAction } from "./_generated/server"
 import {
   ATTACHMENT_DELETE_BATCH_SIZE,
@@ -19,37 +19,25 @@ import {
   ATTACHMENT_PUT_URL_TTL_SECONDS,
 } from "./attachmentConstants"
 
-function requireR2Env() {
-  const accountId = process.env.R2_ACCOUNT_ID
+function r2Options() {
   const accessKeyId = process.env.R2_ACCESS_KEY_ID
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
   const bucket = process.env.R2_BUCKET
+  const endpoint =
+    process.env.R2_ENDPOINT ??
+    (process.env.R2_ACCOUNT_ID
+      ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+      : undefined)
 
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
+  if (!accessKeyId || !secretAccessKey || !bucket || !endpoint) {
     throw new ConvexError("R2 is not configured")
   }
 
-  return {
-    accountId,
-    accessKeyId,
-    secretAccessKey,
-    bucket,
-  }
+  return { accessKeyId, secretAccessKey, bucket, endpoint }
 }
 
-function createR2Client() {
-  const env = requireR2Env()
-  return {
-    client: new S3Client({
-      region: "auto",
-      endpoint: `https://${env.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: env.accessKeyId,
-        secretAccessKey: env.secretAccessKey,
-      },
-    }),
-    bucket: env.bucket,
-  }
+function getR2() {
+  return new R2(components.r2, r2Options())
 }
 
 async function requireViewerId(ctx: {
@@ -60,10 +48,7 @@ async function requireViewerId(ctx: {
   return identity.tokenIdentifier
 }
 
-function matchesMagicBytes(
-  bytes: Uint8Array,
-  mimeType: string
-): boolean {
+function matchesMagicBytes(bytes: Uint8Array, mimeType: string): boolean {
   if (mimeType === "application/pdf") {
     return (
       bytes.length >= 5 &&
@@ -75,7 +60,12 @@ function matchesMagicBytes(
     )
   }
   if (mimeType === "image/jpeg") {
-    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+    return (
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff
+    )
   }
   if (mimeType === "image/png") {
     return (
@@ -118,22 +108,20 @@ function matchesMagicBytes(
 }
 
 async function readObjectPrefix(
-  client: S3Client,
-  bucket: string,
+  r2: R2,
   objectKey: string,
   byteCount: number
 ): Promise<Uint8Array> {
-  const response = await client.send(
+  const response = await r2.client.send(
     new GetObjectCommand({
-      Bucket: bucket,
+      Bucket: r2.config.bucket,
       Key: objectKey,
       Range: `bytes=0-${byteCount - 1}`,
     })
   )
   const body = response.Body
   if (!body) throw new Error("Empty object body")
-  const bytes = await body.transformToByteArray()
-  return bytes
+  return await body.transformToByteArray()
 }
 
 export const getUploadUrl = action({
@@ -143,7 +131,10 @@ export const getUploadUrl = action({
     attachmentId: v.string(),
     mimeType: v.string(),
   }),
-  handler: async (ctx, args): Promise<{
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
     putUrl: string
     attachmentId: string
     mimeType: string
@@ -163,11 +154,12 @@ export const getUploadUrl = action({
       throw new ConvexError("Upload URL is no longer available")
     }
 
-    const { client, bucket } = createR2Client()
+    const r2 = getR2()
+    // Sign Content-Type so the client cannot PUT a different MIME than declared.
     const putUrl: string = await getSignedUrl(
-      client,
+      r2.client,
       new PutObjectCommand({
-        Bucket: bucket,
+        Bucket: r2.config.bucket,
         Key: attachment.objectKey,
         ContentType: attachment.mimeType,
       }),
@@ -194,7 +186,10 @@ export const getDownloadUrl = action({
     filename: v.string(),
     kind: v.union(v.literal("image"), v.literal("pdf")),
   }),
-  handler: async (ctx, args): Promise<{
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
     url: string
     expiresInSeconds: number
     mimeType: string
@@ -223,15 +218,9 @@ export const getDownloadUrl = action({
         ? ATTACHMENT_GET_URL_MODEL_TTL_SECONDS
         : ATTACHMENT_GET_URL_UI_TTL_SECONDS
 
-    const { client, bucket } = createR2Client()
-    const url: string = await getSignedUrl(
-      client,
-      new GetObjectCommand({
-        Bucket: bucket,
-        Key: attachment.objectKey,
-      }),
-      { expiresIn }
-    )
+    const url: string = await getR2().getUrl(attachment.objectKey, {
+      expiresIn,
+    })
 
     return {
       url,
@@ -257,7 +246,10 @@ export const mintModelDownloadUrls = action({
       filename: v.string(),
     })
   ),
-  handler: async (ctx, args): Promise<
+  handler: async (
+    ctx,
+    args
+  ): Promise<
     Array<{
       attachmentId: string
       url: string
@@ -283,7 +275,7 @@ export const mintModelDownloadUrls = action({
       attachmentIds: uniqueIds,
     })
 
-    const { client, bucket } = createR2Client()
+    const r2 = getR2()
     const results: Array<{
       attachmentId: string
       url: string
@@ -293,14 +285,9 @@ export const mintModelDownloadUrls = action({
     }> = []
     for (const attachment of rows) {
       if (attachment.status !== "ready") continue
-      const url: string = await getSignedUrl(
-        client,
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: attachment.objectKey,
-        }),
-        { expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS }
-      )
+      const url: string = await r2.getUrl(attachment.objectKey, {
+        expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
+      })
       results.push({
         attachmentId: attachment.attachmentId,
         url,
@@ -341,10 +328,10 @@ export const verifyObject = internalAction({
     })
 
     try {
-      const { client, bucket } = createR2Client()
-      const head = await client.send(
+      const r2 = getR2()
+      const head = await r2.client.send(
         new HeadObjectCommand({
-          Bucket: bucket,
+          Bucket: r2.config.bucket,
           Key: attachment.objectKey,
         })
       )
@@ -376,12 +363,7 @@ export const verifyObject = internalAction({
         return null
       }
 
-      const prefix = await readObjectPrefix(
-        client,
-        bucket,
-        attachment.objectKey,
-        16
-      )
+      const prefix = await readObjectPrefix(r2, attachment.objectKey, 16)
       if (!matchesMagicBytes(prefix, attachment.mimeType)) {
         await ctx.runMutation(internal.attachments.markFailed, {
           ownerId: args.ownerId,
@@ -395,14 +377,11 @@ export const verifyObject = internalAction({
         ownerId: args.ownerId,
         attachmentId: args.attachmentId,
       })
-    } catch (error) {
+    } catch {
       await ctx.runMutation(internal.attachments.markFailed, {
         ownerId: args.ownerId,
         attachmentId: args.attachmentId,
-        errorMessage:
-          error instanceof Error
-            ? "Unable to verify uploaded file"
-            : "Unable to verify uploaded file",
+        errorMessage: "Unable to verify uploaded file",
       })
     }
 
@@ -424,7 +403,7 @@ export const deleteObjects = internalAction({
       return null
     }
 
-    const { client, bucket } = createR2Client()
+    const r2 = getR2()
     const failedKeys: Array<string> = []
     const failedDocIds: typeof args.attachmentDocIds = []
     const succeededDocIds: typeof args.attachmentDocIds = []
@@ -444,9 +423,9 @@ export const deleteObjects = internalAction({
       )
 
       try {
-        const result = await client.send(
+        const result = await r2.client.send(
           new DeleteObjectsCommand({
-            Bucket: bucket,
+            Bucket: r2.config.bucket,
             Delete: {
               Objects: keyChunk.map((Key) => ({ Key })),
               Quiet: true,
