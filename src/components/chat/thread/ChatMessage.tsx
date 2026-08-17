@@ -1,5 +1,6 @@
 import { memo, useState } from "react"
 import type { UIMessage } from "@tanstack/ai-react"
+import { useAction } from "convex/react"
 import {
   CheckIcon,
   CircleSlashIcon,
@@ -9,10 +10,14 @@ import {
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
+import { api } from "../../../../convex/_generated/api"
+import { MessageAttachments } from "@/components/chat/attachments/MessageAttachments"
+import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
 import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { STOPPED_RESPONSE } from "@/components/chat/thread/constants"
 import { Button } from "@/components/shared/ui/button"
+import { formatUserMessageClipboard } from "@/lib/attachment-clipboard"
 import {
   chatMessageText,
   chatMessageThinking,
@@ -25,8 +30,16 @@ async function copyText(text: string) {
   await navigator.clipboard.writeText(text)
 }
 
-function MessageCopyControl({ text }: { text: string }) {
+function MessageCopyControl({
+  text,
+  attachments = [],
+}: {
+  text: string
+  attachments?: Array<ThreadMessageAttachment>
+}) {
+  const getDownloadUrl = useAction(api.r2.getDownloadUrl)
   const [copied, setCopied] = useState(false)
+  if (!text && attachments.length === 0) return null
 
   return (
     <Button
@@ -36,7 +49,21 @@ function MessageCopyControl({ text }: { text: string }) {
       className="size-6 text-muted-foreground hover:text-foreground"
       aria-label={copied ? "Copied" : "Copy message"}
       onClick={() => {
-        void copyText(text).then(() => {
+        void (async () => {
+          const links: Array<{ filename: string; url: string }> = []
+          for (const attachment of attachments) {
+            try {
+              const result = await getDownloadUrl({
+                attachmentId: attachment.attachmentId,
+                purpose: "ui",
+              })
+              links.push({ filename: attachment.filename, url: result.url })
+            } catch {
+              continue
+            }
+          }
+          await copyText(formatUserMessageClipboard(text, links))
+        })().then(() => {
           setCopied(true)
           window.setTimeout(() => setCopied(false), 1200)
         })
@@ -56,6 +83,7 @@ type ChatMessageProps = {
   isStreaming?: boolean
   isStopped?: boolean
   generationStats?: AssistantGenerationStats
+  attachments?: Array<ThreadMessageAttachment>
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -63,6 +91,7 @@ export const ChatMessage = memo(function ChatMessage({
   isStreaming = false,
   isStopped = false,
   generationStats,
+  attachments = [],
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
@@ -70,10 +99,16 @@ export const ChatMessage = memo(function ChatMessage({
   const timestamp = formatShortTimestamp(message.createdAt)
 
   if (isUser) {
+    if (!text && attachments.length === 0) return null
     return (
       <div className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 whitespace-pre-wrap text-[var(--message-foreground,var(--foreground))]">
-          {text}
+        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 text-[var(--message-foreground,var(--foreground))]">
+          {attachments.length > 0 ? (
+            <div className={text ? "mb-2" : undefined}>
+              <MessageAttachments attachments={attachments} />
+            </div>
+          ) : null}
+          {text ? <div className="whitespace-pre-wrap">{text}</div> : null}
         </div>
         <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
           <div className="flex shrink-0 items-center gap-2">
@@ -93,7 +128,9 @@ export const ChatMessage = memo(function ChatMessage({
               >
                 <Undo2Icon className="size-3" />
               </Button>
-              {text ? <MessageCopyControl text={text} /> : null}
+              {text || attachments.length > 0 ? (
+                <MessageCopyControl text={text} attachments={attachments} />
+              ) : null}
             </div>
           </div>
         </div>

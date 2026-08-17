@@ -83,29 +83,30 @@ export function ChatShellLayout() {
   }, [navigate, returnTo])
 
   const activateDraftWithMessage = useCallback(
-    (content: string) => {
+    (content: string, attachmentIds: string[] = []) => {
       if (!isDraft || !canPersistThread) return
 
       void (async () => {
         let createdThreadId: string | null = null
         try {
-          createdThreadId = await convex.mutation(
+          const threadId = await convex.mutation(
             api.threads.createOrReuseEmpty,
             {}
           )
+          createdThreadId = threadId
           moveThreadState(
             createThreadStateKey(user?.id, "guest"),
-            createThreadStateKey(user?.id, createdThreadId)
+            createThreadStateKey(user?.id, threadId)
           )
-          queuePendingSubmission(createdThreadId, content)
+          queuePendingSubmission(threadId, content, attachmentIds)
           await navigate({
             to: "/chat/$threadId",
-            params: { threadId: createdThreadId },
+            params: { threadId },
             replace: true,
           })
           // Ask the mounted thread view to dispatch the queued first turn once
           // its useChat client is bound — not from a mount effect.
-          chatRuntimeStore.getState().requestPendingFlush(createdThreadId)
+          chatRuntimeStore.getState().requestPendingFlush(threadId)
         } catch (submissionError) {
           if (createdThreadId) takePendingSubmission(createdThreadId)
           // The turn never reached a stream, so release the bridged "sending"

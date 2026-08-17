@@ -1,7 +1,15 @@
-import { memo, useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
+import {
+  memo,
+  useCallback,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
-import { useMutation } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
 import type { Id } from "../../../../convex/_generated/dataModel"
@@ -9,6 +17,7 @@ import type { Id } from "../../../../convex/_generated/dataModel"
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
+import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
 import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
@@ -39,15 +48,26 @@ import {
   resolveChatModel,
 } from "@/lib/chat-models"
 import {
+  rememberComposerPreviews,
+  sentAttachmentsForMessage,
+} from "@/lib/attachment-preview-cache"
+import {
   chatMessageHasContent,
   chatMessageText,
   chatMessageThinking,
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import { cn } from "@/lib/utils"
-import { chatRuntimeStore, useChatRuntimeStore } from "@/stores/chat-runtime-store"
+import {
+  chatRuntimeStore,
+  useChatRuntimeStore,
+} from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
-import { getThreadComposerState } from "@/stores/chat-ui-store"
+import {
+  composerCanSend,
+  getThreadComposerState,
+  readyAttachmentIds,
+} from "@/stores/chat-ui-store"
 import {
   CHAT_STREAM_PROCESSOR,
   CHAT_STREAM_RENDER_INTERVAL_MS,
@@ -114,7 +134,11 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
   )
 
   return (
-    <TimelineMinimap items={items} bottomInset={bottomInset} onSelect={onSelect} />
+    <TimelineMinimap
+      items={items}
+      bottomInset={bottomInset}
+      onSelect={onSelect}
+    />
   )
 })
 
@@ -124,18 +148,22 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
  * subtree — memoizing further up can't help, because the message list is the
  * very prop that changes.
  */
+const EMPTY_MESSAGE_ATTACHMENTS: Array<ThreadMessageAttachment> = []
+
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
   isScrollAnchor,
   isStopped,
   generationStats,
+  attachments,
 }: {
   message: UIMessage
   isStreaming: boolean
   isScrollAnchor: boolean
   isStopped: boolean
   generationStats: AssistantGenerationStats | undefined
+  attachments: Array<ThreadMessageAttachment>
 }) {
   return (
     <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
@@ -144,6 +172,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         isStreaming={isStreaming}
         isStopped={isStopped}
         generationStats={generationStats}
+        attachments={attachments}
       />
     </MessageScrollerItem>
   )
@@ -179,12 +208,39 @@ export function ChatThreadView({
     ReadonlySet<string>
   >(() => new Set())
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
+  const threadAttachmentDocs = useQuery(
+    api.attachments.listForThreadMessages,
+    isAuthenticated && threadId !== "guest"
+      ? { threadId: threadId as Id<"threads"> }
+      : "skip"
+  )
+  const attachmentsByMessageId = useMemo(() => {
+    const grouped = new Map<string, Array<ThreadMessageAttachment>>()
+    for (const attachment of threadAttachmentDocs ?? []) {
+      if (!attachment.messageId) continue
+      const existing = grouped.get(attachment.messageId)
+      const item = {
+        attachmentId: attachment.attachmentId,
+        messageId: attachment.messageId,
+        filename: attachment.filename,
+        kind: attachment.kind,
+      }
+      if (existing) existing.push(item)
+      else grouped.set(attachment.messageId, [item])
+    }
+    return grouped
+  }, [threadAttachmentDocs])
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
+  const hasComposerAttachments = useChatUiStore(
+    (state) =>
+      getThreadComposerState(state, threadStateKey).attachments.length > 0
+  )
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
   const chatUi = useChatUiStoreApi()
   const setDraft = useChatUiStore((state) => state.setDraft)
   const clearDraft = useChatUiStore((state) => state.clearDraft)
+  const clearAttachments = useChatUiStore((state) => state.clearAttachments)
   const pendingSubmission = useChatUiStore(
     (state) => state.pendingSubmissions[threadId]
   )
@@ -211,18 +267,20 @@ export function ChatThreadView({
   )?.providerReasoningEffort
   const expectsReasoning =
     providerReasoningEffort !== undefined && providerReasoningEffort !== "none"
-  const forwardedProps = useMemo(
-    () => ({
-      modelId: modelPreferences.selectedModelId,
-      reasoningEffort: effectiveReasoningEffort,
-    }),
-    [effectiveReasoningEffort, modelPreferences.selectedModelId]
-  )
+  // Stable object mutated before each send so attachmentIds are current when
+  // ChatClient spreads forwardedPropsOption at request time.
+  const forwardedPropsRef = useRef({
+    modelId: modelPreferences.selectedModelId,
+    reasoningEffort: effectiveReasoningEffort,
+    attachmentIds: [] as string[],
+  })
+  forwardedPropsRef.current.modelId = modelPreferences.selectedModelId
+  forwardedPropsRef.current.reasoningEffort = effectiveReasoningEffort
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     threadId,
     initialMessages,
-    forwardedProps,
+    forwardedProps: forwardedPropsRef.current,
     connection: fetchServerSentEvents("/api/chat"),
     streamProcessor: CHAT_STREAM_PROCESSOR,
   })
@@ -238,7 +296,8 @@ export function ChatThreadView({
     !hasPendingSubmission &&
     !hasStartedTurn &&
     !activeTurn &&
-    !hasDraft
+    !hasDraft &&
+    !hasComposerAttachments
   const lastMessage = messages.at(-1)
 
   // During the draft→thread handoff the real user message isn't dispatched until
@@ -249,15 +308,29 @@ export function ChatThreadView({
     isEmptyThread && (activeTurn || hasPendingSubmission)
       ? activeTurnContent || pendingSubmission?.content || ""
       : ""
+  const optimisticAttachmentCount =
+    isEmptyThread && (activeTurn || hasPendingSubmission)
+      ? (pendingSubmission?.attachmentIds.length ??
+        getThreadComposerState(chatUi.getState(), threadStateKey).attachments
+          .length)
+      : 0
   const optimisticUserMessage = useMemo<UIMessage | null>(() => {
-    if (!optimisticUserContent) return null
+    if (!optimisticUserContent && optimisticAttachmentCount === 0) return null
     return {
       id: pendingSubmission?.messageId ?? "optimistic-user",
       role: "user",
-      parts: [{ type: "text", content: optimisticUserContent }],
+      parts: [
+        ...(optimisticUserContent
+          ? [{ type: "text" as const, content: optimisticUserContent }]
+          : [{ type: "text" as const, content: "" }]),
+      ],
       createdAt: new Date(),
     }
-  }, [optimisticUserContent, pendingSubmission?.messageId])
+  }, [
+    optimisticAttachmentCount,
+    optimisticUserContent,
+    pendingSubmission?.messageId,
+  ])
   const displayMessages = optimisticUserMessage
     ? [optimisticUserMessage]
     : messages
@@ -315,11 +388,18 @@ export function ChatThreadView({
             locallyStoppedMessageIds.has(message.id)
           }
           generationStats={generationStats[message.id]}
+          attachments={sentAttachmentsForMessage(
+            message.id,
+            attachmentsByMessageId.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+            latestUserMessageId
+          )}
         />
       )),
     [
+      attachmentsByMessageId,
       generationStats,
       history,
+      latestUserMessageId,
       locallyStoppedMessageIds,
       scrollAnchorId,
       stoppedMessageIds,
@@ -361,26 +441,43 @@ export function ChatThreadView({
             isScrollAnchor={false}
             isStopped={false}
             generationStats={undefined}
+            attachments={
+              attachmentsByMessageId.get(renderedStreamingMessage.id) ??
+              EMPTY_MESSAGE_ATTACHMENTS
+            }
           />,
         ]
       : historyRows
 
   function submitMessage(content?: string) {
-    const text =
-      content ??
-      getThreadComposerState(chatUi.getState(), threadStateKey).draft.trim()
-    if (!isReady || !text || isLoading) return
+    const composer = getThreadComposerState(chatUi.getState(), threadStateKey)
+    const text = content ?? composer.draft.trim()
+    const attachmentIds = readyAttachmentIds(composer)
+    if (!isReady || isLoading) return
+    if (!composerCanSend({ ...composer, draft: text })) return
     if (!isAuthenticated) {
       onRequireAuthentication()
       return
     }
 
+    forwardedPropsRef.current.attachmentIds = attachmentIds
+    rememberComposerPreviews(composer.attachments)
     clearDraft(threadStateKey)
+    clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: crypto.randomUUID(),
-      content: [{ type: "text", content: text }],
-    })
+      content: text
+        ? [{ type: "text", content: text }]
+        : [{ type: "text", content: "" }],
+    }).then(
+      () => {
+        forwardedPropsRef.current.attachmentIds = []
+      },
+      () => {
+        forwardedPropsRef.current.attachmentIds = attachmentIds
+      }
+    )
   }
 
   function fillPrompt(prompt: string) {
@@ -428,11 +525,22 @@ export function ChatThreadView({
     const pending = takePendingSubmission(threadId)
     if (!pending) return
 
+    forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+    clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
     void sendMessage({
       id: pending.messageId,
-      content: [{ type: "text", content: pending.content }],
-    })
+      content: pending.content
+        ? [{ type: "text", content: pending.content }]
+        : [{ type: "text", content: "" }],
+    }).then(
+      () => {
+        forwardedPropsRef.current.attachmentIds = []
+      },
+      () => {
+        forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+      }
+    )
   }
 
   useLayoutEffect(() => {
@@ -449,7 +557,9 @@ export function ChatThreadView({
     if (!isReady || !isAuthenticated) return
     return chatRuntimeStore
       .getState()
-      .registerPendingFlusher(threadId, () => flushPendingSubmissionRef.current())
+      .registerPendingFlusher(threadId, () =>
+        flushPendingSubmissionRef.current()
+      )
   }, [threadId, isReady, isAuthenticated])
 
   useLayoutEffect(() => {
@@ -459,7 +569,9 @@ export function ChatThreadView({
       isReady,
       isEmptyThread,
       effectiveReasoningEffort,
-      supportedReasoningEfforts: modelConfig.supportedReasoningEfforts,
+      supportedReasoningEfforts: modelPreferences.isLoading
+        ? []
+        : modelConfig.supportedReasoningEfforts,
       modelLoading: modelPreferences.isLoading,
     })
   }, [

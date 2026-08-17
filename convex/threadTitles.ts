@@ -29,12 +29,46 @@ export const getTitleContext = internalQuery({
       .order("asc")
       .first()
 
-    const firstText = firstMessage ? getMessageContent(firstMessage) : ""
-    if (!firstText.trim()) return null
+    if (!firstMessage) return null
+
+    const firstText = getMessageContent(firstMessage)
+    if (firstText.trim()) {
+      return {
+        threadId: thread._id,
+        firstMessage: firstText.slice(0, MAX_THREAD_TITLE_LENGTH * 8),
+      }
+    }
+
+    const attachments = await ctx.db
+      .query("attachments")
+      .withIndex("by_threadId_and_messageId", (query) =>
+        query
+          .eq("threadId", thread._id)
+          .eq("messageId", firstMessage.messageId)
+      )
+      .take(5)
+
+    if (attachments.length === 0) return null
+
+    const filenames = attachments.map((attachment) => attachment.filename)
+    const allImages = attachments.every(
+      (attachment) => attachment.kind === "image"
+    )
+    const allPdfs = attachments.every(
+      (attachment) => attachment.kind === "pdf"
+    )
+    const titleSeed =
+      filenames.length === 1
+        ? filenames[0]!
+        : allImages
+          ? "Images"
+          : allPdfs
+            ? "PDFs"
+            : filenames.slice(0, 2).join(", ")
 
     return {
       threadId: thread._id,
-      firstMessage: firstText.slice(0, MAX_THREAD_TITLE_LENGTH * 8),
+      firstMessage: titleSeed.slice(0, MAX_THREAD_TITLE_LENGTH * 8),
     }
   },
 })

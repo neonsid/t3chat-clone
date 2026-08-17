@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { contextToModelMessages } from "@/lib/chat-context"
+import {
+  contextRequiresPdf,
+  contextRequiresVision,
+  contextToModelMessages,
+} from "@/lib/chat-context"
 import { MAX_MODEL_CONTEXT_CHARACTERS } from "@/lib/chat-models"
 
 describe("contextToModelMessages", () => {
@@ -64,5 +68,89 @@ describe("contextToModelMessages", () => {
       },
       { role: "user", content: newer },
     ])
+  })
+
+  it("builds image and pdf parts from signed urls", () => {
+    expect(
+      contextToModelMessages([
+        {
+          role: "user",
+          content: "",
+          attachments: [
+            {
+              attachmentId: "a1",
+              kind: "image",
+              mimeType: "image/png",
+              filename: "shot.png",
+              sizeBytes: 10,
+              url: "https://example.com/shot.png",
+            },
+            {
+              attachmentId: "a2",
+              kind: "pdf",
+              mimeType: "application/pdf",
+              filename: "doc.pdf",
+              sizeBytes: 20,
+              url: "https://example.com/doc.pdf",
+            },
+          ],
+        },
+      ])
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: "https://example.com/shot.png",
+              mimeType: "image/png",
+            },
+          },
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: "https://example.com/doc.pdf",
+              mimeType: "application/pdf",
+            },
+          },
+        ],
+      },
+    ])
+  })
+
+  it("detects vision and pdf requirements across context", () => {
+    const messages = [
+      {
+        role: "user" as const,
+        content: "hi",
+        attachments: [
+          {
+            attachmentId: "a1",
+            kind: "image" as const,
+            mimeType: "image/jpeg",
+            filename: "a.jpg",
+            sizeBytes: 1,
+          },
+        ],
+      },
+      {
+        role: "user" as const,
+        content: "pdf",
+        attachments: [
+          {
+            attachmentId: "a2",
+            kind: "pdf" as const,
+            mimeType: "application/pdf",
+            filename: "b.pdf",
+            sizeBytes: 1,
+          },
+        ],
+      },
+    ]
+    expect(contextRequiresVision(messages)).toBe(true)
+    expect(contextRequiresPdf(messages)).toBe(true)
   })
 })

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values"
 
 import { internal } from "./_generated/api"
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "./attachmentConstants"
 import {
   MAX_CHAT_IDENTIFIER_LENGTH,
   MAX_MESSAGE_CONTENT_LENGTH,
@@ -175,6 +176,7 @@ export const start = authedMutation({
     completionSecret: v.string(),
     userMessageId: v.string(),
     content: v.string(),
+    attachmentIds: v.optional(v.array(v.string())),
     modelId: v.string(),
     reasoningEffort: reasoningEffortValidator,
   },
@@ -193,6 +195,14 @@ export const start = authedMutation({
     }
     if (thread.messageCount + 2 > MAX_THREAD_MESSAGES) {
       throw new ConvexError("This thread has reached its message limit")
+    }
+
+    const attachmentIds = args.attachmentIds ?? []
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      throw new ConvexError("Too many attachments")
+    }
+    if (new Set(attachmentIds).size !== attachmentIds.length) {
+      throw new ConvexError("Duplicate attachment ids")
     }
 
     const existingRun = await ctx.db
@@ -224,10 +234,36 @@ export const start = authedMutation({
     }
 
     const content = args.content.trim()
-    if (!content) throw new ConvexError("Message cannot be empty")
+    if (!content && attachmentIds.length === 0) {
+      throw new ConvexError("Message cannot be empty")
+    }
     if (content.length > MAX_MESSAGE_CONTENT_LENGTH) {
       throw new ConvexError("Message is too long")
     }
+
+    const attachments: Array<Doc<"attachments">> = []
+    for (const attachmentId of attachmentIds) {
+      const attachment = await ctx.db
+        .query("attachments")
+        .withIndex("by_ownerId_and_attachmentId", (query) =>
+          query.eq("ownerId", ctx.viewerId).eq("attachmentId", attachmentId)
+        )
+        .unique()
+      if (!attachment) throw new ConvexError("Attachment not found")
+      if (attachment.status !== "ready") {
+        throw new ConvexError("Attachment is not ready")
+      }
+      if (attachment.bindingStatus === "bound") {
+        if (
+          attachment.threadId !== thread._id ||
+          attachment.messageId !== args.userMessageId
+        ) {
+          throw new ConvexError("Attachment is already bound")
+        }
+      }
+      attachments.push(attachment)
+    }
+
     const existingMessage = await ctx.db
       .query("messages")
       .withIndex("by_threadId_and_messageId", (query) =>
@@ -243,12 +279,22 @@ export const start = authedMutation({
         messageId: args.userMessageId,
         sequence: nextSequence,
         role: "user",
-        content,
+        content: content || undefined,
         status: "complete",
         createdAt: now,
       })
       nextSequence += 1
       messageCount += 1
+    }
+
+    for (const attachment of attachments) {
+      if (attachment.bindingStatus === "bound") continue
+      await ctx.db.patch("attachments", attachment._id, {
+        bindingStatus: "bound",
+        threadId: thread._id,
+        messageId: args.userMessageId,
+        expiresAt: undefined,
+      })
     }
 
     const shouldGenerateTitle =
