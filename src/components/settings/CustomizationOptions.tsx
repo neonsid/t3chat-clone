@@ -16,7 +16,7 @@ export function CustomizationBehaviorOptions() {
   return (
     <section>
       <h2 className="text-xl font-semibold tracking-tight">Behavior Options</h2>
-      <div className="mt-2 divide-y divide-border">
+      <div className="mt-2">
         {CUSTOMIZATION_BEHAVIOR_OPTIONS.map((option) => (
           <SettingsToggleRow
             key={option.id}
@@ -45,7 +45,7 @@ export function CustomizationVisualOptions() {
   return (
     <section>
       <h2 className="text-xl font-semibold tracking-tight">Visual Options</h2>
-      <div className="mt-2 divide-y divide-border">
+      <div className="mt-2">
         {CUSTOMIZATION_VISUAL_OPTIONS.map((option) => (
           <SettingsToggleRow
             key={option.id}

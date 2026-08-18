@@ -196,7 +196,7 @@ export function CustomizationProfile() {
             placeholder={CUSTOMIZATION_PROFILE.extraPlaceholder}
             rows={5}
             onChange={(event) => setExtra(event.target.value)}
-            className="min-h-28 w-full resize-y rounded-md border border-border bg-transparent px-3 py-2.5 pr-16 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+            className="min-h-28 w-full resize-none rounded-md border border-border bg-transparent px-3 py-2.5 pr-16 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
           />
         </CustomizationField>
       </div>
