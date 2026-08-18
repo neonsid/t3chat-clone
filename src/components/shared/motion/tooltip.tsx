@@ -17,6 +17,7 @@ import type { ReactElement, ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { EASE_OUT } from "@/lib/ease"
 import {
+  TOOLTIP_ALIGN_TRANSLATE_X,
   TOOLTIP_ANCHOR_TRANSLATE,
   TOOLTIP_GAP_PX,
   TOOLTIP_OFFSET_FROM,
@@ -26,6 +27,7 @@ import {
 } from "@/components/shared/motion/constants"
 import type {
   MotionSide,
+  TooltipAlign,
   TooltipOffset,
 } from "@/components/shared/motion/constants"
 import { useHoverCapable } from "@/hooks/useHoverCapable"
@@ -37,6 +39,8 @@ export interface TooltipProps {
   content: ReactNode
   children: ReactElement
   side?: MotionSide
+  /** Horizontal align for top/bottom sides. Default center. */
+  align?: TooltipAlign
   /** Delay before showing (ms). Default 120. */
   delay?: number
   className?: string
@@ -92,6 +96,7 @@ export function Tooltip({
   content,
   children,
   side = "top",
+  align = "center",
   delay = 120,
   className,
   wrapperClassName,
@@ -115,14 +120,19 @@ export function Tooltip({
     const r = el.getBoundingClientRect()
     const cx = r.left + r.width / 2
     const cy = r.top + r.height / 2
+    const alignedLeft = {
+      start: r.left,
+      center: cx,
+      end: r.right,
+    }[align]
     const point = {
-      top: { top: r.top - TOOLTIP_GAP_PX, left: cx },
-      bottom: { top: r.bottom + TOOLTIP_GAP_PX, left: cx },
+      top: { top: r.top - TOOLTIP_GAP_PX, left: alignedLeft },
+      bottom: { top: r.bottom + TOOLTIP_GAP_PX, left: alignedLeft },
       left: { top: cy, left: r.left - TOOLTIP_GAP_PX },
       right: { top: cy, left: r.right + TOOLTIP_GAP_PX },
     } satisfies Record<MotionSide, { top: number; left: number }>
     setCoords(point[side])
-  }, [side])
+  }, [align, side])
 
   const show = useCallback(() => {
     if (!canHover) return
@@ -187,7 +197,12 @@ export function Tooltip({
           style={{
             top: coords.top,
             left: coords.left,
-            translate: TOOLTIP_ANCHOR_TRANSLATE[side],
+            translate:
+              side === "left" || side === "right"
+                ? TOOLTIP_ANCHOR_TRANSLATE[side]
+                : `${TOOLTIP_ALIGN_TRANSLATE_X[align]} ${
+                    side === "top" ? "-100%" : "0"
+                  }`,
             transformOrigin: TOOLTIP_TRANSFORM_ORIGIN[side],
           }}
         >

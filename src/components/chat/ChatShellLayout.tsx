@@ -26,6 +26,8 @@ import { SIGN_IN_PATH } from "@/lib/auth"
 import {
   createTemporarySidebarThread,
   createTemporaryThreadId,
+  isTemporaryThreadId,
+  storedTemporaryThreadToChatThread,
 } from "@/lib/temporary-chat"
 import { useChatUiStore, useSidebarUiStore } from "@/stores/AppStateProvider"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
@@ -33,6 +35,10 @@ import {
   chatRuntimeStore,
   useChatRuntimeStore,
 } from "@/stores/chat-runtime-store"
+import {
+  temporaryThreadsStore,
+  useTemporaryThreadsStore,
+} from "@/stores/temporary-threads-store"
 
 export function ChatShellLayout() {
   const navigate = useNavigate()
@@ -67,6 +73,13 @@ export function ChatShellLayout() {
   const toasts = useAnimatedToastStack({ limit: 1 })
   const [convertOpen, setConvertOpen] = useState(false)
   const [convertPending, setConvertPending] = useState(false)
+  const [convertThreadId, setConvertThreadId] = useState<string | null>(null)
+  const storedTemporaryThreads = useTemporaryThreadsStore(
+    (state) => state.threads
+  )
+  const forgottenThreadIds = useTemporaryThreadsStore(
+    (state) => state.forgottenThreadIds
+  )
 
   const {
     isSidebarDataReady,
@@ -82,9 +95,41 @@ export function ChatShellLayout() {
   } = useThreadList({ forceGuestThread, searchQuery })
 
   const sidebarThreads = useMemo(() => {
-    if (!isTemporary || (!hasConversation && !isBusy)) return threads
-    return [createTemporarySidebarThread(threadId, isBusy), ...threads]
-  }, [hasConversation, isBusy, isTemporary, threadId, threads])
+    const query = searchQuery.trim().toLowerCase()
+    const localThreads = Object.values(storedTemporaryThreads)
+      .filter((thread) => thread.archivedAt == null)
+      .filter((thread) =>
+        query ? thread.title.toLowerCase().includes(query) : true
+      )
+      .map((thread) =>
+        storedTemporaryThreadToChatThread(
+          thread,
+          thread.id === threadId && isBusy
+        )
+      )
+    const hasCurrentLocal = localThreads.some(
+      (thread) => thread.id === threadId
+    )
+    const injected =
+      isTemporary &&
+      !convertPending &&
+      !forgottenThreadIds[threadId] &&
+      (hasConversation || isBusy) &&
+      !hasCurrentLocal
+        ? [createTemporarySidebarThread(threadId, isBusy)]
+        : []
+    return [...injected, ...localThreads, ...threads]
+  }, [
+    convertPending,
+    forgottenThreadIds,
+    hasConversation,
+    isBusy,
+    isTemporary,
+    searchQuery,
+    storedTemporaryThreads,
+    threadId,
+    threads,
+  ])
 
   useLayoutEffect(() => {
     if (!isChatUiHydrated) return
@@ -212,8 +257,28 @@ export function ChatShellLayout() {
     [convex, navigate]
   )
 
+  const navigateAfterLeavingLocalThread = useCallback(() => {
+    if (isTemporaryChatPreference) {
+      void navigate({
+        to: "/chat/$threadId",
+        params: { threadId: createTemporaryThreadId() },
+        replace: true,
+      })
+      return
+    }
+    void navigate({ to: "/", replace: true })
+  }, [isTemporaryChatPreference, navigate])
+
   const removeThread = useCallback(
     async (removedThreadId: string) => {
+      if (isTemporaryThreadId(removedThreadId)) {
+        temporaryThreadsStore.getState().removeThread(removedThreadId)
+        removeThreadState(createThreadStateKey(user?.id, removedThreadId))
+        if (removedThreadId !== sidebarActiveThreadId) return
+        navigateAfterLeavingLocalThread()
+        return
+      }
+
       const nextThreadId = await deleteThread(removedThreadId)
       removeThreadState(createThreadStateKey(user?.id, removedThreadId))
       if (removedThreadId !== sidebarActiveThreadId) return
@@ -222,6 +287,7 @@ export function ChatShellLayout() {
     },
     [
       deleteThread,
+      navigateAfterLeavingLocalThread,
       navigateAfterLeavingThread,
       removeThreadState,
       sidebarActiveThreadId,
@@ -231,32 +297,73 @@ export function ChatShellLayout() {
 
   const archiveChat = useCallback(
     async (archivedThreadId: string) => {
+      if (isTemporaryThreadId(archivedThreadId)) {
+        temporaryThreadsStore.getState().archive(archivedThreadId)
+        if (archivedThreadId !== sidebarActiveThreadId) return
+        navigateAfterLeavingLocalThread()
+        return
+      }
+
       const nextThreadId = await archiveThread(archivedThreadId)
       if (archivedThreadId !== sidebarActiveThreadId) return
 
       await navigateAfterLeavingThread(nextThreadId)
     },
-    [archiveThread, navigateAfterLeavingThread, sidebarActiveThreadId]
+    [
+      archiveThread,
+      navigateAfterLeavingLocalThread,
+      navigateAfterLeavingThread,
+      sidebarActiveThreadId,
+    ]
   )
+
+  const pinChat = useCallback(
+    (pinnedThreadId: string) => {
+      if (isTemporaryThreadId(pinnedThreadId)) {
+        temporaryThreadsStore.getState().togglePinned(pinnedThreadId)
+        return
+      }
+      void toggleThreadPinned(pinnedThreadId)
+    },
+    [toggleThreadPinned]
+  )
+
+  const renameChat = useCallback(
+    (renamedThreadId: string, title: string) => {
+      if (isTemporaryThreadId(renamedThreadId)) {
+        temporaryThreadsStore.getState().rename(renamedThreadId, title)
+        return
+      }
+      void renameThread(renamedThreadId, title)
+    },
+    [renameThread]
+  )
+
+  const openConvertDialog = useCallback((targetThreadId: string) => {
+    setConvertThreadId(targetThreadId)
+    setConvertOpen(true)
+  }, [])
 
   const sidebarActions = useMemo(
     () => ({
       select: openThread,
       create: createNewThread,
       delete: (id: string) => void removeThread(id),
-      togglePinned: (id: string) => void toggleThreadPinned(id),
+      togglePinned: pinChat,
       archive: (id: string) => void archiveChat(id),
-      rename: (id: string, title: string) => void renameThread(id, title),
+      rename: renameChat,
       regenerateTitle: (id: string) => void regenerateThreadTitle(id),
+      convert: openConvertDialog,
     }),
     [
       archiveChat,
       createNewThread,
+      openConvertDialog,
       openThread,
+      pinChat,
       regenerateThreadTitle,
       removeThread,
-      renameThread,
-      toggleThreadPinned,
+      renameChat,
     ]
   )
 
@@ -274,6 +381,7 @@ export function ChatShellLayout() {
         void navigate({ to: "/" })
         return
       }
+      setConvertThreadId(threadId)
       setConvertOpen(true)
       return
     }
@@ -289,9 +397,15 @@ export function ChatShellLayout() {
 
   const handleConvert = useCallback(() => {
     if (convertPending || isBusy) return
-    const messages = chatRuntimeStore.getState().getPersistableMessages()
+    const sourceThreadId = convertThreadId ?? threadId
+    const messages =
+      sourceThreadId === threadId
+        ? chatRuntimeStore.getState().getPersistableMessages()
+        : (temporaryThreadsStore.getState().threads[sourceThreadId]?.messages ??
+          [])
     if (messages.length === 0) {
       setConvertOpen(false)
+      setConvertThreadId(null)
       setTemporaryChat(false)
       void navigate({ to: "/" })
       return
@@ -301,12 +415,14 @@ export function ChatShellLayout() {
     void (async () => {
       try {
         const storedThreadId = await persistTemporary({ messages })
+        temporaryThreadsStore.getState().removeThread(sourceThreadId)
         moveThreadState(
-          createThreadStateKey(user?.id, threadId),
+          createThreadStateKey(user?.id, sourceThreadId),
           createThreadStateKey(user?.id, storedThreadId)
         )
         setTemporaryChat(false)
         setConvertOpen(false)
+        setConvertThreadId(null)
         await navigate({
           to: "/chat/$threadId",
           params: { threadId: storedThreadId },
@@ -328,6 +444,7 @@ export function ChatShellLayout() {
     })()
   }, [
     convertPending,
+    convertThreadId,
     isBusy,
     moveThreadState,
     navigate,
@@ -384,7 +501,10 @@ export function ChatShellLayout() {
         </ChatShell>
         <ConvertTemporaryChatDialog
           open={convertOpen}
-          onOpenChange={setConvertOpen}
+          onOpenChange={(open) => {
+            setConvertOpen(open)
+            if (!open) setConvertThreadId(null)
+          }}
           onConfirm={handleConvert}
           isPending={convertPending}
         />

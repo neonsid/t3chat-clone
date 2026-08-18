@@ -63,6 +63,65 @@ export function createTemporarySidebarThread(
   }
 }
 
+export type StoredTemporaryThread = {
+  id: string
+  title: string
+  titleSource: ChatThread["titleSource"]
+  createdAt: number
+  updatedAt: number
+  pinnedAt?: number
+  archivedAt?: number
+  messages: PersistableTemporaryMessage[]
+  generationStats: Record<string, AssistantGenerationStats>
+  stoppedMessageIds: string[]
+}
+
+export function persistableMessagesToUiMessages(
+  messages: PersistableTemporaryMessage[]
+) {
+  return messages.map((message) => ({
+    id: message.messageId,
+    role: message.role,
+    parts: [
+      ...(message.thinking
+        ? [{ type: "thinking" as const, content: message.thinking }]
+        : []),
+      ...(message.content
+        ? [{ type: "text" as const, content: message.content }]
+        : []),
+    ],
+    createdAt: new Date(message.createdAt),
+  }))
+}
+
+export function storedTemporaryThreadToChatThread(
+  thread: StoredTemporaryThread,
+  isStreaming: boolean
+): ChatThread {
+  return {
+    id: thread.id,
+    title: thread.title,
+    titleSource: isStreaming ? "pending" : thread.titleSource,
+    isStreaming,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    messages: persistableMessagesToUiMessages(thread.messages),
+    generationStats: thread.generationStats,
+    pinnedAt: thread.pinnedAt,
+    isTemporary: true,
+  }
+}
+
+export function storedTemporaryThreadsEqual(
+  left: StoredTemporaryThread,
+  right: StoredTemporaryThread
+) {
+  return (
+    JSON.stringify({ ...left, updatedAt: 0 }) ===
+    JSON.stringify({ ...right, updatedAt: 0 })
+  )
+}
+
 export function toPersistableTemporaryMessages(
   messages: Array<{
     id: string

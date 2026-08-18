@@ -6,6 +6,8 @@ import {
   estimateTemporaryGenerationStats,
   isTemporaryThreadId,
   TEMP_THREAD_PREFIX,
+  persistableMessagesToUiMessages,
+  storedTemporaryThreadToChatThread,
   toPersistableTemporaryMessages,
 } from "@/lib/temporary-chat"
 
@@ -101,6 +103,69 @@ describe("temporary thread ids", () => {
         status: "stopped",
         createdAt: 20,
         attachmentIds: undefined,
+      },
+    ])
+  })
+
+  it("round-trips persistable messages into a sidebar thread", () => {
+    const persistable = toPersistableTemporaryMessages(
+      [
+        {
+          id: "u1",
+          role: "user",
+          content: "Hello",
+          thinking: "",
+          createdAt: 10,
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          content: "Hi",
+          thinking: "",
+          createdAt: 20,
+        },
+      ],
+      {},
+      new Set()
+    )
+    const thread = storedTemporaryThreadToChatThread(
+      {
+        id: "tmp-1",
+        title: "Renamed",
+        titleSource: "manual",
+        createdAt: 10,
+        updatedAt: 20,
+        pinnedAt: 30,
+        messages: persistable,
+        generationStats: {
+          a1: {
+            modelName: "GPT-5.5",
+            mode: "Instant",
+            outputTokens: 2,
+            tokensPerSecond: 0,
+            timeToFirstTokenSeconds: 0,
+          },
+        },
+        stoppedMessageIds: [],
+      },
+      false
+    )
+
+    expect(thread.title).toBe("Renamed")
+    expect(thread.pinnedAt).toBe(30)
+    expect(thread.isTemporary).toBe(true)
+    expect(persistableMessagesToUiMessages(persistable)).toEqual([
+      {
+        id: "u1",
+        role: "user",
+        parts: [{ type: "text", content: "Hello" }],
+        createdAt: new Date(10),
+      },
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [{ type: "text", content: "Hi" }],
+        createdAt: new Date(20),
       },
     ])
   })

@@ -69,6 +69,7 @@ import {
   useChatRuntimeStore,
 } from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
+import { temporaryThreadsStore } from "@/stores/temporary-threads-store"
 import {
   composerCanSend,
   getThreadComposerState,
@@ -218,7 +219,7 @@ export function ChatThreadView({
   >(() => new Set())
   const [ephemeralGenerationStats, setEphemeralGenerationStats] = useState<
     Record<string, AssistantGenerationStats>
-  >({})
+  >(() => generationStats)
   const isTemporary = isTemporaryThreadId(threadId)
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
@@ -667,6 +668,27 @@ export function ChatThreadView({
       .getState()
       .bindPersistableMessages(() => persistableMessagesRef.current())
   }, [threadId])
+
+  // External localStorage snapshot. Cannot run during render: the sidebar
+  // subscribes to this store and would update while this view is rendering.
+  useLayoutEffect(() => {
+    if (!isTemporary || messages.length === 0) return
+    if (isLoading && lastMessage?.role !== "user") return
+    temporaryThreadsStore.getState().upsertLiveTranscript(threadId, {
+      messages: persistableMessagesRef.current(),
+      generationStats: resolvedGenerationStats,
+      stoppedMessageIds: [...stoppedMessageIds, ...locallyStoppedMessageIds],
+    })
+  }, [
+    isLoading,
+    isTemporary,
+    lastMessage?.role,
+    locallyStoppedMessageIds,
+    messages,
+    resolvedGenerationStats,
+    stoppedMessageIds,
+    threadId,
+  ])
 
   // Draft submit queues a pending message then navigates here and requests a
   // flush. Registering the flusher (instead of sending on mount) keeps the

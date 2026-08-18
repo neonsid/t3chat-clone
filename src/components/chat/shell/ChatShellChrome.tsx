@@ -151,9 +151,22 @@ export function ChatHeaderActions({
   const isMobile = useIsMobile()
   const open = useSidebarUiStore((state) => state.desktopOpen)
   const onNotch = open && !isMobile
-  const tooltip = disabled
-    ? TEMPORARY_CHAT.onlyOnNewChat
-    : TEMPORARY_CHAT.toggleLabel
+  const tooltip = disabled ? (
+    TEMPORARY_CHAT.onlyOnNewChat
+  ) : (
+    <span className="flex flex-col gap-px text-left">
+      <span>
+        {isTemporaryChat
+          ? TEMPORARY_CHAT.convertTooltipTitle
+          : TEMPORARY_CHAT.enableTooltipTitle}
+      </span>
+      <span className="font-normal whitespace-nowrap text-muted-foreground">
+        {isTemporaryChat
+          ? TEMPORARY_CHAT.convertTooltipDescription
+          : TEMPORARY_CHAT.enableTooltipDescription}
+      </span>
+    </span>
+  )
 
   return (
     <div className="pointer-events-none fixed top-[10px] right-3 z-60">
@@ -175,7 +188,9 @@ export function ChatHeaderActions({
           <Tooltip
             content={tooltip}
             side="bottom"
+            align="end"
             delay={250}
+            className="rounded-md py-2 leading-tight whitespace-normal"
             wrapperClassName="pointer-events-auto"
           >
             <Button

@@ -8,9 +8,11 @@ import { useActiveThread } from "@/hooks/useActiveThread"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { createPendingChatThread } from "@/lib/threads"
+import { storedTemporaryThreadToChatThread } from "@/lib/temporary-chat"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { chatRuntimeStore } from "@/stores/chat-runtime-store"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
+import { useTemporaryThreadsStore } from "@/stores/temporary-threads-store"
 
 export function ChatThreadPanel() {
   const navigate = useNavigate()
@@ -18,7 +20,13 @@ export function ChatThreadPanel() {
   const { isSignedIn, user } = useUser()
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
+  const isTemporaryThreadsHydrated = useTemporaryThreadsStore(
+    (state) => state.isHydrated
+  )
   const { isDraft, isTemporary, threadId } = useChatRouteState()
+  const storedTemporaryThread = useTemporaryThreadsStore(
+    (state) => state.threads[threadId]
+  )
   const forceGuestThread = isAuthLoading || !isAuthenticated
   const isRouteDataReady = !isAuthLoading
 
@@ -40,8 +48,26 @@ export function ChatThreadPanel() {
     () => createPendingChatThread(threadId),
     [threadId]
   )
+  const restoredTemporaryThread = useMemo(
+    () =>
+      storedTemporaryThread
+        ? storedTemporaryThreadToChatThread(storedTemporaryThread, false)
+        : null,
+    [storedTemporaryThread]
+  )
   const renderedThread =
-    activeThread && !messagesLoading ? activeThread : pendingThread
+    isTemporary && restoredTemporaryThread
+      ? restoredTemporaryThread
+      : activeThread && !messagesLoading
+        ? activeThread
+        : pendingThread
+  const restoredStoppedMessageIds = useMemo(
+    () =>
+      storedTemporaryThread
+        ? new Set(storedTemporaryThread.stoppedMessageIds)
+        : null,
+    [storedTemporaryThread]
+  )
   const hasPendingSubmission = useChatUiStore((state) =>
     Boolean(state.pendingSubmissions[threadId])
   )
@@ -69,6 +95,10 @@ export function ChatThreadPanel() {
       search: { redirect_url: returnTo },
     })
   }, [isSignedIn, navigate, returnTo])
+
+  if (isTemporary && !isTemporaryThreadsHydrated) {
+    return null
+  }
 
   if (activeThreadMissing) {
     return <Navigate to="/" replace />
@@ -124,7 +154,11 @@ export function ChatThreadPanel() {
       threadStateKey={threadStateKey}
       initialMessages={renderedThread.messages}
       generationStats={renderedThread.generationStats}
-      stoppedMessageIds={stoppedMessageIds}
+      stoppedMessageIds={
+        isTemporary
+          ? (restoredStoppedMessageIds ?? stoppedMessageIds)
+          : stoppedMessageIds
+      }
       isReady={isChatDataReady}
       isAuthenticated={isAuthenticated && canPersistThread}
       userName={userName}

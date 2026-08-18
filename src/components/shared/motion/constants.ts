@@ -3,6 +3,7 @@ import type { Transition, Variants } from "motion/react"
 import { EASE_OUT } from "@/lib/ease"
 
 export type MotionSide = "top" | "right" | "bottom" | "left"
+export type TooltipAlign = "start" | "center" | "end"
 export type TabsVariant = "pill" | "underline" | "segment"
 
 export const CONTEXT_MENU_VIEWPORT_PADDING = 8
@@ -18,6 +19,11 @@ export const TOOLTIP_ANCHOR_TRANSLATE = {
   left: "-100% -50%",
   right: "0 -50%",
 } as const satisfies Record<MotionSide, string>
+export const TOOLTIP_ALIGN_TRANSLATE_X = {
+  start: "0",
+  center: "-50%",
+  end: "-100%",
+} as const satisfies Record<TooltipAlign, string>
 export const TOOLTIP_TRANSFORM_ORIGIN = {
   top: "center bottom",
   bottom: "center top",
