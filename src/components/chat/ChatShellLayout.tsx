@@ -2,7 +2,7 @@ import { useUser } from "@clerk/tanstack-react-start"
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
 import { useConvex, useConvexAuth, useMutation } from "convex/react"
 import { LazyMotion, domAnimation } from "motion/react"
-import { useCallback, useLayoutEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 
 import { api } from "../../../convex/_generated/api"
 import { ChatShellComposer } from "@/components/chat/ChatShellComposer"
@@ -12,13 +12,11 @@ import {
   SidebarControl,
 } from "@/components/chat/shell/ChatShellChrome"
 import { ConvertTemporaryChatDialog } from "@/components/chat/temporary-chat/ConvertTemporaryChatDialog"
+import { TemporaryChatToast } from "@/components/chat/temporary-chat/TemporaryChatToast"
 import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import { AppSidebar } from "@/components/sidebar/AppSidebar"
 import { AppSidebarProvider } from "@/components/sidebar/AppSidebarProvider"
-import {
-  AnimatedToastStack,
-  useAnimatedToastStack,
-} from "@/components/shared/motion/animated-toast-stack"
+import { useAnimatedToastStack } from "@/components/shared/motion/animated-toast-stack"
 import { SidebarInset } from "@/components/shared/ui/sidebar"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
 import { useThreadList } from "@/hooks/useThreadList"
@@ -48,7 +46,6 @@ export function ChatShellLayout() {
   const { user } = useUser()
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const searchQuery = useSidebarUiStore((state) => state.searchQuery)
-  const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
   const isTemporaryChatPreference = useChatUiStore(
     (state) => state.isTemporaryChat
   )
@@ -131,16 +128,6 @@ export function ChatShellLayout() {
     threads,
   ])
 
-  useLayoutEffect(() => {
-    if (!isChatUiHydrated) return
-    if (!isTemporaryChatPreference || !isDraft) return
-    void navigate({
-      to: "/chat/$threadId",
-      params: { threadId: createTemporaryThreadId() },
-      replace: true,
-    })
-  }, [isChatUiHydrated, isDraft, isTemporaryChatPreference, navigate])
-
   const openThread = useCallback(
     (nextThreadId: string) => {
       void navigate({
@@ -152,15 +139,8 @@ export function ChatShellLayout() {
   )
 
   const createNewThread = useCallback(() => {
-    if (isTemporaryChatPreference) {
-      void navigate({
-        to: "/chat/$threadId",
-        params: { threadId: createTemporaryThreadId() },
-      })
-      return
-    }
     void navigate({ to: "/" })
-  }, [isTemporaryChatPreference, navigate])
+  }, [navigate])
 
   const requireAuthentication = useCallback(() => {
     void navigate({
@@ -258,16 +238,8 @@ export function ChatShellLayout() {
   )
 
   const navigateAfterLeavingLocalThread = useCallback(() => {
-    if (isTemporaryChatPreference) {
-      void navigate({
-        to: "/chat/$threadId",
-        params: { threadId: createTemporaryThreadId() },
-        replace: true,
-      })
-      return
-    }
     void navigate({ to: "/", replace: true })
-  }, [isTemporaryChatPreference, navigate])
+  }, [navigate])
 
   const removeThread = useCallback(
     async (removedThreadId: string) => {
@@ -386,10 +358,11 @@ export function ChatShellLayout() {
       return
     }
 
-    setTemporaryChat(true)
+    setTemporaryChat(!isTemporaryChatPreference)
   }, [
     hasConversation,
     isTemporary,
+    isTemporaryChatPreference,
     isTemporaryToggleDisabled,
     navigate,
     setTemporaryChat,
@@ -489,14 +462,10 @@ export function ChatShellLayout() {
               onDraftSubmit={activateDraftWithMessage}
               onRequireAuthentication={requireAuthentication}
             />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
-              <div className="chat-composer-horizontal-inset relative w-full">
-                <AnimatedToastStack
-                  toasts={toasts.toasts}
-                  onDismiss={toasts.dismissToast}
-                />
-              </div>
-            </div>
+            <TemporaryChatToast
+              toasts={toasts.toasts}
+              onDismiss={toasts.dismissToast}
+            />
           </SidebarInset>
         </ChatShell>
         <ConvertTemporaryChatDialog

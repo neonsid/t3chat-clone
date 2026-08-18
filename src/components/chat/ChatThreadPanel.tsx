@@ -23,6 +23,9 @@ export function ChatThreadPanel() {
   const isTemporaryThreadsHydrated = useTemporaryThreadsStore(
     (state) => state.isHydrated
   )
+  const isTemporaryChatPreference = useChatUiStore(
+    (state) => state.isTemporaryChat
+  )
   const { isDraft, isTemporary, threadId } = useChatRouteState()
   const storedTemporaryThread = useTemporaryThreadsStore(
     (state) => state.threads[threadId]
@@ -100,6 +103,15 @@ export function ChatThreadPanel() {
     return null
   }
 
+  if (
+    isTemporary &&
+    isTemporaryThreadsHydrated &&
+    storedTemporaryThread == null &&
+    !currentThreadHadPendingSubmission
+  ) {
+    return <Navigate to="/" replace />
+  }
+
   if (activeThreadMissing) {
     return <Navigate to="/" replace />
   }
@@ -162,6 +174,9 @@ export function ChatThreadPanel() {
       isReady={isChatDataReady}
       isAuthenticated={isAuthenticated && canPersistThread}
       userName={userName}
+      emptyStateIsTemporary={
+        isTemporary || (isDraft && isTemporaryChatPreference)
+      }
       onRequireAuthentication={requireAuthentication}
     />
   )

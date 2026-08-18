@@ -407,19 +407,21 @@ export function AppSidebar({
               beginRename: () => beginRename(thread),
             }}
           >
-            <ThreadRowButton
-              isRenaming={isRenaming}
-              isTemporary={isTemporary}
-              isActive={isActive}
-              isBusy={isBusy}
-              isTitlePending={isTitlePending}
-              displayTitle={displayTitle}
-              renameDraft={renameDraft}
-              onRenameDraftChange={setRenameDraft}
-              onCommitRename={commitRename}
-              onCancelRename={cancelRename}
-              onSelect={() => handleSelect(thread.id)}
-            />
+            <div className="w-full">
+              <ThreadRowButton
+                isRenaming={isRenaming}
+                isTemporary={isTemporary}
+                isActive={isActive}
+                isBusy={isBusy}
+                isTitlePending={isTitlePending}
+                displayTitle={displayTitle}
+                renameDraft={renameDraft}
+                onRenameDraftChange={setRenameDraft}
+                onCommitRename={commitRename}
+                onCancelRename={cancelRename}
+                onSelect={() => handleSelect(thread.id)}
+              />
+            </div>
           </ThreadContextMenu>
         )}
 

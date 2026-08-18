@@ -197,6 +197,7 @@ export function ChatThreadView({
   isReady,
   isAuthenticated,
   userName,
+  emptyStateIsTemporary = false,
   onRequireAuthentication,
 }: {
   threadId: string
@@ -207,6 +208,7 @@ export function ChatThreadView({
   isReady: boolean
   isAuthenticated: boolean
   userName: string
+  emptyStateIsTemporary?: boolean
   onRequireAuthentication: () => void
 }) {
   const activeTurn = useChatRuntimeStore((state) => state.activeTurn)
@@ -764,7 +766,7 @@ export function ChatThreadView({
               <ChatEmptyState
                 className="mt-auto pt-20 pb-4"
                 userName={userName}
-                isTemporary={isTemporary}
+                isTemporary={emptyStateIsTemporary}
                 onSelectPrompt={fillPrompt}
               />
             </div>
