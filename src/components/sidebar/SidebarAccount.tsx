@@ -13,8 +13,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/shared/ui/popover"
+import { SETTINGS_PATH } from "@/components/settings/constants"
 import { Separator } from "@/components/shared/ui/separator"
 import { DEFAULT_AUTH_REDIRECT, SIGN_IN_PATH } from "@/lib/auth"
+import { getUserProfileInfo } from "@/lib/user-profile"
 
 export function SidebarAccount() {
   const { isLoaded, isSignedIn, user } = useUser()
@@ -36,12 +38,7 @@ export function SidebarAccount() {
     )
   }
 
-  const displayName =
-    user.fullName ??
-    user.firstName ??
-    user.primaryEmailAddress?.emailAddress ??
-    "Account"
-  const initial = displayName.charAt(0).toUpperCase()
+  const profile = getUserProfileInfo(user)
 
   return (
     <Popover>
@@ -55,14 +52,14 @@ export function SidebarAccount() {
         }
       >
         <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-medium text-primary-foreground ring-2 ring-sidebar-ring/80 ring-offset-2 ring-offset-sidebar">
-          {user.hasImage ? (
+          {profile.imageUrl ? (
             <img
-              src={user.imageUrl}
+              src={profile.imageUrl}
               alt=""
               className="size-full object-cover"
             />
           ) : (
-            initial
+            profile.initial
           )}
         </span>
         <UserRoundPlusIcon
@@ -80,7 +77,7 @@ export function SidebarAccount() {
       >
         <div className="space-y-2.5 px-4 py-3.5">
           <p className="truncate text-sm font-semibold tracking-tight">
-            {displayName}
+            {profile.displayName}
           </p>
           <span className="inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
             Pro
@@ -88,13 +85,13 @@ export function SidebarAccount() {
         </div>
         <Separator />
         <div className="space-y-0.5 p-1.5">
-          <button
-            type="button"
+          <Link
+            to={SETTINGS_PATH}
             className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
             <SettingsIcon aria-hidden="true" className="size-4" />
             Settings
-          </button>
+          </Link>
           <button
             type="button"
             className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"

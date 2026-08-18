@@ -10,14 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ChatRouteRouteImport } from './routes/_chat/route'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SsoCallbackRouteImport } from './routes/sso-callback'
 import { Route as ChatIndexRouteImport } from './routes/_chat/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as ChatChatThreadIdRouteImport } from './routes/_chat/chat.$threadId'
 
 const ChatRouteRoute = ChatRouteRouteImport.update({
   id: '/_chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -40,6 +48,16 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const ChatChatThreadIdRoute = ChatChatThreadIdRouteImport.update({
   id: '/chat/$threadId',
   path: '/chat/$threadId',
@@ -48,45 +66,71 @@ const ChatChatThreadIdRoute = ChatChatThreadIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/': typeof ChatIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/_chat/': typeof ChatIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/_chat/chat/$threadId': typeof ChatChatThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/sign-in' | '/sso-callback' | '/api/chat' | '/chat/$threadId'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/sign-in' | '/sso-callback' | '/api/chat' | '/' | '/chat/$threadId'
-  id:
-    | '__root__'
-    | '/_chat'
+    | '/'
+    | '/settings'
     | '/sign-in'
     | '/sso-callback'
     | '/api/chat'
+    | '/settings/$section'
+    | '/settings/'
+    | '/chat/$threadId'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/sign-in'
+    | '/sso-callback'
+    | '/api/chat'
+    | '/settings/$section'
+    | '/'
+    | '/settings'
+    | '/chat/$threadId'
+  id:
+    | '__root__'
+    | '/_chat'
+    | '/settings'
+    | '/sign-in'
+    | '/sso-callback'
+    | '/api/chat'
+    | '/settings/$section'
     | '/_chat/'
+    | '/settings/'
     | '/_chat/chat/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   ChatRouteRoute: typeof ChatRouteRouteWithChildren
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   SignInRoute: typeof SignInRoute
   SsoCallbackRoute: typeof SsoCallbackRoute
   ApiChatRoute: typeof ApiChatRoute
@@ -99,6 +143,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ChatRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -129,6 +180,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/$section': {
+      id: '/settings/$section'
+      path: '/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/_chat/chat/$threadId': {
       id: '/_chat/chat/$threadId'
       path: '/chat/$threadId'
@@ -153,8 +218,23 @@ const ChatRouteRouteWithChildren = ChatRouteRoute._addFileChildren(
   ChatRouteRouteChildren,
 )
 
+interface SettingsRouteRouteChildren {
+  SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
+  SettingsSectionRoute: SettingsSectionRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   ChatRouteRoute: ChatRouteRouteWithChildren,
+  SettingsRouteRoute: SettingsRouteRouteWithChildren,
   SignInRoute: SignInRoute,
   SsoCallbackRoute: SsoCallbackRoute,
   ApiChatRoute: ApiChatRoute,

@@ -22,3 +22,5 @@ function BrainIconLow({ className }: { className?: string }) {
 ```
 
 - Have constants in a proper file instead of setting it inside components.
+
+- Use `rounded-md` for borders and corner radius across this project. Do not use `rounded-full`, `rounded-xl`, `rounded-2xl`, `rounded-none`, or other radius tokens unless the user explicitly asks to revert or override this.

@@ -150,7 +150,7 @@ export function TabsTrigger({
       {active ? (
         <m.span
           layoutId={layoutId}
-          style={{ borderRadius: variant === "pill" ? 9999 : 8 }}
+          style={variant === "pill" ? { borderRadius: 9999 } : undefined}
           className={cn(
             "absolute inset-0 bg-primary",
             radius,
@@ -165,7 +165,7 @@ export function TabsTrigger({
         data-state={active ? "active" : "inactive"}
         onClick={() => setValue(value)}
         className={cn(
-          "relative z-10 inline-flex items-center justify-center bg-transparent px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors outline-none",
+          "relative z-10 inline-flex cursor-pointer items-center justify-center bg-transparent px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors outline-none",
           active
             ? "text-primary-foreground"
             : "text-muted-foreground hover:text-foreground",

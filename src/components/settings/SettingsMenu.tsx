@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "@tanstack/react-router"
 import {
   MonitorIcon,
   MoonIcon,
@@ -7,6 +8,7 @@ import {
   SunIcon,
 } from "lucide-react"
 
+import { SETTINGS_PATH } from "@/components/settings/constants"
 import { Tabs, TabsList, TabsTrigger } from "@/components/shared/motion/tabs"
 import {
   Popover,
@@ -151,14 +153,14 @@ export function SettingsMenu({
 
         <div className="my-1 h-px bg-border" />
 
-        <button
-          type="button"
+        <Link
+          to={SETTINGS_PATH}
           onClick={() => setOpen(false)}
           className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 text-left text-sm font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
         >
           <SettingsIcon className="size-4 shrink-0" aria-hidden="true" />
           <span>Settings</span>
-        </button>
+        </Link>
       </PopoverContent>
     </Popover>
   )
