@@ -20,7 +20,6 @@ import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 type ChatShellComposerProps = {
   threadStateKey: string
   isDraft: boolean
-  isTemporary: boolean
   isAuthenticated: boolean
   canSubmit: boolean
   onDraftSubmit: (content: string, attachmentIds: string[]) => void
@@ -36,7 +35,6 @@ function publishComposerOverlayHeight(overlay: HTMLElement, heightPx: number) {
 export function ChatShellComposer({
   threadStateKey,
   isDraft,
-  isTemporary,
   isAuthenticated,
   canSubmit,
   onDraftSubmit,
@@ -174,7 +172,6 @@ export function ChatShellComposer({
                   ? CHAT_COMPOSER_PLACEHOLDERS.newThread
                   : CHAT_COMPOSER_PLACEHOLDERS.followUp
             }
-            isTemporary={isTemporary}
           />
         </div>
       </div>

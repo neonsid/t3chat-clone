@@ -82,9 +82,9 @@ export function ChatShellLayout() {
   } = useThreadList({ forceGuestThread, searchQuery })
 
   const sidebarThreads = useMemo(() => {
-    if (!isTemporary) return threads
+    if (!isTemporary || (!hasConversation && !isBusy)) return threads
     return [createTemporarySidebarThread(threadId, isBusy), ...threads]
-  }, [isBusy, isTemporary, threadId, threads])
+  }, [hasConversation, isBusy, isTemporary, threadId, threads])
 
   useLayoutEffect(() => {
     if (!isChatUiHydrated) return
@@ -364,7 +364,6 @@ export function ChatShellLayout() {
             <ChatShellComposer
               threadStateKey={threadStateKey}
               isDraft={isDraft}
-              isTemporary={isTemporary}
               isAuthenticated={isAuthenticated && canPersistThread}
               canSubmit={
                 isRouteDataReady &&

@@ -1,5 +1,7 @@
 import { Fragment, useState } from "react"
+import { CheckIcon, ClockIcon } from "lucide-react"
 
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import {
   CHAT_SUGGESTIONS,
   SUGGESTION_CATEGORIES,
@@ -11,12 +13,14 @@ import { cn } from "@/lib/utils"
 
 interface ChatEmptyStateProps {
   userName?: string
+  isTemporary?: boolean
   onSelectPrompt: (prompt: string) => void
   className?: string
 }
 
 export function ChatEmptyState({
   userName = "there",
+  isTemporary = false,
   onSelectPrompt,
   className,
 }: ChatEmptyStateProps) {
@@ -30,8 +34,21 @@ export function ChatEmptyState({
         className
       )}
     >
-      <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-        How can I help you, {userName}?
+      <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+        {isTemporary ? (
+          <>
+            <span className="relative inline-flex shrink-0">
+              <ClockIcon aria-hidden="true" className="size-8" />
+              <CheckIcon
+                aria-hidden="true"
+                className="absolute -right-0.5 -bottom-0.5 size-3.5"
+              />
+            </span>
+            {TEMPORARY_CHAT.label}
+          </>
+        ) : (
+          `How can I help you, ${userName}?`
+        )}
       </h1>
 
       <div className="mt-8 flex flex-wrap items-center justify-center gap-2">

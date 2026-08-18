@@ -173,7 +173,8 @@ export function AppSidebar({
               aria-hidden="true"
               className="size-3.5 text-sidebar-foreground/80"
             />
-          ) : isTitlePending ? (
+          ) : null}
+          {isTitlePending ? (
             <span
               aria-label="Generating title"
               className={cn(

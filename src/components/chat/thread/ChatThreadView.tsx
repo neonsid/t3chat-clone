@@ -14,6 +14,7 @@ import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../../convex/_generated/api"
 import { asThreadId } from "@/lib/convex-ids"
 import {
+  estimateTemporaryGenerationStats,
   isTemporaryThreadId,
   toPersistableTemporaryMessages,
 } from "@/lib/temporary-chat"
@@ -48,6 +49,7 @@ import {
 import {
   CHAT_MODEL_CONFIG,
   DEFAULT_CHAT_MODEL_ID,
+  getChatModelById,
   isChatModelId,
   resolveChatModel,
 } from "@/lib/chat-models"
@@ -214,6 +216,9 @@ export function ChatThreadView({
   const [locallyStoppedMessageIds, setLocallyStoppedMessageIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const [ephemeralGenerationStats, setEphemeralGenerationStats] = useState<
+    Record<string, AssistantGenerationStats>
+  >({})
   const isTemporary = isTemporaryThreadId(threadId)
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
@@ -321,6 +326,32 @@ export function ChatThreadView({
     !hasComposerAttachments
   const lastMessage = messages.at(-1)
 
+  // Snapshot once the stream settles. Derived during render so a finished
+  // assistant row has stats on the next paint without an effect.
+  if (isTemporary && !isLoading) {
+    const modelName =
+      getChatModelById(selectedModelId)?.name ?? selectedModelId
+    const mode = `${effectiveReasoningEffort.charAt(0).toUpperCase()}${effectiveReasoningEffort.slice(1)}`
+    let nextStats: Record<string, AssistantGenerationStats> | null = null
+    for (const message of messages) {
+      if (message.role !== "assistant") continue
+      if (ephemeralGenerationStats[message.id]) continue
+      if (!chatMessageHasContent(message)) continue
+      nextStats ??= { ...ephemeralGenerationStats }
+      nextStats[message.id] = estimateTemporaryGenerationStats({
+        text: chatMessageText(message),
+        thinking: chatMessageThinking(message),
+        modelName,
+        mode,
+      })
+    }
+    if (nextStats) setEphemeralGenerationStats(nextStats)
+  }
+
+  const resolvedGenerationStats = isTemporary
+    ? ephemeralGenerationStats
+    : generationStats
+
   // During the draft→thread handoff the real user message isn't dispatched until
   // after navigation, so paint an optimistic bubble from the in-flight text.
   // Reusing the pending message id lets the real message replace it in place
@@ -410,7 +441,7 @@ export function ChatThreadView({
             locallyStoppedMessageIds.has(message.id)
           }
           isTemporary={isTemporary}
-          generationStats={generationStats[message.id]}
+          generationStats={resolvedGenerationStats[message.id]}
           attachments={sentAttachmentsForMessage(
             message.id,
             attachmentsByMessageId.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
@@ -420,7 +451,7 @@ export function ChatThreadView({
       )),
     [
       attachmentsByMessageId,
-      generationStats,
+      resolvedGenerationStats,
       history,
       isTemporary,
       latestUserMessageId,
@@ -711,6 +742,7 @@ export function ChatThreadView({
               <ChatEmptyState
                 className="mt-auto pt-20 pb-4"
                 userName={userName}
+                isTemporary={isTemporary}
                 onSelectPrompt={fillPrompt}
               />
             </div>

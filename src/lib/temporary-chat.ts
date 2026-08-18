@@ -1,6 +1,31 @@
-import type { ChatThread } from "@/lib/threads"
+import type { AssistantGenerationStats, ChatThread } from "@/lib/threads"
 
 export const TEMP_THREAD_PREFIX = "tmp-"
+export const TEMPORARY_SIDEBAR_TITLE = "New Chat"
+
+/** Providers stream roughly a token per four characters of text + thinking. */
+const EPHEMERAL_CHARS_PER_TOKEN = 4
+
+export function estimateTemporaryGenerationStats({
+  text,
+  thinking,
+  modelName,
+  mode,
+}: {
+  text: string
+  thinking: string
+  modelName: string
+  mode: string
+}): AssistantGenerationStats {
+  const chars = text.length + thinking.length
+  return {
+    modelName,
+    mode,
+    outputTokens: Math.max(1, Math.ceil(chars / EPHEMERAL_CHARS_PER_TOKEN)),
+    tokensPerSecond: 0,
+    timeToFirstTokenSeconds: 0,
+  }
+}
 
 export function isTemporaryThreadId(threadId: string) {
   return threadId.startsWith(TEMP_THREAD_PREFIX)
@@ -27,8 +52,8 @@ export function createTemporarySidebarThread(
 ): ChatThread {
   return {
     id: threadId,
-    title: "",
-    titleSource: "derived",
+    title: TEMPORARY_SIDEBAR_TITLE,
+    titleSource: isStreaming ? "pending" : "derived",
     isStreaming,
     createdAt: now,
     updatedAt: now,
