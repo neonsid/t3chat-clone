@@ -39,16 +39,21 @@ export function ModelsList({
           <li key={model.id}>
             <div
               className={cn(
-                "flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50",
-                selected && "bg-muted/80"
+                "flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/50",
+                selected && "bg-primary/10"
               )}
               onClick={() => onToggleSelected(model.id)}
             >
-              <span className="relative mt-0.5 shrink-0 text-foreground">
-                <ProviderLogo providerId={model.providerId} className="size-8" />
+              <span className="relative shrink-0 text-foreground">
+                <span className="flex size-9 items-center justify-center rounded-md bg-foreground/5">
+                  <ProviderLogo
+                    providerId={model.providerId}
+                    className="size-5"
+                  />
+                </span>
                 {isNew ? (
                   <SparklesIcon
-                    className="absolute -top-1 -left-1 size-3 fill-amber-400 text-amber-400"
+                    className="absolute -top-1 -left-1 size-3 fill-primary text-primary"
                     aria-label={MODELS_PAGE.newSparkle}
                   />
                 ) : null}

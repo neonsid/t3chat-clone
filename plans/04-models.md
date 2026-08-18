@@ -38,7 +38,7 @@ Do not persist enabled models, gate by plan, or filter the chat picker until thi
 | List / Grid | Local view toggle | Optional persist |
 | List row click | Toggles enabled (local) | Write `enabledModelIds` and feed the picker |
 | List `⋯` Favorite | Local star only | Same `favoriteModelIds` as the chat picker (`preferences`) |
-| Grid card | Gold border when enabled; star; NEW pill; price meter; capability icons | Same persistence as list |
+| Grid card | Gold border when enabled; star on hover; NEW pill; price meter; up to 3 capability icons | Same persistence as list |
 | Price meter | Reuses picker `ModelPriceMeter` | Unchanged |
 | Provider logos | Reuses `ProviderLogo` / `MODEL_PROVIDER_LOGOS` | Unchanged |
 

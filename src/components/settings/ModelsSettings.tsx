@@ -83,9 +83,9 @@ export function ModelsSettings() {
       </div>
 
       {newBanner ? (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200">
-          <SparklesIcon className="mt-0.5 size-4 shrink-0 fill-amber-400 text-amber-400" />
-          <p>{newBanner}</p>
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <SparklesIcon className="size-4 shrink-0 text-primary" />
+          <p className="text-foreground">{newBanner}</p>
         </div>
       ) : null}
 
