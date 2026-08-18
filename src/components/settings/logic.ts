@@ -1,3 +1,9 @@
+import { MODEL_PROVIDERS } from "@t3chat/model-catalog"
+import type {
+  ModelCapability,
+  ModelCatalogEntry,
+} from "@t3chat/model-catalog"
+
 import {
   PLAN_RANK,
   SETTINGS_PATH,
@@ -7,6 +13,7 @@ import {
   CUSTOMIZATION_CREATE_PROFILE,
 } from "@/components/settings/constants"
 import type {
+  ModelsAccessFilter,
   PlanAction,
   PlanId,
   SettingsPlaceholderSectionId,
@@ -137,4 +144,76 @@ export function removeIds<T extends { id: string }>(
 
 export function historyActionLabel(action: string, count: number) {
   return `${action} (${count})`
+}
+
+const providerNames = new Map(
+  MODEL_PROVIDERS.map((provider) => [provider.id, provider.name])
+)
+
+function normalizeModelText(value: string) {
+  return value.toLowerCase().replace(/[\s._-]+/g, "")
+}
+
+export function filterSettingsModels(
+  models: ReadonlyArray<ModelCatalogEntry>,
+  query: {
+    search: string
+    capabilities: ReadonlyArray<ModelCapability>
+    access: ModelsAccessFilter
+  }
+) {
+  const needle = normalizeModelText(query.search)
+  return models.filter((model) => {
+    if (query.access === "free" && model.inputCostPerMillion !== 0) {
+      return false
+    }
+    if (
+      query.access === "premium" &&
+      (model.inputCostPerMillion === null || model.inputCostPerMillion <= 0)
+    ) {
+      return false
+    }
+    if (
+      query.capabilities.some(
+        (capability) => !model.capabilities.includes(capability)
+      )
+    ) {
+      return false
+    }
+    if (!needle) return true
+    const haystack = normalizeModelText(
+      `${model.name} ${model.modelId} ${
+        providerNames.get(model.providerId) ?? model.providerId
+      } ${model.description ?? ""}`
+    )
+    return haystack.includes(needle)
+  })
+}
+
+export function getNewestCatalogModels(
+  models: ReadonlyArray<ModelCatalogEntry>,
+  limit: number
+) {
+  return [...models]
+    .filter((model) => model.lastUpdated)
+    .sort(
+      (a, b) =>
+        (b.lastUpdated ?? "").localeCompare(a.lastUpdated ?? "") ||
+        a.name.localeCompare(b.name)
+    )
+    .slice(0, limit)
+}
+
+export function formatNewModelsBanner(
+  models: ReadonlyArray<{ name: string }>
+) {
+  if (models.length === 0) return null
+  return `${models.length} new — ${models.map((model) => model.name).join(", ")}`
+}
+
+export function modelVersionSubtitle(model: ModelCatalogEntry) {
+  const normalizedName = normalizeModelText(model.name)
+  const normalizedId = normalizeModelText(model.modelId)
+  if (normalizedName.includes(normalizedId)) return null
+  return model.modelId
 }

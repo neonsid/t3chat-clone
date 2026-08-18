@@ -54,6 +54,10 @@ import { Button } from "@/components/ui/button"
 
 History & Sync (`/settings/history`) already has the Shared Threads UI: expandable rows, nested share URLs, branch/view counts, edit, and an empty state. Creating public shares, visiting `/share/...`, and branching chats in the product are not wired yet. Backend: [plans/03-history.md](./plans/03-history.md).
 
+### Models settings
+
+The Models tab (`/settings/models`) lists `packages/model-catalog/src/generated` in list and grid views. Selecting models, starring favorites, and “Select recommended” are local to the page and do not change the chat picker yet. Backend: [plans/04-models.md](./plans/04-models.md).
+
 - [] While copying keep the original without markdown text
 
 -[] Preserve the chat UI state always

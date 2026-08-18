@@ -13,11 +13,16 @@ import {
   toggleIdInList,
   removeIds,
   historyActionLabel,
+  filterSettingsModels,
+  getNewestCatalogModels,
+  formatNewModelsBanner,
+  modelVersionSubtitle,
 } from "@/components/settings/logic"
 import {
   COPY_FROM_SCRATCH_ID,
   CUSTOMIZATION_CREATE_PROFILE,
 } from "@/components/settings/constants"
+import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 
 describe("getPlanAction", () => {
   it("marks the active plan as current", () => {
@@ -35,13 +40,14 @@ describe("getPlanAction", () => {
 
 describe("isSettingsPlaceholderSection", () => {
   it("accepts known placeholder sections", () => {
-    expect(isSettingsPlaceholderSection("models")).toBe(true)
+    expect(isSettingsPlaceholderSection("api-keys")).toBe(true)
   })
 
   it("rejects implemented tabs and unknown paths", () => {
     expect(isSettingsPlaceholderSection("account")).toBe(false)
     expect(isSettingsPlaceholderSection("customization")).toBe(false)
     expect(isSettingsPlaceholderSection("history")).toBe(false)
+    expect(isSettingsPlaceholderSection("models")).toBe(false)
     expect(isSettingsPlaceholderSection("billing")).toBe(false)
   })
 })
@@ -56,6 +62,7 @@ describe("getActiveSettingsTabId", () => {
       "customization"
     )
     expect(getActiveSettingsTabId("/settings/history")).toBe("history")
+    expect(getActiveSettingsTabId("/settings/models")).toBe("models")
   })
 
   it("falls back to account for unknown sections", () => {
@@ -152,3 +159,117 @@ describe("history selection", () => {
     expect(historyActionLabel("Delete", 1)).toBe("Delete (1)")
   })
 })
+
+describe("settings models catalog", () => {
+  const models = [
+    catalogEntry({
+      id: "openai/free",
+      modelId: "free",
+      name: "Free Model",
+      description: "cheap helper",
+      capabilities: ["fast"],
+      inputCostPerMillion: 0,
+      lastUpdated: "2026-01-01",
+    }),
+    catalogEntry({
+      id: "openai/pro",
+      modelId: "pro",
+      name: "Pro Model",
+      description: "paid helper",
+      capabilities: ["vision", "reasoning"],
+      inputCostPerMillion: 5,
+      lastUpdated: "2026-07-09",
+    }),
+    catalogEntry({
+      id: "anthropic/sonnet",
+      modelId: "sonnet",
+      providerId: "anthropic",
+      name: "Claude Sonnet",
+      description: "balanced",
+      capabilities: ["vision"],
+      inputCostPerMillion: 3,
+      lastUpdated: "2026-06-01",
+    }),
+  ]
+
+  it("filters by search, capability, and access", () => {
+    expect(
+      filterSettingsModels(models, {
+        search: "claude",
+        capabilities: [],
+        access: "all",
+      }).map((model) => model.id)
+    ).toEqual(["anthropic/sonnet"])
+
+    expect(
+      filterSettingsModels(models, {
+        search: "",
+        capabilities: ["fast"],
+        access: "all",
+      }).map((model) => model.id)
+    ).toEqual(["openai/free"])
+
+    expect(
+      filterSettingsModels(models, {
+        search: "",
+        capabilities: [],
+        access: "free",
+      }).map((model) => model.id)
+    ).toEqual(["openai/free"])
+
+    expect(
+      filterSettingsModels(models, {
+        search: "",
+        capabilities: [],
+        access: "premium",
+      }).map((model) => model.id)
+    ).toEqual(["openai/pro", "anthropic/sonnet"])
+  })
+
+  it("picks newest models and formats the banner", () => {
+    const newest = getNewestCatalogModels(models, 2)
+    expect(newest.map((model) => model.id)).toEqual([
+      "openai/pro",
+      "anthropic/sonnet",
+    ])
+    expect(formatNewModelsBanner(newest)).toBe(
+      "2 new — Pro Model, Claude Sonnet"
+    )
+    expect(formatNewModelsBanner([])).toBeNull()
+  })
+
+  it("hides a version subtitle when the name already contains it", () => {
+    expect(modelVersionSubtitle(models[0]!)).toBeNull()
+    expect(
+      modelVersionSubtitle(
+        catalogEntry({
+          id: "deepseek/deepseek-v4-pro",
+          modelId: "deepseek-v4-pro",
+          providerId: "deepseek",
+          name: "DeepSeek",
+        })
+      )
+    ).toBe("deepseek-v4-pro")
+  })
+})
+
+function catalogEntry(
+  overrides: Partial<ModelCatalogEntry> &
+    Pick<ModelCatalogEntry, "id" | "modelId" | "name">
+): ModelCatalogEntry {
+  return {
+    providerId: "openai",
+    description: null,
+    capabilities: [],
+    contextTokens: null,
+    outputTokens: null,
+    inputCostPerMillion: null,
+    outputCostPerMillion: null,
+    knowledgeCutoff: null,
+    releaseDate: null,
+    lastUpdated: null,
+    openWeights: false,
+    experimental: false,
+    ...overrides,
+  }
+}
