@@ -22,11 +22,38 @@ export function getSettingsTabLabel(section: SettingsPlaceholderSectionId) {
   return tab?.label ?? "Settings"
 }
 
+export function isSettingsTabId(value: string): value is SettingsTabId {
+  return SETTINGS_TABS.some((tab) => tab.id === value)
+}
+
 export function getActiveSettingsTabId(pathname: string): SettingsTabId {
   const prefix = `${SETTINGS_PATH}/`
   if (!pathname.startsWith(prefix)) return "account"
   const section = pathname.slice(prefix.length)
-  return isSettingsPlaceholderSection(section) ? section : "account"
+  return isSettingsTabId(section) ? section : "account"
+}
+
+export function traitCharacterCount(
+  traits: ReadonlyArray<string>,
+  draft: string
+) {
+  const joined = traits.join(", ")
+  if (joined.length === 0) return draft.length
+  if (draft.length === 0) return joined.length
+  return joined.length + 2 + draft.length
+}
+
+export function canAddTrait(
+  traits: ReadonlyArray<string>,
+  trait: string,
+  maxCharacters: number
+) {
+  const next = trait.trim()
+  if (next.length === 0) return false
+  if (traits.some((item) => item.toLowerCase() === next.toLowerCase())) {
+    return false
+  }
+  return traitCharacterCount(traits, next) <= maxCharacters
 }
 
 export function getPlanAction(

@@ -17,6 +17,7 @@ import { Route as ChatIndexRouteImport } from './routes/_chat/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
+import { Route as SettingsCustomizationRouteImport } from './routes/settings/customization'
 import { Route as ChatChatThreadIdRouteImport } from './routes/_chat/chat.$threadId'
 
 const ChatRouteRoute = ChatRouteRouteImport.update({
@@ -58,6 +59,11 @@ const SettingsSectionRoute = SettingsSectionRouteImport.update({
   path: '/$section',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const SettingsCustomizationRoute = SettingsCustomizationRouteImport.update({
+  id: '/customization',
+  path: '/customization',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const ChatChatThreadIdRoute = ChatChatThreadIdRouteImport.update({
   id: '/chat/$threadId',
   path: '/chat/$threadId',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/settings/$section': typeof SettingsSectionRoute
+  '/settings/customization': typeof SettingsCustomizationRoute
   '/settings/': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
 }
@@ -79,6 +86,7 @@ export interface FileRoutesByTo {
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/settings/$section': typeof SettingsSectionRoute
+  '/settings/customization': typeof SettingsCustomizationRoute
   '/': typeof ChatIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   '/sso-callback': typeof SsoCallbackRoute
   '/api/chat': typeof ApiChatRoute
   '/settings/$section': typeof SettingsSectionRoute
+  '/settings/customization': typeof SettingsCustomizationRoute
   '/_chat/': typeof ChatIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/_chat/chat/$threadId': typeof ChatChatThreadIdRoute
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
     | '/sso-callback'
     | '/api/chat'
     | '/settings/$section'
+    | '/settings/customization'
     | '/settings/'
     | '/chat/$threadId'
   fileRoutesByTo: FileRoutesByTo
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/sso-callback'
     | '/api/chat'
     | '/settings/$section'
+    | '/settings/customization'
     | '/'
     | '/settings'
     | '/chat/$threadId'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/sso-callback'
     | '/api/chat'
     | '/settings/$section'
+    | '/settings/customization'
     | '/_chat/'
     | '/settings/'
     | '/_chat/chat/$threadId'
@@ -194,6 +206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsSectionRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
+    '/settings/customization': {
+      id: '/settings/customization'
+      path: '/customization'
+      fullPath: '/settings/customization'
+      preLoaderRoute: typeof SettingsCustomizationRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/_chat/chat/$threadId': {
       id: '/_chat/chat/$threadId'
       path: '/chat/$threadId'
@@ -220,11 +239,13 @@ const ChatRouteRouteWithChildren = ChatRouteRoute._addFileChildren(
 
 interface SettingsRouteRouteChildren {
   SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsCustomizationRoute: typeof SettingsCustomizationRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsSectionRoute: SettingsSectionRoute,
+  SettingsCustomizationRoute: SettingsCustomizationRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
