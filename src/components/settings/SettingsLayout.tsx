@@ -1,25 +1,34 @@
-import { useClerk, useUser } from "@clerk/tanstack-react-start";
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeftIcon, MoonIcon, SunIcon } from "lucide-react";
-import { LazyMotion, domAnimation } from "motion/react";
-
-import { SettingsRail } from "@/components/settings/SettingsRail";
+import { useClerk, useUser } from "@clerk/tanstack-react-start"
 import {
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router"
+import { ArrowLeftIcon, MoonIcon, SunIcon } from "lucide-react"
+import { LazyMotion, domAnimation } from "motion/react"
+
+import { SettingsRail } from "@/components/settings/SettingsRail"
+import {
+  CUSTOMIZATION_PATH,
   SETTINGS_HIDE_SCROLLBAR_CLASS,
   SETTINGS_PATH,
   SETTINGS_TABS,
-} from "@/components/settings/constants";
-import { getActiveSettingsTabId, isSettingsPlaceholderSection } from "@/components/settings/logic";
-import { Tabs, TabsList, TabsTrigger } from "@/components/shared/motion/tabs";
-import { Button } from "@/components/shared/ui/button";
-import { Skeleton } from "@/components/shared/ui/skeleton";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { DEFAULT_AUTH_REDIRECT } from "@/lib/auth";
-import { cn } from "@/lib/utils";
-import { usePreferencesStore } from "@/stores/AppStateProvider";
+} from "@/components/settings/constants"
+import {
+  getActiveSettingsTabId,
+  isSettingsPlaceholderSection,
+} from "@/components/settings/logic"
+import { Tabs, TabsList, TabsTrigger } from "@/components/shared/motion/tabs"
+import { Button } from "@/components/shared/ui/button"
+import { Skeleton } from "@/components/shared/ui/skeleton"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { DEFAULT_AUTH_REDIRECT } from "@/lib/auth"
+import { cn } from "@/lib/utils"
+import { usePreferencesStore } from "@/stores/AppStateProvider"
 
 export function SettingsLayout() {
-  const { isLoaded } = useUser();
+  const { isLoaded } = useUser()
 
   return (
     <LazyMotion features={domAnimation}>
@@ -28,16 +37,16 @@ export function SettingsLayout() {
         {isLoaded ? <SettingsBody /> : <SettingsBodySkeleton />}
       </div>
     </LazyMotion>
-  );
+  )
 }
 
 function SettingsHeader() {
-  const clerk = useClerk();
-  const returnTo = useRouterState({ select: (state) => state.location.href });
-  const theme = usePreferencesStore((state) => state.theme);
-  const setTheme = usePreferencesStore((state) => state.setTheme);
-  const systemDark = useMediaQuery("(prefers-color-scheme: dark)");
-  const isDark = theme === "dark" || (theme === "system" && systemDark);
+  const clerk = useClerk()
+  const returnTo = useRouterState({ select: (state) => state.location.href })
+  const theme = usePreferencesStore((state) => state.theme)
+  const setTheme = usePreferencesStore((state) => state.setTheme)
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)")
+  const isDark = theme === "dark" || (theme === "system" && systemDark)
 
   return (
     <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -73,12 +82,17 @@ function SettingsHeader() {
         </button>
       </div>
     </header>
-  );
+  )
 }
 
 function SettingsBody() {
   return (
-    <div className={cn("min-h-0 flex-1 overflow-y-auto", SETTINGS_HIDE_SCROLLBAR_CLASS)}>
+    <div
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto",
+        SETTINGS_HIDE_SCROLLBAR_CLASS
+      )}
+    >
       <div className="lg:flex lg:items-start">
         <aside className="w-full shrink-0 px-5 py-8 lg:w-80 xl:w-96">
           <SettingsRail />
@@ -93,35 +107,44 @@ function SettingsBody() {
         </main>
       </div>
     </div>
-  );
+  )
 }
 
 function SettingsTabs() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
-  });
-  const activeTab = getActiveSettingsTabId(pathname);
+  })
+  const activeTab = getActiveSettingsTabId(pathname)
 
   function handleTabChange(nextTab: string) {
     if (nextTab === "account") {
-      void navigate({ to: SETTINGS_PATH });
-      return;
+      void navigate({ to: SETTINGS_PATH })
+      return
     }
-    if (!isSettingsPlaceholderSection(nextTab)) return;
+    if (nextTab === "customization") {
+      void navigate({ to: CUSTOMIZATION_PATH })
+      return
+    }
+    if (!isSettingsPlaceholderSection(nextTab)) return
     void navigate({
       to: "/settings/$section",
       params: { section: nextTab },
-    });
+    })
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} variant="segment" className="min-w-0">
+    <Tabs
+      value={activeTab}
+      onValueChange={handleTabChange}
+      variant="segment"
+      className="min-w-0"
+    >
       <TabsList
         aria-label="Settings"
         className={cn(
           "h-auto w-max max-w-full gap-0 overflow-x-auto rounded-md bg-accent p-1 [&>div]:shrink-0",
-          SETTINGS_HIDE_SCROLLBAR_CLASS,
+          SETTINGS_HIDE_SCROLLBAR_CLASS
         )}
       >
         {SETTINGS_TABS.map((tab) => (
@@ -136,12 +159,17 @@ function SettingsTabs() {
         ))}
       </TabsList>
     </Tabs>
-  );
+  )
 }
 
 function SettingsBodySkeleton() {
   return (
-    <div className={cn("min-h-0 flex-1 overflow-y-auto", SETTINGS_HIDE_SCROLLBAR_CLASS)}>
+    <div
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto",
+        SETTINGS_HIDE_SCROLLBAR_CLASS
+      )}
+    >
       <div className="lg:flex lg:items-start">
         <aside className="flex w-full flex-col items-center px-5 py-8 lg:w-80 xl:w-96">
           <Skeleton className="size-20 rounded-full" />
@@ -156,5 +184,5 @@ function SettingsBodySkeleton() {
         </div>
       </div>
     </div>
-  );
+  )
 }
