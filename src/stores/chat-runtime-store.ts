@@ -1,11 +1,9 @@
 import { createStore } from "zustand/vanilla"
 import { useStore } from "zustand"
 
+import type { PersistableTemporaryMessage } from "@/lib/temporary-chat"
 import type { ReasoningEffort } from "@/lib/chat-models"
-import {
-  CHAT_MODEL_CONFIG,
-  DEFAULT_CHAT_MODEL_ID,
-} from "@/lib/chat-models"
+import { CHAT_MODEL_CONFIG, DEFAULT_CHAT_MODEL_ID } from "@/lib/chat-models"
 
 export type ChatRuntimeState = {
   isLoading: boolean
@@ -48,14 +46,12 @@ export type ChatRuntimeState = {
   ) => void
   setActiveTurn: (activeTurn: boolean, content?: string) => void
   requestPendingFlush: (threadId: string) => void
-  registerPendingFlusher: (
-    threadId: string,
-    flush: () => void
+  registerPendingFlusher: (threadId: string, flush: () => void) => () => void
+  bindActions: (actions: { submit: () => void; stop: () => void }) => () => void
+  getPersistableMessages: () => PersistableTemporaryMessage[]
+  bindPersistableMessages: (
+    getMessages: () => PersistableTemporaryMessage[]
   ) => () => void
-  bindActions: (actions: {
-    submit: () => void
-    stop: () => void
-  }) => () => void
   reset: () => void
 }
 
@@ -67,10 +63,10 @@ const initialThreadState = {
   messagesLoading: false,
   activeTurn: false,
   activeTurnContent: "",
-  effectiveReasoningEffort: CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
-    .defaultReasoningEffort,
-  supportedReasoningEfforts: CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID]
-    .supportedReasoningEfforts,
+  effectiveReasoningEffort:
+    CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID].defaultReasoningEffort,
+  supportedReasoningEfforts:
+    CHAT_MODEL_CONFIG[DEFAULT_CHAT_MODEL_ID].supportedReasoningEfforts,
   modelLoading: false,
   submit: null,
   stop: null,
@@ -80,6 +76,7 @@ const initialThreadState = {
 // navigate-side request across the draft→thread remount.
 const pendingFlushers = new Map<string, () => void>()
 const flushEpochs = new Map<string, number>()
+let persistableMessages: () => PersistableTemporaryMessage[] = () => []
 
 function bumpFlushEpoch(threadId: string) {
   flushEpochs.set(threadId, (flushEpochs.get(threadId) ?? 0) + 1)
@@ -144,6 +141,15 @@ export const chatRuntimeStore = createStore<ChatRuntimeState>()((set, get) => ({
     set({ submit: actions.submit, stop: actions.stop })
     return () => {
       set({ submit: null, stop: null })
+    }
+  },
+  getPersistableMessages() {
+    return persistableMessages()
+  },
+  bindPersistableMessages(getMessages) {
+    persistableMessages = getMessages
+    return () => {
+      if (persistableMessages === getMessages) persistableMessages = () => []
     }
   },
   // The thread view resets on unmount, which happens mid-handoff when the draft

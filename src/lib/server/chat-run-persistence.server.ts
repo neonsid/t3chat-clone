@@ -30,17 +30,19 @@ export function collectAndPersistStream({
   reasoningEffort,
   startedAt,
   signal,
+  persist = true,
 }: {
   stream: AsyncIterable<StreamChunk>
   convex: ChatRunConvexClient
-  threadId: Id<"threads">
-  runId: string
-  completionSecret: string
+  threadId?: Id<"threads">
+  runId?: string
+  completionSecret?: string
   modelId: string
   modelName: string
   reasoningEffort: ReasoningEffort
   startedAt: number
   signal: AbortSignal
+  persist?: boolean
 }): AsyncIterable<StreamChunk> {
   return (async function* () {
     let assistantMessageId: string | undefined
@@ -65,10 +67,19 @@ export function collectAndPersistStream({
       timeToFirstTokenMs: firstTokenAt ? firstTokenAt - startedAt : 0,
     })
 
+    const persistThreadId = threadId
+    const persistRunId = runId
+    const persistSecret = completionSecret
+    const canPersist =
+      persist &&
+      persistThreadId !== undefined &&
+      persistRunId !== undefined &&
+      persistSecret !== undefined
+
     const finishPayload = () => ({
-      threadId,
-      runId,
-      completionSecret,
+      threadId: persistThreadId!,
+      runId: persistRunId!,
+      completionSecret: persistSecret!,
       assistantMessageId:
         assistantMessageId ??
         (thinking || text ? crypto.randomUUID() : undefined),
@@ -117,28 +128,32 @@ export function collectAndPersistStream({
       // the loop falling through is not proof the answer is finished. Reading
       // the signal here is what keeps a stopped run from being filed as a
       // complete one, half a sentence and all.
-      if (signal.aborted) {
-        await convex.mutation(api.chatRuns.stop, finishPayload())
-      } else {
-        await convex.mutation(api.chatRuns.complete, finishPayload())
+      if (canPersist) {
+        if (signal.aborted) {
+          await convex.mutation(api.chatRuns.stop, finishPayload())
+        } else {
+          await convex.mutation(api.chatRuns.complete, finishPayload())
+        }
       }
       finished = true
     } catch (error) {
-      if (signal.aborted) {
-        await convex.mutation(api.chatRuns.stop, finishPayload())
-      } else {
-        await convex.mutation(api.chatRuns.fail, {
-          ...finishPayload(),
-          errorMessage:
-            error instanceof Error ? error.message : "Generation failed",
-        })
+      if (canPersist) {
+        if (signal.aborted) {
+          await convex.mutation(api.chatRuns.stop, finishPayload())
+        } else {
+          await convex.mutation(api.chatRuns.fail, {
+            ...finishPayload(),
+            errorMessage:
+              error instanceof Error ? error.message : "Generation failed",
+          })
+        }
       }
       finished = true
       throw error
     } finally {
       // The client hanging up closes this generator mid-yield, which is the one
       // exit that reaches neither branch above.
-      if (!finished) {
+      if (!finished && canPersist) {
         await convex.mutation(api.chatRuns.stop, finishPayload())
       }
     }

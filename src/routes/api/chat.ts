@@ -15,9 +15,17 @@ import {
   contextRequiresPdf,
   contextRequiresVision,
   contextToModelMessages,
+  requestMessagesToContext,
+  type ChatContextAttachment,
   type ChatContextMessage,
 } from "@/lib/chat-context"
-import { latestUserChatMessage, parseAttachmentIds } from "@/lib/chat-messages"
+import {
+  chatMessageText,
+  chatRequestThinking,
+  latestUserChatMessage,
+  parseAttachmentIds,
+  parseMessageAttachmentMap,
+} from "@/lib/chat-messages"
 import {
   getMissingRuntimeKey,
   streamChatModel,
@@ -26,6 +34,24 @@ import { collectAndPersistStream } from "@/lib/server/chat-run-persistence.serve
 
 function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status })
+}
+
+const STREAM_HEADERS = {
+  "Cache-Control": "no-cache, no-transform",
+  "X-Accel-Buffering": "no",
+  "X-Content-Type-Options": "nosniff",
+} as const
+
+function assertModelSupportsAttachments(
+  context: ChatContextMessage[],
+  capabilities: readonly string[]
+) {
+  if (contextRequiresVision(context) && !capabilities.includes("vision")) {
+    throw new Error("This model does not support image attachments")
+  }
+  if (contextRequiresPdf(context) && !capabilities.includes("pdf")) {
+    throw new Error("This model does not support PDF attachments")
+  }
 }
 
 export const Route = createFileRoute("/api/chat")({
@@ -58,6 +84,8 @@ export const Route = createFileRoute("/api/chat")({
           modelId?: JsonValue
           reasoningEffort?: JsonValue
           attachmentIds?: JsonValue
+          attachmentsByMessageId?: JsonValue
+          ephemeral?: JsonValue
         }
         const modelId = forwarded.modelId
         const reasoningEffort = forwarded.reasoningEffort
@@ -98,6 +126,117 @@ export const Route = createFileRoute("/api/chat")({
         if (!convexUrl)
           return errorResponse("VITE_CONVEX_URL not configured", 500)
         const convex = new ConvexHttpClient(convexUrl, { auth: token })
+        const catalogModel = getChatModelById(model.id)
+        const capabilities = catalogModel?.capabilities ?? []
+        const isEphemeral = forwarded.ephemeral === true
+        const abortController = new AbortController()
+        request.signal.addEventListener(
+          "abort",
+          () => abortController.abort(),
+          {
+            once: true,
+          }
+        )
+
+        if (isEphemeral) {
+          try {
+            let attachmentsByMessageId: { [messageId: string]: string[] }
+            try {
+              attachmentsByMessageId = parseMessageAttachmentMap(
+                forwarded.attachmentsByMessageId
+              )
+            } catch (error) {
+              return errorResponse(
+                error instanceof Error ? error.message : "Invalid attachments",
+                400
+              )
+            }
+            if (
+              attachmentIds.length > 0 &&
+              attachmentsByMessageId[userMessage.id] === undefined
+            ) {
+              attachmentsByMessageId[userMessage.id] = attachmentIds
+            }
+
+            const contextAttachmentIds = [
+              ...new Set(Object.values(attachmentsByMessageId).flat()),
+            ]
+            const signedDownloads =
+              contextAttachmentIds.length > 0
+                ? await convex.action(api.r2.mintOwnedModelDownloadUrls, {
+                    attachmentIds: contextAttachmentIds,
+                  })
+                : []
+            const mintedById = new Map(
+              signedDownloads.map((entry: (typeof signedDownloads)[number]) => [
+                entry.attachmentId,
+                entry,
+              ])
+            )
+            const contextAttachments: Record<string, ChatContextAttachment[]> =
+              {}
+            for (const [messageId, ids] of Object.entries(
+              attachmentsByMessageId
+            )) {
+              contextAttachments[messageId] = ids.flatMap((id) => {
+                const minted = mintedById.get(id)
+                if (!minted) return []
+                return [
+                  {
+                    attachmentId: minted.attachmentId,
+                    kind: minted.kind,
+                    mimeType: minted.mimeType,
+                    filename: minted.filename,
+                    sizeBytes: minted.sizeBytes,
+                    url: minted.url,
+                  },
+                ]
+              })
+            }
+
+            const context = requestMessagesToContext(
+              params.messages.map((message) => ({
+                role: message.role,
+                id: "id" in message ? message.id : undefined,
+                content: chatMessageText(message),
+                thinking: chatRequestThinking(message),
+              })),
+              contextAttachments
+            )
+            assertModelSupportsAttachments(context, capabilities)
+
+            const startedAt = Date.now()
+            const stream = streamChatModel({
+              runtime: model.runtime,
+              messages: contextToModelMessages(context),
+              providerReasoningEffort: model.providerReasoningEffort,
+              abortController,
+            })
+
+            return toServerSentEventsResponse(
+              collectAndPersistStream({
+                stream,
+                convex,
+                modelId,
+                modelName: catalogModel?.name ?? model.id,
+                reasoningEffort,
+                startedAt,
+                signal: abortController.signal,
+                persist: false,
+              }),
+              {
+                abortController,
+                headers: STREAM_HEADERS,
+              }
+            )
+          } catch (error) {
+            return errorResponse(
+              error instanceof Error ? error.message : "Unable to start chat",
+              400
+            )
+          }
+        }
+
         const threadId = asThreadId(params.threadId)
         const completionSecret = crypto.randomUUID()
         let runAccepted = false
@@ -121,18 +260,21 @@ export const Route = createFileRoute("/api/chat")({
           const context = await convex.query(api.messages.getContext, {
             threadId,
           })
-
-          const catalogModel = getChatModelById(model.id)
-          const capabilities = catalogModel?.capabilities ?? []
-          if (
-            contextRequiresVision(context) &&
-            !capabilities.includes("vision")
-          ) {
-            throw new Error("This model does not support image attachments")
-          }
-          if (contextRequiresPdf(context) && !capabilities.includes("pdf")) {
-            throw new Error("This model does not support PDF attachments")
-          }
+          const messagesWithUrls: ChatContextMessage[] = context.map(
+            (message: (typeof context)[number]) => ({
+              role: message.role,
+              content: message.content,
+              thinking: message.thinking,
+              attachments: message.attachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                kind: attachment.kind,
+                mimeType: attachment.mimeType,
+                filename: attachment.filename,
+                sizeBytes: attachment.sizeBytes,
+              })),
+            })
+          )
+          assertModelSupportsAttachments(messagesWithUrls, capabilities)
 
           const contextAttachmentIds = [
             ...new Set(
@@ -155,34 +297,20 @@ export const Route = createFileRoute("/api/chat")({
             ])
           )
 
-          const messagesWithUrls: ChatContextMessage[] = context.map(
-            (message: (typeof context)[number]) => ({
-              role: message.role,
-              content: message.content,
-              thinking: message.thinking,
-              attachments: message.attachments.map((attachment) => ({
-                attachmentId: attachment.attachmentId,
-                kind: attachment.kind,
-                mimeType: attachment.mimeType,
-                filename: attachment.filename,
-                sizeBytes: attachment.sizeBytes,
+          const messagesForModel: ChatContextMessage[] = messagesWithUrls.map(
+            (message) => ({
+              ...message,
+              attachments: (message.attachments ?? []).map((attachment) => ({
+                ...attachment,
                 url: urlByAttachmentId.get(attachment.attachmentId),
               })),
             })
           )
 
-          const abortController = new AbortController()
-          request.signal.addEventListener(
-            "abort",
-            () => abortController.abort(),
-            {
-              once: true,
-            }
-          )
           const startedAt = Date.now()
           const stream = streamChatModel({
             runtime: model.runtime,
-            messages: contextToModelMessages(messagesWithUrls),
+            messages: contextToModelMessages(messagesForModel),
             providerReasoningEffort: model.providerReasoningEffort,
             abortController,
           })
@@ -202,11 +330,7 @@ export const Route = createFileRoute("/api/chat")({
             }),
             {
               abortController,
-              headers: {
-                "Cache-Control": "no-cache, no-transform",
-                "X-Accel-Buffering": "no",
-                "X-Content-Type-Options": "nosniff",
-              },
+              headers: STREAM_HEADERS,
             }
           )
         } catch (error) {

@@ -20,6 +20,7 @@ export type ChatThread = {
   messages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
   pinnedAt?: number
+  isTemporary?: boolean
 }
 
 export function createPendingChatThread(id: string): ChatThread {

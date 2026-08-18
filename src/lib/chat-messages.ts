@@ -1,7 +1,7 @@
 import type { ModelMessage, UIMessage } from "@tanstack/ai"
 
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/attachment-limits"
-import { isJsonString, type JsonValue } from "@/lib/json-value"
+import { isJsonObject, isJsonString, type JsonValue } from "@/lib/json-value"
 
 export type ChatRequestMessage = UIMessage | ModelMessage
 
@@ -40,6 +40,37 @@ export function parseAttachmentIds(value: JsonValue | undefined): string[] {
     throw new Error("Duplicate attachment ids")
   }
   return ids
+}
+
+export function parseMessageAttachmentMap(value: JsonValue | undefined) {
+  if (value === undefined) return {}
+  if (!isJsonObject(value)) {
+    throw new Error("Invalid attachments")
+  }
+
+  const attachmentsByMessageId: { [messageId: string]: string[] } = {}
+  for (const [messageId, ids] of Object.entries(value)) {
+    if (!messageId.trim()) continue
+    attachmentsByMessageId[messageId] = parseAttachmentIds(ids)
+  }
+  return attachmentsByMessageId
+}
+
+export function chatRequestThinking(message: ChatRequestMessage): string {
+  if ("parts" in message) {
+    const parts: string[] = []
+    for (const part of message.parts) {
+      if (part.type === "thinking") parts.push(part.content)
+    }
+    return parts.join("\n").trim()
+  }
+
+  const thinking = "thinking" in message ? message.thinking : undefined
+  if (!Array.isArray(thinking)) return ""
+  return thinking
+    .map((part) => ("content" in part ? part.content : ""))
+    .join("\n")
+    .trim()
 }
 
 /** Latest user turn with a stable id. Empty text is allowed when attachments are sent via forwardedProps. */

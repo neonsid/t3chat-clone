@@ -8,9 +8,11 @@ import { useActiveThread } from "@/hooks/useActiveThread"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
 import { SIGN_IN_PATH } from "@/lib/auth"
 import { createPendingChatThread } from "@/lib/threads"
+import { storedTemporaryThreadToChatThread } from "@/lib/temporary-chat"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { chatRuntimeStore } from "@/stores/chat-runtime-store"
 import { createThreadStateKey } from "@/stores/chat-ui-store"
+import { useTemporaryThreadsStore } from "@/stores/temporary-threads-store"
 
 export function ChatThreadPanel() {
   const navigate = useNavigate()
@@ -18,7 +20,16 @@ export function ChatThreadPanel() {
   const { isSignedIn, user } = useUser()
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth()
   const isChatUiHydrated = useChatUiStore((state) => state.isHydrated)
-  const { isDraft, threadId } = useChatRouteState()
+  const isTemporaryThreadsHydrated = useTemporaryThreadsStore(
+    (state) => state.isHydrated
+  )
+  const isTemporaryChatPreference = useChatUiStore(
+    (state) => state.isTemporaryChat
+  )
+  const { isDraft, isTemporary, threadId } = useChatRouteState()
+  const storedTemporaryThread = useTemporaryThreadsStore(
+    (state) => state.threads[threadId]
+  )
   const forceGuestThread = isAuthLoading || !isAuthenticated
   const isRouteDataReady = !isAuthLoading
 
@@ -32,7 +43,7 @@ export function ChatThreadPanel() {
 
   const isChatDataReady = isRouteDataReady && isThreadDataReady
   const activeThreadMissing = Boolean(
-    !isDraft && isThreadDataReady && activeThread === null
+    !isDraft && !isTemporary && isThreadDataReady && activeThread === null
   )
   // Memoized so the placeholder's empty message list and stats keep their
   // identity; ChatThreadView memoizes rows against both.
@@ -40,8 +51,26 @@ export function ChatThreadPanel() {
     () => createPendingChatThread(threadId),
     [threadId]
   )
+  const restoredTemporaryThread = useMemo(
+    () =>
+      storedTemporaryThread
+        ? storedTemporaryThreadToChatThread(storedTemporaryThread, false)
+        : null,
+    [storedTemporaryThread]
+  )
   const renderedThread =
-    activeThread && !messagesLoading ? activeThread : pendingThread
+    isTemporary && restoredTemporaryThread
+      ? restoredTemporaryThread
+      : activeThread && !messagesLoading
+        ? activeThread
+        : pendingThread
+  const restoredStoppedMessageIds = useMemo(
+    () =>
+      storedTemporaryThread
+        ? new Set(storedTemporaryThread.stoppedMessageIds)
+        : null,
+    [storedTemporaryThread]
+  )
   const hasPendingSubmission = useChatUiStore((state) =>
     Boolean(state.pendingSubmissions[threadId])
   )
@@ -70,12 +99,26 @@ export function ChatThreadPanel() {
     })
   }, [isSignedIn, navigate, returnTo])
 
+  if (isTemporary && !isTemporaryThreadsHydrated) {
+    return null
+  }
+
+  if (
+    isTemporary &&
+    isTemporaryThreadsHydrated &&
+    storedTemporaryThread == null &&
+    !currentThreadHadPendingSubmission
+  ) {
+    return <Navigate to="/" replace />
+  }
+
   if (activeThreadMissing) {
     return <Navigate to="/" replace />
   }
 
   if (
     !isDraft &&
+    !isTemporary &&
     isRouteDataReady &&
     isChatUiHydrated &&
     isChatDataReady &&
@@ -85,7 +128,13 @@ export function ChatThreadPanel() {
     return <Navigate to="/" replace />
   }
 
-  if (!isDraft && isRouteDataReady && isSignedIn && !isAuthenticated) {
+  if (
+    !isDraft &&
+    !isTemporary &&
+    isRouteDataReady &&
+    isSignedIn &&
+    !isAuthenticated
+  ) {
     return <Navigate to="/" replace />
   }
 
@@ -97,6 +146,7 @@ export function ChatThreadPanel() {
   if (
     !(
       isDraft ||
+      isTemporary ||
       isChatDataReady ||
       wasCurrentThreadReady ||
       currentThreadHadPendingSubmission
@@ -116,10 +166,17 @@ export function ChatThreadPanel() {
       threadStateKey={threadStateKey}
       initialMessages={renderedThread.messages}
       generationStats={renderedThread.generationStats}
-      stoppedMessageIds={stoppedMessageIds}
+      stoppedMessageIds={
+        isTemporary
+          ? (restoredStoppedMessageIds ?? stoppedMessageIds)
+          : stoppedMessageIds
+      }
       isReady={isChatDataReady}
       isAuthenticated={isAuthenticated && canPersistThread}
       userName={userName}
+      emptyStateIsTemporary={
+        isTemporary || (isDraft && isTemporaryChatPreference)
+      }
       onRequireAuthentication={requireAuthentication}
     />
   )

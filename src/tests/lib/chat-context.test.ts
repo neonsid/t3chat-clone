@@ -4,6 +4,7 @@ import {
   contextRequiresPdf,
   contextRequiresVision,
   contextToModelMessages,
+  requestMessagesToContext,
 } from "@/lib/chat-context"
 import { MAX_MODEL_CONTEXT_CHARACTERS } from "@/lib/chat-models"
 
@@ -152,5 +153,58 @@ describe("contextToModelMessages", () => {
     ]
     expect(contextRequiresVision(messages)).toBe(true)
     expect(contextRequiresPdf(messages)).toBe(true)
+  })
+})
+
+describe("requestMessagesToContext", () => {
+  it("attaches files to the matching user message and skips empty shells", () => {
+    expect(
+      requestMessagesToContext(
+        [
+          { role: "system", content: "ignore", thinking: "" },
+          { role: "user", id: "u1", content: "", thinking: "" },
+          {
+            role: "assistant",
+            id: "a1",
+            content: "done",
+            thinking: "notes",
+          },
+        ],
+        {
+          u1: [
+            {
+              attachmentId: "att-1",
+              kind: "image",
+              mimeType: "image/png",
+              filename: "shot.png",
+              sizeBytes: 12,
+              url: "https://example.com/shot.png",
+            },
+          ],
+        }
+      )
+    ).toEqual([
+      {
+        role: "user",
+        content: "",
+        thinking: undefined,
+        attachments: [
+          {
+            attachmentId: "att-1",
+            kind: "image",
+            mimeType: "image/png",
+            filename: "shot.png",
+            sizeBytes: 12,
+            url: "https://example.com/shot.png",
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: "done",
+        thinking: "notes",
+        attachments: [],
+      },
+    ])
   })
 })

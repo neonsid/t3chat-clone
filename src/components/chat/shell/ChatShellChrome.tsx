@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { memo } from "react"
-import { ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
+import { CheckIcon, ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
 import * as m from "motion/react-m"
 
 import {
@@ -10,7 +10,9 @@ import {
   CHAT_HEADER_NOTCH_STROKE,
   CHAT_NOTCH_BUTTON_CLASS,
 } from "@/components/chat/shell/constants"
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import { SettingsMenu } from "@/components/settings/SettingsMenu"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import { Button } from "@/components/shared/ui/button"
 import { SidebarTrigger } from "@/components/shared/ui/sidebar"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -137,10 +139,34 @@ function ChatShellEdge() {
  * drops 8px into the notch band. Motion drives this because it is a mount-free
  * crossfade with no CSS transition of its own to stay in step with.
  */
-export function ChatHeaderActions() {
+export function ChatHeaderActions({
+  isTemporaryChat,
+  disabled,
+  onToggleTemporaryChat,
+}: {
+  isTemporaryChat: boolean
+  disabled: boolean
+  onToggleTemporaryChat: () => void
+}) {
   const isMobile = useIsMobile()
   const open = useSidebarUiStore((state) => state.desktopOpen)
   const onNotch = open && !isMobile
+  const tooltip = disabled ? (
+    TEMPORARY_CHAT.onlyOnNewChat
+  ) : (
+    <span className="flex flex-col gap-px text-left">
+      <span>
+        {isTemporaryChat
+          ? TEMPORARY_CHAT.convertTooltipTitle
+          : TEMPORARY_CHAT.enableTooltipTitle}
+      </span>
+      <span className="font-normal whitespace-nowrap text-muted-foreground">
+        {isTemporaryChat
+          ? TEMPORARY_CHAT.convertTooltipDescription
+          : TEMPORARY_CHAT.enableTooltipDescription}
+      </span>
+    </span>
+  )
 
   return (
     <div className="pointer-events-none fixed top-[10px] right-3 z-60">
@@ -159,15 +185,38 @@ export function ChatHeaderActions() {
           animate={{ x: onNotch ? 4 : 0, y: onNotch ? -4 : 0 }}
           transition={{ duration: 0.2, ease: "linear" }}
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="History"
-            className={CHAT_NOTCH_BUTTON_CLASS}
+          <Tooltip
+            content={tooltip}
+            side="bottom"
+            align="end"
+            delay={250}
+            className="rounded-md py-2 leading-tight whitespace-normal"
+            wrapperClassName="pointer-events-auto"
           >
-            <ClockIcon />
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={TEMPORARY_CHAT.toggleLabel}
+              aria-pressed={isTemporaryChat}
+              disabled={disabled}
+              className={cn(
+                CHAT_NOTCH_BUTTON_CLASS,
+                isTemporaryChat && "text-primary hover:text-primary"
+              )}
+              onClick={onToggleTemporaryChat}
+            >
+              <span className="relative inline-flex">
+                <ClockIcon />
+                {isTemporaryChat ? (
+                  <CheckIcon
+                    aria-hidden="true"
+                    className="absolute -right-1 -bottom-1 size-2.5 text-primary"
+                  />
+                ) : null}
+              </span>
+            </Button>
+          </Tooltip>
           <SettingsMenu triggerClassName={CHAT_NOTCH_BUTTON_CLASS} />
         </m.div>
       </m.div>

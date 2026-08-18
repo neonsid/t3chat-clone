@@ -5,12 +5,14 @@ import {
   PencilIcon,
   PinIcon,
   RefreshCwIcon,
+  SaveIcon,
   Share2Icon,
   Trash2Icon,
 } from "lucide-react"
 import { useConvex } from "convex/react"
 
 import { api } from "../../../convex/_generated/api"
+import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -27,8 +29,10 @@ type ThreadContextMenuActions = {
   delete: (threadId: string) => void
   togglePinned: (threadId: string) => void
   archive: (threadId: string) => void
+  beginRename: (threadId: string) => void
   rename: (threadId: string, title: string) => void
   regenerateTitle: (threadId: string) => void
+  convert: (threadId: string) => void
 }
 
 type ThreadContextMenuProps = {
@@ -88,6 +92,40 @@ async function shareThread(thread: ChatThread) {
   await navigator.clipboard.writeText(url)
 }
 
+function createTemporaryThreadContextMenuItems(
+  thread: ChatThread,
+  actions: ThreadContextMenuActions
+): ContextMenuItemData[] {
+  return [
+    {
+      id: "open-new-tab",
+      label: TEMPORARY_CHAT.contextOpenNewTab,
+      icon: <ExternalLinkIcon className="size-4" />,
+      onSelect: () =>
+        window.open(`/chat/${thread.id}`, "_blank", "noopener,noreferrer"),
+    },
+    {
+      id: "rename",
+      label: TEMPORARY_CHAT.contextRename,
+      icon: <PencilIcon className="size-4" />,
+      onSelect: () => actions.beginRename(thread.id),
+    },
+    {
+      id: "convert",
+      label: TEMPORARY_CHAT.contextConvert,
+      icon: <SaveIcon className="size-4" />,
+      onSelect: () => actions.convert(thread.id),
+    },
+    {
+      id: "delete",
+      label: TEMPORARY_CHAT.contextDelete,
+      icon: <Trash2Icon className="size-4" />,
+      tone: "destructive",
+      onSelect: () => actions.delete(thread.id),
+    },
+  ]
+}
+
 function createThreadContextMenuItems(
   thread: ChatThread,
   actions: ThreadContextMenuActions,
@@ -119,10 +157,7 @@ function createThreadContextMenuItems(
       id: "rename",
       label: "Rename",
       icon: <PencilIcon className="size-4" />,
-      onSelect: () => {
-        const title = window.prompt("Rename chat", thread.title)
-        if (title != null) actions.rename(thread.id, title)
-      },
+      onSelect: () => actions.beginRename(thread.id),
     },
     {
       id: "regenerate-title",
@@ -158,21 +193,27 @@ export function ThreadContextMenu({
   children,
 }: ThreadContextMenuProps) {
   const convex = useConvex()
-  const menuItems = createThreadContextMenuItems(thread, actions, () => {
-    void exportThread(thread, async () => {
-      const messages = await convex.query(api.messages.listForThread, {
-        threadId: thread.id,
+  const menuItems = thread.isTemporary
+    ? createTemporaryThreadContextMenuItems(thread, actions)
+    : createThreadContextMenuItems(thread, actions, () => {
+        void exportThread(thread, async () => {
+          const messages = await convex.query(api.messages.listForThread, {
+            threadId: thread.id,
+          })
+          return toChatMessages(messages)
+        })
       })
-      return toChatMessages(messages)
-    })
-  })
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
       <ContextMenuContent
         ariaLabel={`${thread.title} actions`}
-        className="w-44 min-w-0 bg-popover px-1 [&_[data-context-menu-item=true]]:py-1.5"
+        className={
+          thread.isTemporary
+            ? "w-52 min-w-0 bg-popover px-1 [&_[data-context-menu-item=true]]:py-1.5"
+            : "w-44 min-w-0 bg-popover px-1 [&_[data-context-menu-item=true]]:py-1.5"
+        }
       >
         <ContextMenuItemList items={menuItems} />
       </ContextMenuContent>

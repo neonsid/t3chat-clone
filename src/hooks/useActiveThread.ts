@@ -3,6 +3,7 @@ import { useConvexAuth, useQuery } from "convex/react"
 import type { UIMessage } from "@tanstack/ai-react"
 
 import { api } from "../../convex/_generated/api"
+import { isTemporaryThreadId } from "@/lib/temporary-chat"
 import {
   createMessageProjectionCache,
   createPendingChatThread,
@@ -30,7 +31,9 @@ export function useActiveThread(
   const useBackend = isAuthenticated && !options.forceGuestThread
   const normalizedThreadId = threadId ?? null
   const hasActiveThreadId =
-    normalizedThreadId != null && normalizedThreadId !== "guest"
+    normalizedThreadId != null &&
+    normalizedThreadId !== "guest" &&
+    !isTemporaryThreadId(normalizedThreadId)
 
   const threadDocument = useQuery(
     api.threads.get,

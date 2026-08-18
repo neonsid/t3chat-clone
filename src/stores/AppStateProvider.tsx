@@ -18,6 +18,7 @@ import type {
 import { readSidebarDesktopOpen } from "@/stores/sidebar-state-cookie"
 import { createSidebarUiStore } from "@/stores/sidebar-ui-store"
 import type { SidebarUiState, SidebarUiStore } from "@/stores/sidebar-ui-store"
+import { temporaryThreadsStore } from "@/stores/temporary-threads-store"
 
 type AppStores = {
   chatUi: ChatUiStore
@@ -54,6 +55,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     void Promise.resolve(stores.chatUi.persist.rehydrate()).finally(() => {
       stores.chatUi.getState().markHydrated()
     })
+    void Promise.resolve(temporaryThreadsStore.persist.rehydrate()).finally(
+      () => {
+        temporaryThreadsStore.getState().markHydrated()
+      }
+    )
 
     const preferences = stores.preferences.getState()
     preferences.hydrateClientPreferences()

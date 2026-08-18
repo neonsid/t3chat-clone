@@ -82,6 +82,7 @@ type ChatMessageProps = {
   message: UIMessage
   isStreaming?: boolean
   isStopped?: boolean
+  isTemporary?: boolean
   generationStats?: AssistantGenerationStats
   attachments?: Array<ThreadMessageAttachment>
 }
@@ -90,13 +91,15 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming = false,
   isStopped = false,
+  isTemporary = false,
   generationStats,
   attachments = [],
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
   const thinking = chatMessageThinking(message)
-  const timestamp = formatShortTimestamp(message.createdAt)
+  const timestamp = isTemporary ? "" : formatShortTimestamp(message.createdAt)
+  const hideRateAndLatency = isTemporary || isStopped
 
   if (isUser) {
     if (!text && attachments.length === 0) return null
@@ -184,9 +187,10 @@ export const ChatMessage = memo(function ChatMessage({
                 {/* A cut-short run has no usage report and no meaningful rate
                     or completion time, so only the token count survives — as an
                     estimate from the chunks that did arrive. */}
-                {isStopped ? (
+                {hideRateAndLatency ? (
                   <span className="inline-flex items-center gap-1">
-                    <CpuIcon aria-hidden="true" className="size-3.5" />~
+                    <CpuIcon aria-hidden="true" className="size-3.5" />
+                    {isStopped ? "~" : null}
                     {generationStats.outputTokens.toLocaleString()} tokens
                   </span>
                 ) : (
