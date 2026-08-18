@@ -11,6 +11,7 @@ import { LazyMotion, domAnimation } from "motion/react"
 import { SettingsRail } from "@/components/settings/SettingsRail"
 import {
   CUSTOMIZATION_PATH,
+  HISTORY_PATH,
   SETTINGS_HIDE_SCROLLBAR_CLASS,
   SETTINGS_PATH,
   SETTINGS_TABS,
@@ -124,6 +125,10 @@ function SettingsTabs() {
     }
     if (nextTab === "customization") {
       void navigate({ to: CUSTOMIZATION_PATH })
+      return
+    }
+    if (nextTab === "history") {
+      void navigate({ to: HISTORY_PATH })
       return
     }
     if (!isSettingsPlaceholderSection(nextTab)) return

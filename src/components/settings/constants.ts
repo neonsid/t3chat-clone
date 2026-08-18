@@ -11,6 +11,7 @@ import {
 
 export const SETTINGS_PATH = "/settings" as const
 export const CUSTOMIZATION_PATH = "/settings/customization" as const
+export const HISTORY_PATH = "/settings/history" as const
 
 export const SETTINGS_HIDE_SCROLLBAR_CLASS =
   "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -30,7 +31,6 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number]
 export type SettingsTabId = SettingsTab["id"]
 
 export const SETTINGS_PLACEHOLDER_SECTION_IDS = [
-  "history",
   "models",
   "api-keys",
   "attachments",
@@ -154,10 +154,13 @@ export const SETTINGS_PLANS: ReadonlyArray<PlanDefinition> = [
 
 export const CUSTOMIZATION_PAGE_TITLE = "Customize T3 Chat"
 
+export const COPY_FROM_SCRATCH_ID = "scratch" as const
+
 export const CUSTOMIZATION_PROFILE = {
   title: "Profile",
   info: "Each profile can use a different name, occupation, traits, and extra context for the assistant.",
   defaultName: "Default",
+  defaultId: "default",
   addLabel: "Add profile",
   preferredNameLabel: "What should T3 Chat call you?",
   preferredNamePlaceholder: "Enter your name.",
@@ -180,6 +183,21 @@ export const CUSTOMIZATION_PROFILE = {
     "creative",
     "patient",
   ],
+} as const
+
+export const CUSTOMIZATION_CREATE_PROFILE = {
+  title: "Create New Profile",
+  description:
+    "Create a new profile to organize your threads and customize your experience.",
+  nameLabel: "Name",
+  namePlaceholder: "Work, Personal, etc.",
+  nameMax: 50,
+  copyFromLabel: "Copy settings from",
+  copyFromScratch: "Start from scratch",
+  copyFromAriaLabel: "Copy settings from",
+  cancel: "Cancel",
+  submit: "Create Profile",
+  closeLabel: "Close",
 } as const
 
 export const CUSTOMIZATION_BEHAVIOR_OPTIONS = [
@@ -293,3 +311,223 @@ export const CUSTOMIZATION_FONTS_PREVIEW = {
     ],
   ],
 } as const
+
+export const HISTORY_PAGE_SIZE = 10
+
+export type HistoryMockThread = {
+  id: string
+  title: string
+  updatedLabel: string
+  pinned: boolean
+}
+
+export type SharedMockShare = {
+  id: string
+  url: string
+  branchCount: number
+  viewCount: number
+  updatedLabel: string
+}
+
+export type SharedMockThread = {
+  id: string
+  title: string
+  shares: ReadonlyArray<SharedMockShare>
+}
+
+export const HISTORY_PAGE = {
+  title: "Chat History",
+  description:
+    "You can back up your chat history from here to restore or transfer your conversations later. Importing will NOT delete any of your existing conversations.",
+  titleColumn: "Title",
+  previous: "Previous",
+  next: "Next",
+  moreLabel: "History actions",
+  import: "Import",
+  export: "Export all",
+  exportSelected: "Export selected",
+  selectPage: "Select all on this page",
+  selectThread: "Select thread",
+  archive: "Archive",
+  delete: "Delete",
+  pinnedLabel: "Pinned",
+} as const
+
+export const SHARED_THREADS_PAGE = {
+  title: "Shared Threads",
+  description: "Manage your shared threads here.",
+  emptyTitle: "No threads found.",
+  emptyDescription: "No threads found. Create a new thread to get started.",
+  createThread: "Create thread",
+  expand: "Show shares",
+  collapse: "Hide shares",
+  selectShare: "Select share",
+  editShare: "Edit share",
+  branchesLabel: "Branches",
+  viewsLabel: "Views",
+  selectPage: "Select all shared threads on this page",
+} as const
+
+export const HISTORY_DANGER_ZONE = {
+  title: "Danger Zone",
+  description:
+    "Permanently delete your history from both your local device and our servers.",
+  action: "Delete Chat History",
+  note: "Note: The retention policies of our LLM hosting partners may vary.",
+  confirm:
+    "Permanently delete all chat history? This cannot be undone.",
+} as const
+
+export const HISTORY_MOCK_THREADS: ReadonlyArray<HistoryMockThread> = [
+  {
+    id: "thread-1",
+    title: "Lans and Routing Final Chapter",
+    updatedLabel: "3 months ago",
+    pinned: true,
+  },
+  {
+    id: "thread-2",
+    title: "Lans and Routing Chapter 4,5,6,7",
+    updatedLabel: "3 months ago",
+    pinned: true,
+  },
+  {
+    id: "thread-3",
+    title: "Lans and Routing Chapter 1,2,3",
+    updatedLabel: "3 months ago",
+    pinned: true,
+  },
+  {
+    id: "thread-4",
+    title: "LANs and Routing Main Commands",
+    updatedLabel: "3 months ago",
+    pinned: true,
+  },
+  {
+    id: "thread-5",
+    title: "New Thread",
+    updatedLabel: "about 23 hours ago",
+    pinned: false,
+  },
+  {
+    id: "thread-6",
+    title: "Yupp",
+    updatedLabel: "about 23 hours ago",
+    pinned: false,
+  },
+  {
+    id: "thread-7",
+    title: "React Doctor Triage Plan",
+    updatedLabel: "7 days ago",
+    pinned: false,
+  },
+  {
+    id: "thread-8",
+    title: "Image Content Identification",
+    updatedLabel: "1 day ago",
+    pinned: false,
+  },
+  {
+    id: "thread-9",
+    title: "Image Content Description",
+    updatedLabel: "1 day ago",
+    pinned: false,
+  },
+  {
+    id: "thread-10",
+    title: "Cloudflare R2 File Attachments Implementation",
+    updatedLabel: "6 days ago",
+    pinned: false,
+  },
+  {
+    id: "thread-11",
+    title: "Model picker favorites",
+    updatedLabel: "3 months ago",
+    pinned: false,
+  },
+  {
+    id: "thread-12",
+    title: "Reasoning tab visibility",
+    updatedLabel: "3 months ago",
+    pinned: false,
+  },
+]
+
+export const SHARED_MOCK_THREADS: ReadonlyArray<SharedMockThread> = [
+  {
+    id: "shared-1",
+    title: "Turborepo with pnpm setup guide",
+    shares: [
+      {
+        id: "share-1",
+        url: "https://t3.chat/share/9gf0h8gtga",
+        branchCount: 0,
+        viewCount: 0,
+        updatedLabel: "7 months ago",
+      },
+    ],
+  },
+  {
+    id: "shared-2",
+    title: "Set Default Browser Arch Linux",
+    shares: [
+      {
+        id: "share-2",
+        url: "https://t3.chat/share/k2m91qpl8c",
+        branchCount: 1,
+        viewCount: 4,
+        updatedLabel: "2 months ago",
+      },
+    ],
+  },
+  {
+    id: "shared-3",
+    title: "LANs and Routing Challenge Lab",
+    shares: [],
+  },
+  {
+    id: "shared-4",
+    title: "Convex auth and identity mapping",
+    shares: [],
+  },
+  {
+    id: "shared-5",
+    title: "Tailwind v4 theme tokens",
+    shares: [],
+  },
+  {
+    id: "shared-6",
+    title: "Composer attachment previews",
+    shares: [],
+  },
+  {
+    id: "shared-7",
+    title: "Temporary chats until first send",
+    shares: [],
+  },
+  {
+    id: "shared-8",
+    title: "Settings account page layout",
+    shares: [],
+  },
+  {
+    id: "shared-9",
+    title: "R2 file attachments for PDFs",
+    shares: [],
+  },
+  {
+    id: "shared-10",
+    title: "Model picker favorites",
+    shares: [],
+  },
+  {
+    id: "shared-11",
+    title: "Reasoning tab visibility",
+    shares: [],
+  },
+  {
+    id: "shared-12",
+    title: "Chat empty state composer",
+    shares: [],
+  },
+]

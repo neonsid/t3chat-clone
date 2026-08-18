@@ -24,7 +24,7 @@ The Account page UI is complete and static. This plan covers every clickable or 
 | Back to Chat | Link to `/` |
 | Theme toggle | `preferences-store` + localStorage |
 | Sign out | `clerk.signOut` |
-| Settings tabs | Account is real; others are placeholders |
+| Settings tabs | Account, Customization, and History & Sync are real routes; remaining tabs are placeholders |
 | Change Email | Clerk user profile |
 | View Devices | Clerk user profile |
 | Keyboard shortcut list | Static display |

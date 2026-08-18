@@ -2,7 +2,11 @@ import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { InfoIcon, MessageSquareIcon, PlusIcon, XIcon } from "lucide-react"
 
-import { CUSTOMIZATION_PROFILE } from "@/components/settings/constants"
+import { CreateProfileDialog } from "@/components/settings/CreateProfileDialog"
+import {
+  COPY_FROM_SCRATCH_ID,
+  CUSTOMIZATION_PROFILE,
+} from "@/components/settings/constants"
 import { canAddTrait, traitCharacterCount } from "@/components/settings/logic"
 import { SettingsSelect } from "@/components/settings/SettingsSelect"
 import { Tooltip } from "@/components/shared/motion/tooltip"
@@ -10,14 +14,20 @@ import { Button } from "@/components/shared/ui/button"
 import { Input } from "@/components/shared/ui/input"
 import { cn } from "@/lib/utils"
 
-const PROFILE_OPTIONS = [
-  { id: "default", label: CUSTOMIZATION_PROFILE.defaultName },
-] as const
-
 const fieldClassName =
   "h-auto min-h-11 rounded-md border-border bg-transparent px-3 py-2.5 pr-14"
 
 export function CustomizationProfile() {
+  const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([
+    {
+      id: CUSTOMIZATION_PROFILE.defaultId,
+      name: CUSTOMIZATION_PROFILE.defaultName,
+    },
+  ])
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(
+    CUSTOMIZATION_PROFILE.defaultId
+  )
+  const [createOpen, setCreateOpen] = useState(false)
   const [preferredName, setPreferredName] = useState("")
   const [occupation, setOccupation] = useState("")
   const [traits, setTraits] = useState<Array<string>>([])
@@ -30,6 +40,24 @@ export function CustomizationProfile() {
     if (!canAddTrait(traits, value, CUSTOMIZATION_PROFILE.traitsMax)) return
     setTraits([...traits, value.trim()])
     setTraitDraft("")
+  }
+
+  function handleCreateProfile({
+    name,
+    copyFromId,
+  }: {
+    name: string
+    copyFromId: string
+  }) {
+    const id = crypto.randomUUID()
+    setProfiles([...profiles, { id, name }])
+    setSelectedProfileId(id)
+    if (copyFromId !== COPY_FROM_SCRATCH_ID) return
+    setPreferredName("")
+    setOccupation("")
+    setTraits([])
+    setTraitDraft("")
+    setExtra("")
   }
 
   function handleTraitKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -58,9 +86,12 @@ export function CustomizationProfile() {
 
       <div className="mt-4 flex items-center gap-2">
         <SettingsSelect
-          value="default"
-          options={PROFILE_OPTIONS}
-          onValueChange={() => undefined}
+          value={selectedProfileId}
+          options={profiles.map((profile) => ({
+            id: profile.id,
+            label: profile.name,
+          }))}
+          onValueChange={setSelectedProfileId}
           ariaLabel="Customization profile"
           leadingIcon={
             <MessageSquareIcon
@@ -75,10 +106,18 @@ export function CustomizationProfile() {
           size="icon-sm"
           aria-label={CUSTOMIZATION_PROFILE.addLabel}
           className="rounded-md"
+          onClick={() => setCreateOpen(true)}
         >
           <PlusIcon />
         </Button>
       </div>
+
+      <CreateProfileDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        profiles={profiles}
+        onCreate={handleCreateProfile}
+      />
 
       <div className="mt-8 flex flex-col gap-6">
         <CustomizationField

@@ -47,6 +47,13 @@ To use the components in your app, import them as follows:
 ```tsx
 import { Button } from "@/components/ui/button"
 ```
+
+## Later work
+
+### Shared threads and chat branching
+
+History & Sync (`/settings/history`) already has the Shared Threads UI: expandable rows, nested share URLs, branch/view counts, edit, and an empty state. Creating public shares, visiting `/share/...`, and branching chats in the product are not wired yet. Backend: [plans/03-history.md](./plans/03-history.md).
+
 - [] While copying keep the original without markdown text
 
 -[] Preserve the chat UI state always

@@ -14,6 +14,7 @@ UI files:
 - `src/routes/settings/customization.tsx`
 - `src/components/settings/CustomizationSettings.tsx`
 - `src/components/settings/CustomizationProfile.tsx`
+- `src/components/settings/CreateProfileDialog.tsx`
 - `src/components/settings/CustomizationOptions.tsx`
 - `src/components/settings/CustomizationFonts.tsx`
 - `src/components/settings/SettingsSelect.tsx`
@@ -30,8 +31,8 @@ Do not wire Convex or global CSS until this plan is being executed. Polar / usag
 
 | Control | UI now | Later |
 | --- | --- | --- |
-| Profile dropdown ("Default") | One fake option; `onValueChange` is a no-op | List real profiles; switching loads fields |
-| `+` add profile | Button with no handler | `createProfile` mutation; prompt for name |
+| Profile dropdown ("Default") | Local list; switching does not load per-profile fields | List real profiles; switching loads fields |
+| `+` add profile | Opens Create New Profile dialog (local names only) | `createProfile` mutation; persist name + copy-from |
 | Preferred name (50) | Local input + counter | Persist on active profile |
 | Occupation (100) | Local input + counter | Persist |
 | Traits (100) + chips | Local tags, Enter/Tab/chip add, remove | Persist `traits[]`; enforce budget server-side |
