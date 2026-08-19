@@ -191,7 +191,7 @@ export function Tooltip({
           animate="animate"
           exit="exit"
           className={cn(
-            "pointer-events-none fixed z-[9999] block rounded-lg border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
+            "pointer-events-none fixed z-[9999] block rounded-lg border border-border bg-popover/95 px-2.5 py-2 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
             className
           )}
           style={{
