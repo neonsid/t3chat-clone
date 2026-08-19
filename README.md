@@ -59,6 +59,13 @@ History & Sync (`/settings/history`) already has the Shared Threads UI: expandab
 The Models tab (`/settings/models`) lists `packages/model-catalog/src/generated` in list and grid views. Selecting models, starring favorites, and “Select recommended” are local to the page and do not change the chat picker yet. Backend: [plans/04-models.md](./plans/04-models.md).
 
 - [] While copying keep the original without markdown text
-
--[] Preserve the chat UI state always
 - [] Model search is broken
+- [] Implement search bar in chat header to work
+- [] Implement the chat sharing functionality
+- [] Implement the search functionality
+- [] Give the settings icon a tooltip
+-[] Implement the branching functionality and archive chats
+- [] Implement the create profile functionality
+- [] Improve the UI of the overall /settings route
+- [] Add the /models/modelName route
+- [] Implement all the functionality in context menu
