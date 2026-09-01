@@ -1,10 +1,7 @@
 import { ConvexError, v } from "convex/values"
 
 import { internal } from "./_generated/api"
-import {
-  internalMutation,
-  internalQuery,
-} from "./_generated/server"
+import { internalMutation, internalQuery } from "./_generated/server"
 import {
   ATTACHMENT_GC_BATCH_SIZE,
   ATTACHMENT_UNBOUND_TTL_MS,
@@ -86,10 +83,7 @@ async function getOwnedAttachment(
   ctx: DbCtx & { viewerId: string },
   attachmentId: string
 ): Promise<Doc<"attachments">> {
-  if (
-    !attachmentId.trim() ||
-    attachmentId.length > MAX_ATTACHMENT_ID_LENGTH
-  ) {
+  if (!attachmentId.trim() || attachmentId.length > MAX_ATTACHMENT_ID_LENGTH) {
     throw new ConvexError("Invalid attachment id")
   }
 
@@ -158,6 +152,8 @@ export const authorizeForOwner = internalQuery({
       bindingStatus: v.union(v.literal("unbound"), v.literal("bound")),
       threadId: v.optional(v.id("threads")),
       messageId: v.optional(v.string()),
+      modelDownloadUrl: v.optional(v.string()),
+      modelDownloadUrlExpiresAt: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -182,6 +178,8 @@ export const authorizeForOwner = internalQuery({
       bindingStatus: attachment.bindingStatus,
       threadId: attachment.threadId,
       messageId: attachment.messageId,
+      modelDownloadUrl: attachment.modelDownloadUrl,
+      modelDownloadUrlExpiresAt: attachment.modelDownloadUrlExpiresAt,
     }
   },
 })
@@ -207,6 +205,8 @@ export const authorizeManyForOwner = internalQuery({
         v.literal("failed"),
         v.literal("deleting")
       ),
+      modelDownloadUrl: v.optional(v.string()),
+      modelDownloadUrlExpiresAt: v.optional(v.number()),
     })
   ),
   handler: async (ctx, args) => {
@@ -232,6 +232,8 @@ export const authorizeManyForOwner = internalQuery({
         mimeType: attachment.mimeType,
         kind: attachment.kind,
         status: attachment.status,
+        modelDownloadUrl: attachment.modelDownloadUrl,
+        modelDownloadUrlExpiresAt: attachment.modelDownloadUrlExpiresAt,
       })
     }
     return results
@@ -390,6 +392,30 @@ export const discard = authedMutation({
     if (attachment.status === "deleting") return null
 
     await scheduleDurableDelete(ctx, [attachment])
+    return null
+  },
+})
+
+export const storeModelDownloadUrl = internalMutation({
+  args: {
+    ownerId: v.string(),
+    attachmentId: v.string(),
+    url: v.string(),
+    expiresAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db
+      .query("attachments")
+      .withIndex("by_ownerId_and_attachmentId", (query) =>
+        query.eq("ownerId", args.ownerId).eq("attachmentId", args.attachmentId)
+      )
+      .unique()
+    if (!attachment || attachment.status !== "ready") return null
+    await ctx.db.patch("attachments", attachment._id, {
+      modelDownloadUrl: args.url,
+      modelDownloadUrlExpiresAt: args.expiresAt,
+    })
     return null
   },
 })

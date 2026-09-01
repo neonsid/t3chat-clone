@@ -171,12 +171,12 @@ export function ChatHeaderActions({
   return (
     <div className="pointer-events-none fixed top-[10px] right-3 z-60">
       <m.div
-        className="rounded-lg p-1"
+        className={cn(
+          "rounded-lg p-1 transition-[background-color] duration-200 ease-linear",
+          onNotch ? "bg-transparent" : "bg-chrome-surface"
+        )}
         initial={false}
-        animate={{
-          y: onNotch ? 8 : 0,
-          backgroundColor: onNotch ? "transparent" : "var(--chrome-surface)",
-        }}
+        animate={{ y: onNotch ? 8 : 0 }}
         transition={{ duration: 0.2, ease: "linear" }}
       >
         <m.div

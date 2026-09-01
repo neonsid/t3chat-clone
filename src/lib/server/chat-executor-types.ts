@@ -10,6 +10,9 @@ export type ChatExecutorOptions = {
   readonly messages: ReadonlyArray<ModelMessage>
   readonly providerReasoningEffort: ProviderReasoningEffort | undefined
   readonly abortController: AbortController
+  readonly searchEnabled?: boolean
+  readonly searchLimit?: number
+  readonly promptCacheKey?: string
 }
 
 export type ChatExecutor = (

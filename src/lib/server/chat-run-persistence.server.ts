@@ -5,8 +5,70 @@ import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { MAX_MESSAGE_CONTENT_LENGTH } from "../../../convex/constants"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import type { JsonValue } from "@/lib/json-value"
+import {
+  parseWebSearchTurn,
+  WEB_SEARCH_SOURCES_EVENT,
+  type WebSearchSource,
+} from "@/lib/web-search"
 
 export type ChatRunConvexClient = Pick<ConvexHttpClient, "mutation">
+
+const MAX_RUN_ERROR_MESSAGE_LENGTH = 500
+
+export const CHAT_RUN_SAVE_FAILED =
+  "Couldn't save this reply. Try sending again."
+
+function persistErrorMessage(error: Error) {
+  const message = error.message.trim() || "Generation failed"
+  return message.slice(0, MAX_RUN_ERROR_MESSAGE_LENGTH)
+}
+
+function persistableThinkingSearchSplitAt(value: number | undefined) {
+  if (value === undefined || !Number.isInteger(value) || value < 0) {
+    return undefined
+  }
+  return value
+}
+
+function isFinishArgsRejected(error: Error) {
+  const message = error.message
+  return (
+    message.includes("searchQueries") ||
+    message.includes("ArgumentValidationError") ||
+    message.includes("Validator:") ||
+    /extra field/i.test(message)
+  )
+}
+
+function clientFacingStreamError(error: Error) {
+  if (isFinishArgsRejected(error)) return new Error(CHAT_RUN_SAVE_FAILED)
+  return error
+}
+
+async function persistRunOutcome<
+  T extends { searchQueries?: string[]; thinkingSearchSplitAt?: number },
+>(
+  convex: ChatRunConvexClient,
+  reference: Parameters<ChatRunConvexClient["mutation"]>[0],
+  payload: T
+) {
+  try {
+    await convex.mutation(reference, payload)
+  } catch (error) {
+    const thrown =
+      error instanceof Error ? error : new Error("Generation failed")
+    if (!isFinishArgsRejected(thrown)) {
+      throw thrown
+    }
+    const {
+      searchQueries: _searchQueries,
+      thinkingSearchSplitAt: _thinkingSearchSplitAt,
+      ...rest
+    } = payload
+    await convex.mutation(reference, rest)
+  }
+}
 
 function appendThinking(current: string, delta: string) {
   if (!delta) return current
@@ -53,6 +115,9 @@ export function collectAndPersistStream({
     let outputTokens = 0
     let streamedChunks = 0
     let finished = false
+    let sources: WebSearchSource[] = []
+    let searchQueries: string[] = []
+    let thinkingSearchSplitAt: number | undefined
 
     const generation = () => ({
       modelId,
@@ -85,6 +150,10 @@ export function collectAndPersistStream({
         (thinking || text ? crypto.randomUUID() : undefined),
       content: text,
       thinking: thinking || undefined,
+      sources: sources.length > 0 ? sources : undefined,
+      searchQueries: searchQueries.length > 0 ? searchQueries : undefined,
+      thinkingSearchSplitAt:
+        persistableThinkingSearchSplitAt(thinkingSearchSplitAt),
       generation: generation(),
     })
 
@@ -116,8 +185,30 @@ export function collectAndPersistStream({
             thinking = appendThinking(thinking, chunk.delta)
             assistantMessageId ??= crypto.randomUUID()
           }
+        } else if (chunk.type === "CUSTOM") {
+          if (chunk.name === WEB_SEARCH_SOURCES_EVENT) {
+            // SAFETY: CUSTOM value is JSON we emitted as web-search.sources.
+            const value: JsonValue = chunk.value as JsonValue
+            const turn = parseWebSearchTurn(value)
+            sources = turn.sources
+            searchQueries = turn.queries
+            if (
+              thinkingSearchSplitAt === undefined &&
+              (turn.sources.length > 0 || turn.queries.length > 0)
+            ) {
+              thinkingSearchSplitAt = thinking.length
+            }
+          }
         } else if (chunk.type === "RUN_FINISHED") {
           outputTokens = chunk.usage?.completionTokens ?? 0
+          const cachedTokens = chunk.usage?.promptTokensDetails?.cachedTokens
+          if (cachedTokens && cachedTokens > 0) {
+            console.log("OpenAI prompt cache hit", {
+              modelId,
+              cachedTokens,
+              promptTokens: chunk.usage?.promptTokens,
+            })
+          }
         } else if (chunk.type === "RUN_ERROR") {
           throw new Error(chunk.message || "Model generation failed")
         }
@@ -130,31 +221,40 @@ export function collectAndPersistStream({
       // complete one, half a sentence and all.
       if (canPersist) {
         if (signal.aborted) {
-          await convex.mutation(api.chatRuns.stop, finishPayload())
+          await persistRunOutcome(convex, api.chatRuns.stop, finishPayload())
         } else {
-          await convex.mutation(api.chatRuns.complete, finishPayload())
+          await persistRunOutcome(convex, api.chatRuns.complete, finishPayload())
         }
       }
       finished = true
     } catch (error) {
+      const thrown =
+        error instanceof Error ? error : new Error("Generation failed")
       if (canPersist) {
         if (signal.aborted) {
-          await convex.mutation(api.chatRuns.stop, finishPayload())
+          await persistRunOutcome(
+            convex,
+            api.chatRuns.stop,
+            finishPayload()
+          ).catch(() => undefined)
         } else {
-          await convex.mutation(api.chatRuns.fail, {
+          await persistRunOutcome(convex, api.chatRuns.fail, {
             ...finishPayload(),
-            errorMessage:
-              error instanceof Error ? error.message : "Generation failed",
-          })
+            errorMessage: persistErrorMessage(thrown),
+          }).catch(() => undefined)
         }
       }
       finished = true
-      throw error
+      throw clientFacingStreamError(thrown)
     } finally {
       // The client hanging up closes this generator mid-yield, which is the one
       // exit that reaches neither branch above.
       if (!finished && canPersist) {
-        await convex.mutation(api.chatRuns.stop, finishPayload())
+        await persistRunOutcome(
+          convex,
+          api.chatRuns.stop,
+          finishPayload()
+        ).catch(() => undefined)
       }
     }
   })()

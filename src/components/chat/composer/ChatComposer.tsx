@@ -1,6 +1,14 @@
-import { memo, useCallback, useEffect, useRef } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
-import { ArrowUpIcon, GlobeIcon, PaperclipIcon, SquareIcon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  CheckIcon,
+  GlobeIcon,
+  MinusIcon,
+  PaperclipIcon,
+  PlusIcon,
+  SquareIcon,
+} from "lucide-react"
 
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import {
@@ -10,7 +18,11 @@ import {
 } from "@/components/chat/attachments/constants"
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
-import { CHAT_COMPOSER_PLACEHOLDERS } from "@/components/chat/composer/constants"
+import {
+  CHAT_COMPOSER_PLACEHOLDERS,
+  SEARCH_TOGGLE,
+} from "@/components/chat/composer/constants"
+import { webSearchTooltip } from "@/components/chat/composer/logic"
 import {
   AnimatedToastStack,
   useAnimatedToastStack,
@@ -30,6 +42,11 @@ import {
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import {
+  modelSupportsWebSearch,
+  stepSearchLimit,
+  WEB_SEARCH_LIMIT,
+} from "@/lib/web-search"
 import { cn } from "@/lib/utils"
 
 interface ChatComposerProps {
@@ -277,7 +294,10 @@ const ComposerToolbar = memo(function ComposerToolbar({
   toast: ReactNode
 }) {
   const composer = useThreadComposerToolbarControls(threadStateKey)
-  const { isLoading: modelPreferencesLoading } = useModelPreferences()
+  const { isLoading: modelPreferencesLoading, selectedModelId } =
+    useModelPreferences()
+  const searchSupported = modelSupportsWebSearch(selectedModelId)
+  const searchDisabled = modelPreferencesLoading || disabled || !searchSupported
 
   return (
     <div className="flex min-w-0 items-center px-3 pb-7 sm:px-4 sm:pb-8">
@@ -304,16 +324,16 @@ const ComposerToolbar = memo(function ComposerToolbar({
         ) : null}
 
         <div className="flex min-w-0 [scrollbar-width:none] items-center justify-start gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <ToolbarToggle
+          <SearchToggle
             pressed={composer.searchEnabled}
+            searchLimit={composer.searchLimit}
+            supported={searchSupported}
+            disabled={searchDisabled}
             onPressedChange={(searchEnabled) =>
               composer.setSearchEnabled(threadStateKey, searchEnabled)
             }
-            label="Search"
-            icon={<GlobeIcon className="size-3.5" />}
-            disabled={modelPreferencesLoading || disabled}
-            tooltip={
-              composer.searchEnabled ? "Disable web search" : "Search the web"
+            onSearchLimitChange={(searchLimit) =>
+              composer.setSearchLimit(threadStateKey, searchLimit)
             }
           />
           <Tooltip content="Attach files">
@@ -412,40 +432,139 @@ const ComposerSendButton = memo(function ComposerSendButton({
   )
 })
 
-function ToolbarToggle({
+function SearchToggle({
   pressed,
+  searchLimit,
+  supported,
+  disabled,
   onPressedChange,
-  label,
-  icon,
-  tooltip,
-  disabled = false,
+  onSearchLimitChange,
 }: {
   pressed: boolean
+  searchLimit: number
+  supported: boolean
+  disabled: boolean
   onPressedChange: (next: boolean) => void
-  label: string
-  icon: ReactNode
-  tooltip?: ReactNode
-  disabled?: boolean
+  onSearchLimitChange: (searchLimit: number) => void
 }) {
-  const button = (
-    <span className={cn("inline-flex", disabled && "cursor-not-allowed")}>
-      <button
-        type="button"
-        aria-pressed={pressed}
-        disabled={disabled}
-        onClick={() => onPressedChange(!pressed)}
-        className={cn(
-          "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50",
-          pressed
-            ? "border-foreground/15 bg-accent text-foreground"
-            : "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
-        )}
-      >
-        {icon}
-        {label}
-      </button>
-    </span>
-  )
+  const [editingLimit, setEditingLimit] = useState(false)
+  const showLimit = pressed && supported
+  if (!showLimit && editingLimit) setEditingLimit(false)
 
-  return tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button
+  const changeLimit = (delta: number) => {
+    onSearchLimitChange(stepSearchLimit(searchLimit, delta))
+  }
+
+  if (showLimit && editingLimit) {
+    return (
+      <span className={cn("inline-flex", disabled && "cursor-not-allowed")}>
+        <div
+          role="group"
+          tabIndex={0}
+          autoFocus
+          aria-label={SEARCH_TOGGLE.limitEditorLabel}
+          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+            if (event.key === "Escape") {
+              event.preventDefault()
+              event.stopPropagation()
+              setEditingLimit(false)
+              return
+            }
+            if (event.key === "ArrowLeft" || event.key === "-") {
+              event.preventDefault()
+              changeLimit(-1)
+              return
+            }
+            if (event.key === "ArrowRight" || event.key === "+") {
+              event.preventDefault()
+              changeLimit(1)
+            }
+          }}
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-sm",
+            SEARCH_TOGGLE.activeClass,
+            disabled && "opacity-50"
+          )}
+        >
+          <button
+            type="button"
+            aria-label={SEARCH_TOGGLE.decreaseLimit}
+            disabled={disabled || searchLimit <= WEB_SEARCH_LIMIT.min}
+            onClick={() => changeLimit(-1)}
+            className={SEARCH_TOGGLE.editorButtonClass}
+          >
+            <MinusIcon className="size-3.5" />
+          </button>
+          <span className="min-w-5 text-center tabular-nums">{searchLimit}</span>
+          <button
+            type="button"
+            aria-label={SEARCH_TOGGLE.increaseLimit}
+            disabled={disabled || searchLimit >= WEB_SEARCH_LIMIT.max}
+            onClick={() => changeLimit(1)}
+            className={SEARCH_TOGGLE.editorButtonClass}
+          >
+            <PlusIcon className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={SEARCH_TOGGLE.confirmLimit}
+            disabled={disabled}
+            onClick={() => setEditingLimit(false)}
+            className={SEARCH_TOGGLE.editorButtonClass}
+          >
+            <CheckIcon className="size-3.5" />
+          </button>
+        </div>
+      </span>
+    )
+  }
+
+  return (
+    <Tooltip content={webSearchTooltip(supported, pressed)}>
+      <span className={cn("inline-flex", disabled && "cursor-not-allowed")}>
+        <div
+          className={cn(
+            "inline-flex items-center overflow-hidden rounded-full border text-sm transition-colors",
+            pressed ? SEARCH_TOGGLE.activeClass : SEARCH_TOGGLE.idleClass,
+            disabled && "opacity-50"
+          )}
+        >
+          <button
+            type="button"
+            aria-pressed={pressed}
+            disabled={disabled}
+            onClick={() => onPressedChange(!pressed)}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 py-1.5 text-sm disabled:pointer-events-none",
+              showLimit ? "ps-2.5 pe-1.5" : "px-2.5"
+            )}
+          >
+            <GlobeIcon className="size-3.5" />
+            {SEARCH_TOGGLE.label}
+          </button>
+          {showLimit ? (
+            <>
+              <span
+                aria-hidden="true"
+                className="h-3 w-px bg-primary-foreground/30"
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`${SEARCH_TOGGLE.limitEditorLabel} ${searchLimit}`}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setEditingLimit(true)
+                }}
+                className="cursor-pointer px-2 py-1.5 text-sm tabular-nums disabled:pointer-events-none"
+              >
+                {searchLimit}x
+              </button>
+            </>
+          ) : null}
+        </div>
+      </span>
+    </Tooltip>
+  )
 }

@@ -1,12 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
 @source "../node_modules/streamdown/dist/*.js";
-@source "../node_modules/@streamdown/code/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -602,6 +602,54 @@ body:has([data-attachment-lightbox]) [data-chat-composer-overlay] {
   color: var(--foreground);
 }
 
+.chat-surface [data-streamdown="table-wrapper"] {
+  width: max-content;
+  max-width: 100%;
+}
+
+.chat-surface [data-streamdown="table-actions"] {
+  height: 2.25rem;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent);
+}
+
+.chat-surface [data-streamdown="table-actions"] > div {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-surface [data-streamdown="table-actions"] > div > button {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+
+.chat-surface [data-streamdown="table-actions"] > div > button:hover {
+  color: var(--foreground);
+}
+
+.chat-surface [data-streamdown="table"] {
+  width: max-content;
+  max-width: 100%;
+}
+
+/* Streamdown's overlay is z-50; header chrome is z-60 in the same corner. */
+[data-streamdown="table-fullscreen"] {
+  z-index: 400;
+}
+
+body:has([data-streamdown="table-fullscreen"]) [data-chat-composer-overlay] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .chat-surface [data-streamdown="code-block-body"] {
   padding: 1rem;
   border: 0;
@@ -634,6 +682,11 @@ body:has([data-attachment-lightbox]) [data-chat-composer-overlay] {
 /* Streamdown ships its own syntax theme colors — force readable prose text. */
 .chat-surface [data-streamdown] {
   color: var(--foreground);
+}
+
+.chat-surface [data-streamdown] a,
+.chat-surface [data-streamdown="link"] {
+  cursor: pointer;
 }
 
 .chat-surface

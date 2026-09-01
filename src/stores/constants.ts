@@ -5,7 +5,7 @@ import {
 import type { ModelPreferences, ThreadComposerState } from "@/stores/types"
 
 export const CHAT_UI_STORAGE_KEY = "t3chat-chat-ui"
-export const CHAT_UI_STORAGE_VERSION = 2
+export const CHAT_UI_STORAGE_VERSION = 3
 export const TEMPORARY_THREADS_STORAGE_KEY = "t3chat-temporary-chats"
 export const TEMPORARY_THREADS_STORAGE_VERSION = 1
 export const GUEST_MODEL_PREFERENCES_STORAGE_KEY =
@@ -18,6 +18,7 @@ export const DEFAULT_THREAD_COMPOSER_STATE: ThreadComposerState = Object.freeze(
     draft: "",
     reasoningEffort: "instant",
     searchEnabled: false,
+    searchLimit: 1,
     attachments: [],
   }
 )

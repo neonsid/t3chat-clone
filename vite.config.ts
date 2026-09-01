@@ -8,12 +8,7 @@ const config = defineConfig({
   resolve: { tsconfigPaths: true },
   server: { strictPort: true },
   optimizeDeps: {
-    include: [
-      "streamdown",
-      "@streamdown/code",
-      "shiki",
-      "shiki/engine/javascript",
-    ],
+    include: ["streamdown", "shiki", "shiki/engine/javascript"],
   },
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 })

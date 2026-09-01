@@ -146,4 +146,41 @@ describe("createMessageProjectionCache", () => {
     expect(second).not.toBe(first)
     expect(second.has("message-1")).toBe(true)
   })
+
+  it("keeps web search sources identical when nothing changed", () => {
+    const cache = createMessageProjectionCache()
+    const sources = [{ title: "Example", url: "https://example.com" }]
+    const documents = [storedMessage({ messageId: "message-1", sources })]
+
+    const first = cache.webSearchSources(documents)
+    const second = cache.webSearchSources([...documents])
+
+    expect(second).toBe(first)
+    expect(second["message-1"]).toBe(first["message-1"])
+  })
+
+  it("keeps web search queries identical when nothing changed", () => {
+    const cache = createMessageProjectionCache()
+    const searchQueries = ["agentic AI cybersecurity"]
+    const documents = [storedMessage({ messageId: "message-1", searchQueries })]
+
+    const first = cache.webSearchQueries(documents)
+    const second = cache.webSearchQueries([...documents])
+
+    expect(second).toBe(first)
+    expect(second["message-1"]).toBe(first["message-1"])
+  })
+
+  it("keeps thinking search splits identical when nothing changed", () => {
+    const cache = createMessageProjectionCache()
+    const documents = [
+      storedMessage({ messageId: "message-1", thinkingSearchSplitAt: 12 }),
+    ]
+
+    const first = cache.thinkingSearchSplitAt(documents)
+    const second = cache.thinkingSearchSplitAt([...documents])
+
+    expect(second).toBe(first)
+    expect(second["message-1"]).toBe(12)
+  })
 })

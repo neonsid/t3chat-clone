@@ -2,11 +2,7 @@ import type { ReasoningEffort } from "@/lib/chat-models"
 import type { AttachmentKind } from "@/lib/attachment-limits"
 
 export type ComposerAttachmentStatus =
-  | "preparing"
-  | "uploading"
-  | "processing"
-  | "ready"
-  | "failed"
+  "preparing" | "uploading" | "processing" | "ready" | "failed"
 
 export type ComposerAttachment = {
   localId: string
@@ -25,6 +21,7 @@ export type ThreadComposerState = {
   draft: string
   reasoningEffort: ReasoningEffort
   searchEnabled: boolean
+  searchLimit: number
   attachments: Array<ComposerAttachment>
 }
 

@@ -9,6 +9,7 @@ import {
 } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
+import type { StreamChunk } from "@tanstack/ai"
 import { useMutation, useQuery } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
@@ -28,6 +29,10 @@ import {
   findLastUserMessageId,
   focusComposerInput,
   resolveFrozenStreamingHistory,
+  resolveMessageThinkingSearchSplitAt,
+  resolveMessageWebSearchQueries,
+  resolveMessageWebSearchSources,
+  thinkingSearchSplitAtForPersist,
 } from "@/components/chat/thread/logic"
 import { TimelineMinimap } from "@/components/chat/timeline/TimelineMinimap"
 import type { TimelineMinimapItem } from "@/components/chat/timeline/types"
@@ -63,6 +68,15 @@ import {
   chatMessageThinking,
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
+import type { JsonValue } from "@/lib/json-value"
+import {
+  modelSupportsWebSearch,
+  parseWebSearchTurn,
+  webSearchQueriesForPersist,
+  webSearchSourcesForPersist,
+  WEB_SEARCH_SOURCES_EVENT,
+  type WebSearchSource,
+} from "@/lib/web-search"
 import { cn } from "@/lib/utils"
 import {
   chatRuntimeStore,
@@ -156,6 +170,8 @@ const ChatTimelineMinimap = memo(function ChatTimelineMinimap({
  * very prop that changes.
  */
 const EMPTY_MESSAGE_ATTACHMENTS: Array<ThreadMessageAttachment> = []
+const EMPTY_WEB_SEARCH_SOURCES: WebSearchSource[] = []
+const EMPTY_WEB_SEARCH_QUERIES: string[] = []
 
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
@@ -165,6 +181,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isTemporary,
   generationStats,
   attachments,
+  sources,
+  queries,
+  thinkingSearchSplitAt,
+  isSearchingWeb,
 }: {
   message: UIMessage
   isStreaming: boolean
@@ -173,6 +193,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isTemporary: boolean
   generationStats: AssistantGenerationStats | undefined
   attachments: Array<ThreadMessageAttachment>
+  sources: WebSearchSource[]
+  queries: string[]
+  thinkingSearchSplitAt?: number
+  isSearchingWeb: boolean
 }) {
   return (
     <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
@@ -183,6 +207,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
         isTemporary={isTemporary}
         generationStats={generationStats}
         attachments={attachments}
+        sources={sources}
+        queries={queries}
+        thinkingSearchSplitAt={thinkingSearchSplitAt}
+        isSearchingWeb={isSearchingWeb}
       />
     </MessageScrollerItem>
   )
@@ -193,6 +221,9 @@ export function ChatThreadView({
   threadStateKey,
   initialMessages,
   generationStats,
+  webSearchSources,
+  webSearchQueries,
+  thinkingSearchSplitAt,
   stoppedMessageIds,
   isReady,
   isAuthenticated,
@@ -204,6 +235,9 @@ export function ChatThreadView({
   threadStateKey: string
   initialMessages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
+  webSearchSources: Record<string, WebSearchSource[]>
+  webSearchQueries: Record<string, string[]>
+  thinkingSearchSplitAt: Record<string, number>
   stoppedMessageIds: ReadonlySet<string>
   isReady: boolean
   isAuthenticated: boolean
@@ -222,6 +256,17 @@ export function ChatThreadView({
   const [ephemeralGenerationStats, setEphemeralGenerationStats] = useState<
     Record<string, AssistantGenerationStats>
   >(() => generationStats)
+  const [turnWebSearchSources, setTurnWebSearchSources] = useState<
+    WebSearchSource[]
+  >(() => [])
+  const [turnWebSearchQueries, setTurnWebSearchQueries] = useState<string[]>(
+    () => []
+  )
+  const [turnThinkingSearchSplitAt, setTurnThinkingSearchSplitAt] = useState<
+    number | undefined
+  >(() => undefined)
+  const streamingThinkingLengthRef = useRef(0)
+  const [searchThisTurn, setSearchThisTurn] = useState(false)
   const isTemporary = isTemporaryThreadId(threadId)
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
@@ -261,6 +306,12 @@ export function ChatThreadView({
       getThreadComposerState(state, threadStateKey).attachments.length > 0
   )
   const reasoningEffort = useThreadComposerReasoningEffort(threadStateKey)
+  const searchEnabled = useChatUiStore(
+    (state) => getThreadComposerState(state, threadStateKey).searchEnabled
+  )
+  const searchLimit = useChatUiStore(
+    (state) => getThreadComposerState(state, threadStateKey).searchLimit
+  )
   const chatUi = useChatUiStoreApi()
   const setDraft = useChatUiStore((state) => state.setDraft)
   const clearDraft = useChatUiStore((state) => state.clearDraft)
@@ -299,12 +350,32 @@ export function ChatThreadView({
     attachmentIds: new Array<string>(),
     ephemeral: isTemporary,
     attachmentsByMessageId: attachmentIdsByMessageRef.current,
+    searchEnabled,
+    searchLimit,
   })
   forwardedPropsRef.current.modelId = modelPreferences.selectedModelId
   forwardedPropsRef.current.reasoningEffort = effectiveReasoningEffort
   forwardedPropsRef.current.ephemeral = isTemporary
   forwardedPropsRef.current.attachmentsByMessageId =
     attachmentIdsByMessageRef.current
+  forwardedPropsRef.current.searchEnabled = searchEnabled
+  forwardedPropsRef.current.searchLimit = searchLimit
+
+  const onChunk = useCallback((chunk: StreamChunk) => {
+    if (chunk.type !== "CUSTOM" || chunk.name !== WEB_SEARCH_SOURCES_EVENT) {
+      return
+    }
+    // SAFETY: CUSTOM value is JSON we emitted as web-search.sources.
+    const value: JsonValue = chunk.value as JsonValue
+    const turn = parseWebSearchTurn(value)
+    if (turn.sources.length > 0) setTurnWebSearchSources(turn.sources)
+    if (turn.queries.length > 0) setTurnWebSearchQueries(turn.queries)
+    if (turn.sources.length > 0 || turn.queries.length > 0) {
+      setTurnThinkingSearchSplitAt((current) =>
+        current === undefined ? streamingThinkingLengthRef.current : current
+      )
+    }
+  }, [])
 
   const { messages, sendMessage, stop, isLoading, error } = useChat({
     threadId,
@@ -312,6 +383,7 @@ export function ChatThreadView({
     forwardedProps: forwardedPropsRef.current,
     connection: fetchServerSentEvents("/api/chat"),
     streamProcessor: CHAT_STREAM_PROCESSOR,
+    onChunk,
   })
 
   const isEmptyThread = messages.length === 0
@@ -328,12 +400,47 @@ export function ChatThreadView({
     !hasDraft &&
     !hasComposerAttachments
   const lastMessage = messages.at(-1)
+  const lastAssistantMessageId =
+    lastMessage?.role === "assistant" ? lastMessage.id : undefined
+
+  function sourcesForMessage(messageId: string, isStreamingMessage: boolean) {
+    return (
+      resolveMessageWebSearchSources({
+        messageId,
+        isStreamingMessage,
+        persisted: webSearchSources,
+        turnSources: turnWebSearchSources,
+        lastAssistantMessageId,
+      }) ?? EMPTY_WEB_SEARCH_SOURCES
+    )
+  }
+
+  function queriesForMessage(messageId: string, isStreamingMessage: boolean) {
+    return (
+      resolveMessageWebSearchQueries({
+        messageId,
+        isStreamingMessage,
+        persisted: webSearchQueries,
+        turnQueries: turnWebSearchQueries,
+        lastAssistantMessageId,
+      }) ?? EMPTY_WEB_SEARCH_QUERIES
+    )
+  }
+
+  function splitAtForMessage(messageId: string, isStreamingMessage: boolean) {
+    return resolveMessageThinkingSearchSplitAt({
+      messageId,
+      isStreamingMessage,
+      persisted: thinkingSearchSplitAt,
+      turnSplitAt: turnThinkingSearchSplitAt,
+      lastAssistantMessageId,
+    })
+  }
 
   // Snapshot once the stream settles. Derived during render so a finished
   // assistant row has stats on the next paint without an effect.
   if (isTemporary && !isLoading) {
-    const modelName =
-      getChatModelById(selectedModelId)?.name ?? selectedModelId
+    const modelName = getChatModelById(selectedModelId)?.name ?? selectedModelId
     const mode = `${effectiveReasoningEffort.charAt(0).toUpperCase()}${effectiveReasoningEffort.slice(1)}`
     let nextStats: Record<string, AssistantGenerationStats> | null = null
     for (const message of messages) {
@@ -427,6 +534,9 @@ export function ChatThreadView({
     CHAT_STREAM_RENDER_INTERVAL_MS,
     streamingMessage !== null
   )
+  streamingThinkingLengthRef.current = renderedStreamingMessage
+    ? chatMessageThinking(renderedStreamingMessage).length
+    : 0
 
   const latestUserMessageId = findLastUserMessageId(displayMessages)
   const scrollAnchorId = isLoading ? latestUserMessageId : null
@@ -450,6 +560,32 @@ export function ChatThreadView({
             attachmentsByMessageId.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
             latestUserMessageId
           )}
+          sources={
+            resolveMessageWebSearchSources({
+              messageId: message.id,
+              isStreamingMessage: false,
+              persisted: webSearchSources,
+              turnSources: turnWebSearchSources,
+              lastAssistantMessageId,
+            }) ?? EMPTY_WEB_SEARCH_SOURCES
+          }
+          queries={
+            resolveMessageWebSearchQueries({
+              messageId: message.id,
+              isStreamingMessage: false,
+              persisted: webSearchQueries,
+              turnQueries: turnWebSearchQueries,
+              lastAssistantMessageId,
+            }) ?? EMPTY_WEB_SEARCH_QUERIES
+          }
+          thinkingSearchSplitAt={resolveMessageThinkingSearchSplitAt({
+            messageId: message.id,
+            isStreamingMessage: false,
+            persisted: thinkingSearchSplitAt,
+            turnSplitAt: turnThinkingSearchSplitAt,
+            lastAssistantMessageId,
+          })}
+          isSearchingWeb={false}
         />
       )),
     [
@@ -457,10 +593,17 @@ export function ChatThreadView({
       resolvedGenerationStats,
       history,
       isTemporary,
+      lastAssistantMessageId,
       latestUserMessageId,
       locallyStoppedMessageIds,
       scrollAnchorId,
       stoppedMessageIds,
+      turnWebSearchQueries,
+      turnWebSearchSources,
+      turnThinkingSearchSplitAt,
+      thinkingSearchSplitAt,
+      webSearchQueries,
+      webSearchSources,
     ]
   )
 
@@ -469,12 +612,15 @@ export function ChatThreadView({
   // stays on the dots instead of an empty row.
   const isAwaitingFirstContent =
     renderedStreamingMessage !== null &&
-    !chatMessageHasContent(renderedStreamingMessage)
+    !chatMessageHasContent(renderedStreamingMessage) &&
+    turnWebSearchQueries.length === 0 &&
+    turnWebSearchSources.length === 0
 
-  const showPendingDots =
+  const waitingForAssistant =
     (isLoading && lastMessage?.role === "user") ||
     isAwaitingFirstContent ||
     ((hasPendingSubmission || hasStartedTurn || activeTurn) && isEmptyThread)
+  const showPendingDots = waitingForAssistant
   // Nothing visible distinguishes the two waits, but a reader on a screen
   // reader is told which one this is.
   const pendingDotsLabel =
@@ -504,6 +650,13 @@ export function ChatThreadView({
               attachmentsByMessageId.get(renderedStreamingMessage.id) ??
               EMPTY_MESSAGE_ATTACHMENTS
             }
+            sources={sourcesForMessage(renderedStreamingMessage.id, true)}
+            queries={queriesForMessage(renderedStreamingMessage.id, true)}
+            thinkingSearchSplitAt={splitAtForMessage(
+              renderedStreamingMessage.id,
+              true
+            )}
+            isSearchingWeb={searchThisTurn}
           />,
         ]
       : historyRows
@@ -550,6 +703,10 @@ export function ChatThreadView({
     }
 
     forwardedPropsRef.current.attachmentIds = attachmentIds
+    setSearchThisTurn(searchEnabled && modelSupportsWebSearch(selectedModelId))
+    setTurnWebSearchSources([])
+    setTurnWebSearchQueries([])
+    setTurnThinkingSearchSplitAt(undefined)
     const messageId = crypto.randomUUID()
     recordMessageAttachments(messageId, attachmentIds, composer.attachments)
     rememberComposerPreviews(composer.attachments)
@@ -591,11 +748,16 @@ export function ChatThreadView({
     // model, and whichever side writes first owns what the reader sees on their
     // next visit.
     if (streamingMessage && isAuthenticated && !isTemporary) {
+      const sources = sourcesForMessage(streamingMessage.id, true)
+      const queries = queriesForMessage(streamingMessage.id, true)
       void stopStreamingMessage({
         threadId: asThreadId(threadId),
         assistantMessageId: streamingMessage.id,
         content: chatMessageText(streamingMessage),
         thinking: chatMessageThinking(streamingMessage) || undefined,
+        sources: sources.length > 0 ? sources : undefined,
+        searchQueries: queries.length > 0 ? queries : undefined,
+        thinkingSearchSplitAt: splitAtForMessage(streamingMessage.id, true),
       }).catch(() => undefined) // The run's own stop still closes it out.
     }
 
@@ -617,6 +779,10 @@ export function ChatThreadView({
     if (!pending) return
 
     forwardedPropsRef.current.attachmentIds = pending.attachmentIds
+    setSearchThisTurn(searchEnabled && modelSupportsWebSearch(selectedModelId))
+    setTurnWebSearchSources([])
+    setTurnWebSearchQueries([])
+    setTurnThinkingSearchSplitAt(undefined)
     recordMessageAttachments(
       pending.messageId,
       pending.attachmentIds,
@@ -662,7 +828,22 @@ export function ChatThreadView({
             : Date.now(),
       })),
       attachmentIdsByMessageRef.current,
-      new Set([...stoppedMessageIds, ...locallyStoppedMessageIds])
+      new Set([...stoppedMessageIds, ...locallyStoppedMessageIds]),
+      webSearchSourcesForPersist(
+        webSearchSources,
+        lastAssistantMessageId,
+        turnWebSearchSources
+      ),
+      webSearchQueriesForPersist(
+        webSearchQueries,
+        lastAssistantMessageId,
+        turnWebSearchQueries
+      ),
+      thinkingSearchSplitAtForPersist(
+        thinkingSearchSplitAt,
+        lastAssistantMessageId,
+        turnThinkingSearchSplitAt
+      )
     )
 
   useLayoutEffect(() => {

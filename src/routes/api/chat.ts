@@ -31,6 +31,7 @@ import {
   streamChatModel,
 } from "@/lib/server/chat-model-executors.server"
 import { collectAndPersistStream } from "@/lib/server/chat-run-persistence.server"
+import { resolveWebSearchRequest } from "@/lib/web-search"
 
 function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status })
@@ -86,6 +87,8 @@ export const Route = createFileRoute("/api/chat")({
           attachmentIds?: JsonValue
           attachmentsByMessageId?: JsonValue
           ephemeral?: JsonValue
+          searchEnabled?: JsonValue
+          searchLimit?: JsonValue
         }
         const modelId = forwarded.modelId
         const reasoningEffort = forwarded.reasoningEffort
@@ -103,6 +106,12 @@ export const Route = createFileRoute("/api/chat")({
           return errorResponse("Unsupported model or reasoning effort", 400)
         const missingRuntimeKey = getMissingRuntimeKey(model.runtime)
         if (missingRuntimeKey) return errorResponse(missingRuntimeKey, 500)
+        const { enabled: searchEnabled, limit: searchLimit } =
+          resolveWebSearchRequest({
+            runtimeKind: model.runtime.kind,
+            searchEnabled: forwarded.searchEnabled,
+            searchLimit: forwarded.searchLimit,
+          })
 
         let attachmentIds: string[]
         try {
@@ -211,6 +220,9 @@ export const Route = createFileRoute("/api/chat")({
               messages: contextToModelMessages(context),
               providerReasoningEffort: model.providerReasoningEffort,
               abortController,
+              searchEnabled,
+              searchLimit,
+              promptCacheKey: params.threadId,
             })
 
             return toServerSentEventsResponse(
@@ -313,6 +325,9 @@ export const Route = createFileRoute("/api/chat")({
             messages: contextToModelMessages(messagesForModel),
             providerReasoningEffort: model.providerReasoningEffort,
             abortController,
+            searchEnabled,
+            searchLimit,
+            promptCacheKey: threadId,
           })
 
           return toServerSentEventsResponse(

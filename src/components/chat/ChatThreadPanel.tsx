@@ -143,15 +143,13 @@ export function ChatThreadPanel() {
   // its Convex subscriptions would drop the surface for a round trip in the
   // middle of the navigation, blanking the optimistic bubble the draft route was
   // already painting.
-  if (
-    !(
-      isDraft ||
-      isTemporary ||
-      isChatDataReady ||
-      wasCurrentThreadReady ||
-      currentThreadHadPendingSubmission
-    )
-  ) {
+  if (!(
+    isDraft ||
+    isTemporary ||
+    isChatDataReady ||
+    wasCurrentThreadReady ||
+    currentThreadHadPendingSubmission
+  )) {
     return null
   }
 
@@ -166,6 +164,9 @@ export function ChatThreadPanel() {
       threadStateKey={threadStateKey}
       initialMessages={renderedThread.messages}
       generationStats={renderedThread.generationStats}
+      webSearchSources={renderedThread.webSearchSources}
+      webSearchQueries={renderedThread.webSearchQueries}
+      thinkingSearchSplitAt={renderedThread.thinkingSearchSplitAt}
       stoppedMessageIds={
         isTemporary
           ? (restoredStoppedMessageIds ?? stoppedMessageIds)

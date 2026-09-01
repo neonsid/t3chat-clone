@@ -7,6 +7,18 @@ import {
   requestMessagesToContext,
 } from "@/lib/chat-context"
 import { MAX_MODEL_CONTEXT_CHARACTERS } from "@/lib/chat-models"
+import type { ModelMessage } from "@tanstack/ai"
+
+function imageSourceUrl(messages: ModelMessage[]) {
+  const content = messages[0]?.content
+  if (!Array.isArray(content)) return null
+  for (const part of content) {
+    if (part.type === "image" && part.source.type === "url") {
+      return part.source.value
+    }
+  }
+  return null
+}
 
 describe("contextToModelMessages", () => {
   it("maps assistant thinking onto ModelMessage.thinking", () => {
@@ -120,6 +132,30 @@ describe("contextToModelMessages", () => {
         ],
       },
     ])
+  })
+
+  it("reuses the same signed attachment url across rebuilt turns", () => {
+    const attachments = [
+      {
+        attachmentId: "a1",
+        kind: "image" as const,
+        mimeType: "image/png",
+        filename: "shot.png",
+        sizeBytes: 10,
+        url: "https://example.com/shot.png?sig=stable",
+      },
+    ]
+    const first = contextToModelMessages([
+      { role: "user", content: "first", attachments },
+    ])
+    const second = contextToModelMessages([
+      { role: "user", content: "second", attachments },
+    ])
+
+    expect(imageSourceUrl(first)).toBe(
+      "https://example.com/shot.png?sig=stable"
+    )
+    expect(imageSourceUrl(second)).toBe(imageSourceUrl(first))
   })
 
   it("detects vision and pdf requirements across context", () => {

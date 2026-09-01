@@ -1,6 +1,7 @@
 import type { UIMessage } from "@tanstack/ai-react"
 
 import type { Doc } from "../../convex/_generated/dataModel"
+import type { WebSearchSource } from "@/lib/web-search"
 
 export type AssistantGenerationStats = {
   modelName: string
@@ -19,6 +20,9 @@ export type ChatThread = {
   updatedAt: number
   messages: UIMessage[]
   generationStats: Record<string, AssistantGenerationStats>
+  webSearchSources: Record<string, WebSearchSource[]>
+  webSearchQueries: Record<string, string[]>
+  thinkingSearchSplitAt: Record<string, number>
   pinnedAt?: number
   isTemporary?: boolean
 }
@@ -33,6 +37,9 @@ export function createPendingChatThread(id: string): ChatThread {
     updatedAt: 0,
     messages: [],
     generationStats: {},
+    webSearchSources: {},
+    webSearchQueries: {},
+    thinkingSearchSplitAt: {},
   }
 }
 
@@ -161,6 +168,23 @@ function isSameSet<T>(left: ReadonlySet<T>, right: ReadonlySet<T>) {
   return left.size === right.size && [...left].every((item) => right.has(item))
 }
 
+function isSameSources(left: WebSearchSource[], right: WebSearchSource[]) {
+  return (
+    left.length === right.length &&
+    left.every(
+      (source, index) =>
+        source.url === right[index]?.url && source.title === right[index]?.title
+    )
+  )
+}
+
+function isSameStringList(left: string[], right: string[]) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  )
+}
+
 function isSameRecord<T>(left: Record<string, T>, right: Record<string, T>) {
   const leftKeys = Object.keys(left)
   return (
@@ -174,6 +198,11 @@ export type MessageProjectionCache = {
   generationStats: (
     documents: Doc<"messages">[]
   ) => Record<string, AssistantGenerationStats>
+  webSearchSources: (
+    documents: Doc<"messages">[]
+  ) => Record<string, WebSearchSource[]>
+  webSearchQueries: (documents: Doc<"messages">[]) => Record<string, string[]>
+  thinkingSearchSplitAt: (documents: Doc<"messages">[]) => Record<string, number>
   stoppedMessageIds: (documents: Doc<"messages">[]) => ReadonlySet<string>
 }
 
@@ -196,6 +225,15 @@ export function createMessageProjectionCache(): MessageProjectionCache {
     [messageId: string]: AssistantGenerationStats
   }
   let lastStoppedIds: ReadonlySet<string> = new Set()
+  let sourcesCache = new Map<string, WebSearchSource[]>()
+  // SAFETY: accumulator starts empty and is filled only with projected sources.
+  let lastSources = {} as { [messageId: string]: WebSearchSource[] }
+  let queriesCache = new Map<string, string[]>()
+  // SAFETY: accumulator starts empty and is filled only with projected queries.
+  let lastQueries = {} as { [messageId: string]: string[] }
+  let splitAtCache = new Map<string, number>()
+  // SAFETY: accumulator starts empty and is filled only with projected split offsets.
+  let lastSplitAt = {} as { [messageId: string]: number }
 
   return {
     messages(documents) {
@@ -239,6 +277,69 @@ export function createMessageProjectionCache(): MessageProjectionCache {
       return next
     },
 
+    webSearchSources(documents) {
+      const nextCache = new Map<string, WebSearchSource[]>()
+      // SAFETY: accumulator starts empty and is filled only with projected sources.
+      const next = {} as { [messageId: string]: WebSearchSource[] }
+      for (const document of documents) {
+        const projected = document.sources
+        if (!projected || projected.length === 0) continue
+        const previous = sourcesCache.get(document.messageId)
+        const value =
+          previous && isSameSources(previous, projected) ? previous : projected
+        nextCache.set(document.messageId, value)
+        next[document.messageId] = value
+      }
+
+      sourcesCache = nextCache
+      if (isSameRecord(lastSources, next)) return lastSources
+      lastSources = next
+      return next
+    },
+
+    webSearchQueries(documents) {
+      const nextCache = new Map<string, string[]>()
+      // SAFETY: accumulator starts empty and is filled only with projected queries.
+      const next = {} as { [messageId: string]: string[] }
+      for (const document of documents) {
+        const projected = document.searchQueries
+        if (!projected || projected.length === 0) continue
+        const previous = queriesCache.get(document.messageId)
+        const value =
+          previous && isSameStringList(previous, projected)
+            ? previous
+            : projected
+        nextCache.set(document.messageId, value)
+        next[document.messageId] = value
+      }
+
+      queriesCache = nextCache
+      if (isSameRecord(lastQueries, next)) return lastQueries
+      lastQueries = next
+      return next
+    },
+
+    thinkingSearchSplitAt(documents) {
+      const nextCache = new Map<string, number>()
+      // SAFETY: accumulator starts empty and is filled only with projected split offsets.
+      const next = {} as { [messageId: string]: number }
+      for (const document of documents) {
+        const projected = document.thinkingSearchSplitAt
+        if (projected === undefined || !Number.isInteger(projected) || projected < 0) {
+          continue
+        }
+        const previous = splitAtCache.get(document.messageId)
+        const value = previous === projected ? previous : projected
+        nextCache.set(document.messageId, value)
+        next[document.messageId] = value
+      }
+
+      splitAtCache = nextCache
+      if (isSameRecord(lastSplitAt, next)) return lastSplitAt
+      lastSplitAt = next
+      return next
+    },
+
     stoppedMessageIds(documents) {
       const next = new Set<string>()
       for (const document of documents) {
@@ -262,7 +363,10 @@ export type ActiveChatThread = Omit<ChatThread, "isStreaming">
 export function toActiveChatThread(
   thread: Doc<"threads">,
   messages: UIMessage[] = [],
-  generationStats: Record<string, AssistantGenerationStats> = {}
+  generationStats: Record<string, AssistantGenerationStats> = {},
+  webSearchSources: Record<string, WebSearchSource[]> = {},
+  webSearchQueries: Record<string, string[]> = {},
+  thinkingSearchSplitAt: Record<string, number> = {}
 ): ActiveChatThread {
   return {
     id: thread._id,
@@ -272,6 +376,9 @@ export function toActiveChatThread(
     updatedAt: thread.updatedAt,
     messages,
     generationStats,
+    webSearchSources,
+    webSearchQueries,
+    thinkingSearchSplitAt,
     pinnedAt: thread.pinnedAt,
   }
 }
@@ -280,10 +387,20 @@ export function toChatThread(
   thread: Doc<"threads">,
   messages: UIMessage[] = [],
   generationStats: Record<string, AssistantGenerationStats> = {},
-  isStreaming = false
+  isStreaming = false,
+  webSearchSources: Record<string, WebSearchSource[]> = {},
+  webSearchQueries: Record<string, string[]> = {},
+  thinkingSearchSplitAt: Record<string, number> = {}
 ): ChatThread {
   return {
-    ...toActiveChatThread(thread, messages, generationStats),
+    ...toActiveChatThread(
+      thread,
+      messages,
+      generationStats,
+      webSearchSources,
+      webSearchQueries,
+      thinkingSearchSplitAt
+    ),
     isStreaming,
   }
 }

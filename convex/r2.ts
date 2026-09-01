@@ -12,11 +12,13 @@ import { ConvexError, v } from "convex/values"
 
 import { components, internal } from "./_generated/api"
 import { action, internalAction } from "./_generated/server"
+import type { ActionCtx } from "./_generated/server"
 import {
   ATTACHMENT_DELETE_BATCH_SIZE,
   ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
   ATTACHMENT_GET_URL_UI_TTL_SECONDS,
   ATTACHMENT_PUT_URL_TTL_SECONDS,
+  canReuseModelDownloadUrl,
 } from "./attachmentConstants"
 
 function r2Options() {
@@ -38,6 +40,38 @@ function r2Options() {
 
 function getR2() {
   return new R2(components.r2, r2Options())
+}
+
+async function signedModelDownloadUrl(
+  ctx: ActionCtx,
+  r2: ReturnType<typeof getR2>,
+  ownerId: string,
+  attachment: {
+    attachmentId: string
+    objectKey: string
+    modelDownloadUrl?: string
+    modelDownloadUrlExpiresAt?: number
+  }
+) {
+  const now = Date.now()
+  if (
+    attachment.modelDownloadUrl &&
+    attachment.modelDownloadUrlExpiresAt &&
+    canReuseModelDownloadUrl(attachment.modelDownloadUrlExpiresAt, now)
+  ) {
+    return attachment.modelDownloadUrl
+  }
+
+  const url: string = await r2.getUrl(attachment.objectKey, {
+    expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
+  })
+  await ctx.runMutation(internal.attachments.storeModelDownloadUrl, {
+    ownerId,
+    attachmentId: attachment.attachmentId,
+    url,
+    expiresAt: now + ATTACHMENT_GET_URL_MODEL_TTL_SECONDS * 1000,
+  })
+  return url
 }
 
 async function requireViewerId(ctx: {
@@ -269,6 +303,8 @@ export const mintModelDownloadUrls = action({
       mimeType: string
       kind: "image" | "pdf"
       status: string
+      modelDownloadUrl?: string
+      modelDownloadUrlExpiresAt?: number
     }> = await ctx.runQuery(internal.attachments.authorizeManyForOwner, {
       ownerId,
       threadId: args.threadId,
@@ -285,9 +321,7 @@ export const mintModelDownloadUrls = action({
     }> = []
     for (const attachment of rows) {
       if (attachment.status !== "ready") continue
-      const url: string = await r2.getUrl(attachment.objectKey, {
-        expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
-      })
+      const url = await signedModelDownloadUrl(ctx, r2, ownerId, attachment)
       results.push({
         attachmentId: attachment.attachmentId,
         url,
@@ -350,14 +384,14 @@ export const mintOwnedModelDownloadUrls = action({
         status: string
         sizeBytes: number
         attachmentId: string
+        modelDownloadUrl?: string
+        modelDownloadUrlExpiresAt?: number
       } | null = await ctx.runQuery(internal.attachments.authorizeForOwner, {
         ownerId,
         attachmentId,
       })
       if (!attachment || attachment.status !== "ready") continue
-      const url: string = await r2.getUrl(attachment.objectKey, {
-        expiresIn: ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
-      })
+      const url = await signedModelDownloadUrl(ctx, r2, ownerId, attachment)
       results.push({
         attachmentId: attachment.attachmentId,
         url,

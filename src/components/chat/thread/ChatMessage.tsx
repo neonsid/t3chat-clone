@@ -7,7 +7,9 @@ import {
   Clock3Icon,
   CopyIcon,
   CpuIcon,
+  GlobeIcon,
   Undo2Icon,
+  WrenchIcon,
   ZapIcon,
 } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
@@ -15,7 +17,14 @@ import { MessageAttachments } from "@/components/chat/attachments/MessageAttachm
 import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
 import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
+import { WebSearchBlock } from "@/components/chat/thread/WebSearchBlock"
 import { STOPPED_RESPONSE } from "@/components/chat/thread/constants"
+import {
+  resolveAssistantMessageChrome,
+  splitThinkingAroundSearch,
+  webSearchToolCallCount,
+  webSearchToolCallLabel,
+} from "@/components/chat/thread/logic"
 import { Button } from "@/components/shared/ui/button"
 import { formatUserMessageClipboard } from "@/lib/attachment-clipboard"
 import {
@@ -24,6 +33,7 @@ import {
   formatShortTimestamp,
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
+import type { WebSearchSource } from "@/lib/web-search"
 
 async function copyText(text: string) {
   if (!text) return
@@ -85,6 +95,10 @@ type ChatMessageProps = {
   isTemporary?: boolean
   generationStats?: AssistantGenerationStats
   attachments?: Array<ThreadMessageAttachment>
+  sources?: WebSearchSource[]
+  queries?: string[]
+  thinkingSearchSplitAt?: number
+  isSearchingWeb?: boolean
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -94,12 +108,19 @@ export const ChatMessage = memo(function ChatMessage({
   isTemporary = false,
   generationStats,
   attachments = [],
+  sources = [],
+  queries = [],
+  thinkingSearchSplitAt,
+  isSearchingWeb = false,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
   const thinking = chatMessageThinking(message)
+  const { before: thinkingBefore, after: thinkingAfter } =
+    splitThinkingAroundSearch(thinking, thinkingSearchSplitAt)
   const timestamp = isTemporary ? "" : formatShortTimestamp(message.createdAt)
   const hideRateAndLatency = isTemporary || isStopped
+  const toolCallCount = webSearchToolCallCount(queries.length, sources.length)
 
   if (isUser) {
     if (!text && attachments.length === 0) return null
@@ -144,16 +165,46 @@ export const ChatMessage = memo(function ChatMessage({
   // Only ever opened by a trace that exists. Standing in for one that might
   // arrive means guessing, and OpenAI decides per run whether to summarise its
   // reasoning at all — a guess that shows a tab and then takes it away again.
-  const showReasoning = Boolean(thinking)
-  const isStreamingThinking = showReasoning && isStreaming && !text
+  const {
+    showReasoningBefore,
+    showReasoningAfter,
+    isStreamingThinkingBefore,
+    isStreamingThinkingAfter,
+    showWebSearch,
+    isSearching,
+  } =
+    resolveAssistantMessageChrome({
+      thinkingBefore,
+      thinkingAfter,
+      text,
+      isStreaming,
+      sourcesCount: sources.length,
+      queriesCount: queries.length,
+      isSearchingWeb,
+    })
 
   return (
     <div className="group/assistant pb-2">
       <div className="relative min-w-0 px-1 py-0.5">
-        {showReasoning ? (
+        {showReasoningBefore ? (
           <ReasoningBlock
-            content={thinking}
-            isStreamingThinking={isStreamingThinking}
+            content={thinkingBefore}
+            isStreamingThinking={isStreamingThinkingBefore}
+          />
+        ) : null}
+
+        {showWebSearch ? (
+          <WebSearchBlock
+            sources={sources}
+            queries={queries}
+            isSearching={isSearching}
+          />
+        ) : null}
+
+        {showReasoningAfter ? (
+          <ReasoningBlock
+            content={thinkingAfter}
+            isStreamingThinking={isStreamingThinkingAfter}
           />
         ) : null}
 
@@ -173,7 +224,8 @@ export const ChatMessage = memo(function ChatMessage({
           </p>
         ) : null}
 
-        {(text || timestamp || generationStats) && !isStreaming ? (
+        {(text || timestamp || generationStats || toolCallCount > 0) &&
+        !isStreaming ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
             {generationStats ? (
               <div
@@ -181,8 +233,14 @@ export const ChatMessage = memo(function ChatMessage({
                 aria-label="Response generation statistics"
                 className="flex flex-wrap items-center gap-x-3 gap-y-1"
               >
-                <span className="font-semibold text-foreground/75">
+                <span className="inline-flex items-center gap-1 font-semibold text-foreground/75">
                   {generationStats.modelName} ({generationStats.mode})
+                  {toolCallCount > 0 ? (
+                    <GlobeIcon
+                      aria-hidden="true"
+                      className="size-3.5 text-muted-foreground"
+                    />
+                  ) : null}
                 </span>
                 {/* A cut-short run has no usage report and no meaningful rate
                     or completion time, so only the token count survives — as an
@@ -210,7 +268,18 @@ export const ChatMessage = memo(function ChatMessage({
                     </span>
                   </>
                 )}
+                {toolCallCount > 0 ? (
+                  <span className="inline-flex items-center gap-1">
+                    <WrenchIcon aria-hidden="true" className="size-3.5" />
+                    {webSearchToolCallLabel(toolCallCount)}
+                  </span>
+                ) : null}
               </div>
+            ) : toolCallCount > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <WrenchIcon aria-hidden="true" className="size-3.5" />
+                {webSearchToolCallLabel(toolCallCount)}
+              </span>
             ) : null}
             <div className="flex items-center gap-2">
               {text ? <MessageCopyControl text={text} /> : null}
