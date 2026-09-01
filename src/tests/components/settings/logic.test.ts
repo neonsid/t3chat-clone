@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -17,6 +18,7 @@ import {
   getNewestCatalogModels,
   formatNewModelsBanner,
   modelVersionSubtitle,
+  convexErrorMessage,
 } from "@/components/settings/logic"
 import {
   COPY_FROM_SCRATCH_ID,
@@ -35,6 +37,17 @@ describe("getPlanAction", () => {
 
   it("upgrades toward a higher plan", () => {
     expect(getPlanAction("premier", "pro")).toBe("upgrade")
+  })
+})
+
+describe("convexErrorMessage", () => {
+  it("reads a Convex error payload", () => {
+    expect(convexErrorMessage(new ConvexError("Nope"), "fallback")).toBe("Nope")
+    expect(
+      convexErrorMessage(new ConvexError({ message: "Quota" }), "fallback")
+    ).toBe("Quota")
+    expect(convexErrorMessage(new Error("boom"), "fallback")).toBe("boom")
+    expect(convexErrorMessage(new Error(""), "fallback")).toBe("fallback")
   })
 })
 

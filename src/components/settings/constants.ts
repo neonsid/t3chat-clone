@@ -72,6 +72,10 @@ export const ACCOUNT_DANGER_ZONE = {
     "Permanently delete your account and all associated data? This cannot be undone.",
 } as const
 
+export const ACCOUNT_PLAN = {
+  deleteFailed: "Unable to delete account",
+} as const
+
 export const SETTINGS_USAGE = {
   currentPlanId: "pro",
   currentPlanLabel: "Pro Plan",

@@ -3,6 +3,8 @@ import type {
   ModelCapability,
   ModelCatalogEntry,
 } from "@t3chat/model-catalog"
+import { ConvexError } from "convex/values"
+import { z } from "zod"
 
 import {
   PLAN_RANK,
@@ -86,6 +88,18 @@ export function getPlanAction(
 ): PlanAction {
   if (planId === currentPlanId) return "current"
   return PLAN_RANK[planId] < PLAN_RANK[currentPlanId] ? "downgrade" : "upgrade"
+}
+
+const convexErrorDataMessage = z.union([
+  z.string().min(1),
+  z.object({ message: z.string().min(1) }).transform((value) => value.message),
+])
+
+export function convexErrorMessage(error: Error, fallback: string) {
+  if (!(error instanceof ConvexError)) return error.message || fallback
+  const parsed = convexErrorDataMessage.safeParse(error.data)
+  if (parsed.success) return parsed.data
+  return error.message || fallback
 }
 
 export function getHistoryPage<T>(

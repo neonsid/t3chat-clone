@@ -537,3 +537,25 @@ export const beginThreadAttachmentDeletion = internalMutation({
     return { remaining: attachments.length === ATTACHMENT_GC_BATCH_SIZE }
   },
 })
+
+export const beginOwnerAttachmentDeletion = internalMutation({
+  args: { ownerId: v.string() },
+  returns: v.object({
+    remaining: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const attachments = await ctx.db
+      .query("attachments")
+      .withIndex("by_ownerId_and_attachmentId", (query) =>
+        query.eq("ownerId", args.ownerId)
+      )
+      .take(ATTACHMENT_GC_BATCH_SIZE)
+
+    if (attachments.length === 0) {
+      return { remaining: false }
+    }
+
+    await scheduleDurableDelete(ctx, attachments)
+    return { remaining: attachments.length === ATTACHMENT_GC_BATCH_SIZE }
+  },
+})

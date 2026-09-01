@@ -1,27 +1,42 @@
 import { useState } from "react"
 import { useClerk, useUser } from "@clerk/tanstack-react-start"
+import { useMutation } from "convex/react"
 import { useNavigate } from "@tanstack/react-router"
 
+import { api } from "../../../convex/_generated/api"
 import {
   ACCOUNT_DANGER_ZONE,
+  ACCOUNT_PLAN,
   ACCOUNT_SECURITY,
   PLAN_ACTION_LABEL,
   SETTINGS_PLANS,
   SETTINGS_USAGE,
 } from "@/components/settings/constants"
-import { getPlanAction } from "@/components/settings/logic"
+import { convexErrorMessage, getPlanAction } from "@/components/settings/logic"
+import {
+  AnimatedToastStack,
+  useAnimatedToastStack,
+} from "@/components/shared/motion/animated-toast-stack"
 import { Button } from "@/components/shared/ui/button"
 import { Switch } from "@/components/shared/ui/switch"
 import { DEFAULT_AUTH_REDIRECT } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 export function AccountSettings() {
+  const toasts = useAnimatedToastStack({ limit: 1 })
+
   return (
-    <div className="flex flex-col gap-10">
+    <div className="relative flex flex-col gap-10">
       <PlanSelection />
       <BillingPreferences />
       <SecurityAndAccess />
-      <DangerZone />
+      <DangerZone
+        onError={(title) => toasts.showToast({ title, status: "error" })}
+      />
+      <AnimatedToastStack
+        toasts={toasts.toasts}
+        onDismiss={toasts.dismissToast}
+      />
     </div>
   )
 }
@@ -178,9 +193,10 @@ function SecurityAndAccess() {
   )
 }
 
-function DangerZone() {
+function DangerZone({ onError }: { onError: (title: string) => void }) {
   const { user } = useUser()
   const navigate = useNavigate()
+  const scheduleDelete = useMutation(api.accounts.scheduleDelete)
   const [isDeleting, setIsDeleting] = useState(false)
 
   async function handleDeleteAccount() {
@@ -190,9 +206,15 @@ function DangerZone() {
 
     setIsDeleting(true)
     try {
+      await scheduleDelete({})
       await user.delete()
       await navigate({ to: DEFAULT_AUTH_REDIRECT })
-    } finally {
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? convexErrorMessage(error, ACCOUNT_PLAN.deleteFailed)
+          : ACCOUNT_PLAN.deleteFailed
+      )
       setIsDeleting(false)
     }
   }

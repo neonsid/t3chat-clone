@@ -124,6 +124,7 @@ describe("collectAndPersistStream", () => {
       vi.fn<
         (reference: FunctionReference, payload: FinishPayload) => Promise<void>
       >()
+    // SAFETY: persistence tests only exercise mutation(); the mock is not a ConvexHttpClient.
     const convex: ChatRunConvexClient = {
       mutation: mutation as ChatRunConvexClient["mutation"],
     }

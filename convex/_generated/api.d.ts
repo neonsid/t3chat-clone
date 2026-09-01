@@ -8,15 +8,18 @@
  * @module
  */
 
+import type * as accounts from "../accounts.js";
 import type * as attachmentConstants from "../attachmentConstants.js";
 import type * as attachments from "../attachments.js";
 import type * as chatRuns from "../chatRuns.js";
 import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
+import type * as helpers_clerkWebhook from "../helpers/clerkWebhook.js";
 import type * as helpers_functions from "../helpers/functions.js";
 import type * as helpers_generateThreadTitle from "../helpers/generateThreadTitle.js";
 import type * as helpers_messages from "../helpers/messages.js";
 import type * as helpers_threads from "../helpers/threads.js";
+import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as preferences from "../preferences.js";
@@ -31,15 +34,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accounts: typeof accounts;
   attachmentConstants: typeof attachmentConstants;
   attachments: typeof attachments;
   chatRuns: typeof chatRuns;
   constants: typeof constants;
   crons: typeof crons;
+  "helpers/clerkWebhook": typeof helpers_clerkWebhook;
   "helpers/functions": typeof helpers_functions;
   "helpers/generateThreadTitle": typeof helpers_generateThreadTitle;
   "helpers/messages": typeof helpers_messages;
   "helpers/threads": typeof helpers_threads;
+  http: typeof http;
   messages: typeof messages;
   migrations: typeof migrations;
   preferences: typeof preferences;
