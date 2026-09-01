@@ -13,9 +13,13 @@ import type {
   AssistantGenerationStats,
   MessageProjectionCache,
 } from "@/lib/threads"
+import type { WebSearchSource } from "@/lib/web-search"
 
 const EMPTY_MESSAGES: UIMessage[] = []
 const EMPTY_GENERATION_STATS: Record<string, AssistantGenerationStats> = {}
+const EMPTY_WEB_SEARCH_SOURCES: Record<string, WebSearchSource[]> = {}
+const EMPTY_WEB_SEARCH_QUERIES: Record<string, string[]> = {}
+const EMPTY_THINKING_SEARCH_SPLIT_AT: Record<string, number> = {}
 const EMPTY_STOPPED_MESSAGE_IDS: ReadonlySet<string> = new Set()
 
 /**
@@ -60,9 +64,27 @@ export function useActiveThread(
         : EMPTY_GENERATION_STATS,
     [messageDocuments, projection]
   )
-  // Kept beside the thread rather than on it: a stopped turn is a property of
-  // the run, and the panel needs it for messages it is rendering from useChat
-  // rather than from this query.
+  const webSearchSources = useMemo(
+    () =>
+      messageDocuments
+        ? projection.webSearchSources(messageDocuments)
+        : EMPTY_WEB_SEARCH_SOURCES,
+    [messageDocuments, projection]
+  )
+  const webSearchQueries = useMemo(
+    () =>
+      messageDocuments
+        ? projection.webSearchQueries(messageDocuments)
+        : EMPTY_WEB_SEARCH_QUERIES,
+    [messageDocuments, projection]
+  )
+  const thinkingSearchSplitAt = useMemo(
+    () =>
+      messageDocuments
+        ? projection.thinkingSearchSplitAt(messageDocuments)
+        : EMPTY_THINKING_SEARCH_SPLIT_AT,
+    [messageDocuments, projection]
+  )
   const stoppedMessageIds = useMemo(
     () =>
       messageDocuments
@@ -79,14 +101,24 @@ export function useActiveThread(
   const activeThread = useMemo(() => {
     if (!useBackend || !hasActiveThreadId) return guestThread
     if (!threadDocument) return threadDocument
-    return toActiveChatThread(threadDocument, messages, generationStats)
+    return toActiveChatThread(
+      threadDocument,
+      messages,
+      generationStats,
+      webSearchSources,
+      webSearchQueries,
+      thinkingSearchSplitAt
+    )
   }, [
     generationStats,
     guestThread,
     hasActiveThreadId,
     messages,
+    thinkingSearchSplitAt,
     threadDocument,
     useBackend,
+    webSearchQueries,
+    webSearchSources,
   ])
 
   return {

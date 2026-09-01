@@ -7,6 +7,7 @@ import {
   CHAT_COMPOSER_OVERLAY_HEIGHT,
   CHAT_COMPOSER_PLACEHOLDERS,
 } from "@/components/chat/composer/constants"
+import { composerStreamErrorMessage } from "@/components/chat/composer/logic"
 import { rememberComposerPreviews } from "@/lib/attachment-preview-cache"
 import { hasResizeObserver } from "@/lib/runtime-env"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
@@ -154,7 +155,7 @@ export function ChatShellComposer({
               className="mb-2 px-1 text-center text-sm text-destructive"
               role="alert"
             >
-              {error.message}
+              {composerStreamErrorMessage(error)}
             </p>
           )}
           <ChatComposer

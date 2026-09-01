@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+// @vitest-environment jsdom
 
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+
+import { CHAT_UI_STORAGE_KEY } from "@/stores/constants"
 import {
   createChatUiStore,
   createThreadStateKey,
@@ -9,6 +12,10 @@ import { createMemoryStorage } from "@/stores/test-utils"
 
 beforeEach(() => {
   vi.stubGlobal("sessionStorage", createMemoryStorage())
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe("chat UI store", () => {
@@ -27,6 +34,7 @@ describe("chat UI store", () => {
       draft: "",
       reasoningEffort: "high",
       searchEnabled: true,
+      searchLimit: 1,
       attachments: [],
     })
     expect(getThreadComposerState(store.getState(), second).draft).toBe(
@@ -176,5 +184,50 @@ describe("chat UI store", () => {
 
     expect(firstStore.getState().isHydrated).toBe(true)
     expect(secondStore.getState().isHydrated).toBe(false)
+  })
+
+  test("clamps searchLimit to 1–5", () => {
+    const store = createChatUiStore()
+    const key = createThreadStateKey("user-1", "thread-1")
+
+    store.getState().setSearchLimit(key, 0)
+    expect(getThreadComposerState(store.getState(), key).searchLimit).toBe(1)
+
+    store.getState().setSearchLimit(key, 99)
+    expect(getThreadComposerState(store.getState(), key).searchLimit).toBe(5)
+
+    store.getState().setSearchLimit(key, 3.2)
+    expect(getThreadComposerState(store.getState(), key).searchLimit).toBe(1)
+  })
+
+  test("defaults a persisted composer without searchLimit to 1", async () => {
+    const key = createThreadStateKey("user-1", "thread-1")
+    sessionStorage.setItem(
+      CHAT_UI_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          isTemporaryChat: false,
+          composers: {
+            [key]: {
+              draft: "Keep",
+              reasoningEffort: "medium",
+              searchEnabled: true,
+            },
+          },
+        },
+        version: 3,
+      })
+    )
+
+    const store = createChatUiStore()
+    await store.persist.rehydrate()
+
+    expect(getThreadComposerState(store.getState(), key)).toEqual({
+      draft: "Keep",
+      reasoningEffort: "medium",
+      searchEnabled: true,
+      searchLimit: 1,
+      attachments: [],
+    })
   })
 })

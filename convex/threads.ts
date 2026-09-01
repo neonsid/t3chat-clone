@@ -17,6 +17,7 @@ import {
 } from "./constants"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
+import { messageSourceValidator } from "./schema"
 import type { MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 
@@ -91,6 +92,9 @@ const persistableTemporaryMessageValidator = v.object({
   ),
   createdAt: v.number(),
   attachmentIds: v.optional(v.array(v.string())),
+  sources: v.optional(v.array(messageSourceValidator)),
+  searchQueries: v.optional(v.array(v.string())),
+  thinkingSearchSplitAt: v.optional(v.number()),
 })
 
 async function bindMessageAttachments(
@@ -218,6 +222,15 @@ export const persistTemporary = authedMutation({
         thinking: thinking || undefined,
         status: message.status,
         createdAt: message.createdAt || now,
+        sources:
+          message.sources && message.sources.length > 0
+            ? message.sources
+            : undefined,
+        searchQueries:
+          message.searchQueries && message.searchQueries.length > 0
+            ? message.searchQueries
+            : undefined,
+        thinkingSearchSplitAt: message.thinkingSearchSplitAt,
       })
       nextSequence += 1
       messageCount += 1

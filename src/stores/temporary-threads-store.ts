@@ -15,6 +15,7 @@ import {
   storedTemporaryThreadsEqual,
 } from "@/lib/temporary-chat"
 import type { AssistantGenerationStats } from "@/lib/threads"
+import { parseWebSearchQueries, parseWebSearchSources } from "@/lib/web-search"
 import {
   TEMPORARY_THREADS_STORAGE_KEY,
   TEMPORARY_THREADS_STORAGE_VERSION,
@@ -43,9 +44,7 @@ type PersistedTemporaryThreadsState = {
   threads: Record<string, StoredTemporaryThread>
 }
 
-function sanitizeMessage(
-  value: JsonValue
-): PersistableTemporaryMessage | null {
+function sanitizeMessage(value: JsonValue): PersistableTemporaryMessage | null {
   if (!isJsonObject(value)) return null
   if (!isJsonString(value.messageId) || !isJsonNumber(value.createdAt)) {
     return null
@@ -55,6 +54,8 @@ function sanitizeMessage(
   const attachmentIds = Array.isArray(value.attachmentIds)
     ? value.attachmentIds.filter(isJsonString)
     : []
+  const sources = parseWebSearchSources(value.sources)
+  const searchQueries = parseWebSearchQueries(value.searchQueries)
 
   return {
     messageId: value.messageId,
@@ -67,6 +68,14 @@ function sanitizeMessage(
         : "complete",
     createdAt: value.createdAt,
     attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+    sources: sources.length > 0 ? sources : undefined,
+    searchQueries: searchQueries.length > 0 ? searchQueries : undefined,
+    thinkingSearchSplitAt:
+      isJsonNumber(value.thinkingSearchSplitAt) &&
+      Number.isInteger(value.thinkingSearchSplitAt) &&
+      value.thinkingSearchSplitAt >= 0
+        ? value.thinkingSearchSplitAt
+        : undefined,
   }
 }
 

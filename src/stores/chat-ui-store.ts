@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
 
 import { isReasoningEffort } from "@/lib/chat-models"
+import { parseSearchLimit } from "@/lib/web-search"
 import {
   isJsonBoolean,
   isJsonObject,
@@ -34,6 +35,7 @@ export type ChatUiState = {
     reasoningEffort: ThreadComposerState["reasoningEffort"]
   ) => void
   setSearchEnabled: (key: string, searchEnabled: boolean) => void
+  setSearchLimit: (key: string, searchLimit: number) => void
   setAttachments: (key: string, attachments: Array<ComposerAttachment>) => void
   updateAttachment: (
     key: string,
@@ -56,7 +58,7 @@ export type ChatUiState = {
 
 type PersistedComposer = Pick<
   ThreadComposerState,
-  "draft" | "reasoningEffort" | "searchEnabled"
+  "draft" | "reasoningEffort" | "searchEnabled" | "searchLimit"
 >
 type PersistedChatUiState = {
   composers: Partial<Record<string, PersistedComposer>>
@@ -76,6 +78,7 @@ function isDefaultComposerState(state: ThreadComposerState): boolean {
     state.draft === DEFAULT_THREAD_COMPOSER_STATE.draft &&
     state.reasoningEffort === DEFAULT_THREAD_COMPOSER_STATE.reasoningEffort &&
     state.searchEnabled === DEFAULT_THREAD_COMPOSER_STATE.searchEnabled &&
+    state.searchLimit === DEFAULT_THREAD_COMPOSER_STATE.searchLimit &&
     state.attachments.length === 0
   )
 }
@@ -98,6 +101,7 @@ function sanitizeComposer(value: JsonValue): ThreadComposerState | null {
     draft,
     reasoningEffort,
     searchEnabled,
+    searchLimit: parseSearchLimit(value.searchLimit),
     // Never restore in-flight uploads from session storage.
     attachments: [],
   }
@@ -122,6 +126,7 @@ function sanitizePersistedState(value: JsonValue): PersistedChatUiState {
             draft: sanitized.draft,
             reasoningEffort: sanitized.reasoningEffort,
             searchEnabled: sanitized.searchEnabled,
+            searchLimit: sanitized.searchLimit,
           },
         ],
       ]
@@ -213,6 +218,13 @@ export function createChatUiStore() {
       setSearchEnabled(key, searchEnabled) {
         set((state) => ({
           composers: updateComposer(state, key, { searchEnabled }),
+        }))
+      },
+      setSearchLimit(key, searchLimit) {
+        set((state) => ({
+          composers: updateComposer(state, key, {
+            searchLimit: parseSearchLimit(searchLimit),
+          }),
         }))
       },
       setAttachments(key, attachments) {
@@ -354,6 +366,7 @@ export function createChatUiStore() {
                   draft: composer.draft,
                   reasoningEffort: composer.reasoningEffort,
                   searchEnabled: composer.searchEnabled,
+                  searchLimit: composer.searchLimit,
                 },
               ],
             ]
@@ -377,6 +390,7 @@ export function createChatUiStore() {
             draft: composer.draft,
             reasoningEffort: composer.reasoningEffort,
             searchEnabled: composer.searchEnabled,
+            searchLimit: composer.searchLimit,
             attachments: [],
           }
         }

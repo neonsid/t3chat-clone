@@ -11,7 +11,11 @@ import {
 } from "./constants"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
-import { generationValidator, reasoningEffortValidator } from "./schema"
+import {
+  generationValidator,
+  messageSourceValidator,
+  reasoningEffortValidator,
+} from "./schema"
 import type { MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 
@@ -56,7 +60,10 @@ async function saveAssistantMessage(
         durationMs: number
         timeToFirstTokenMs: number
       }
-    | undefined
+    | undefined,
+  sources: Array<{ title: string; url: string }> | undefined,
+  searchQueries: Array<string> | undefined,
+  thinkingSearchSplitAt: number | undefined
 ) {
   if (!messageId || (!content && !thinking)) return
 
@@ -78,6 +85,10 @@ async function saveAssistantMessage(
     status,
     createdAt: Date.now(),
     generation,
+    sources: sources && sources.length > 0 ? sources : undefined,
+    searchQueries:
+      searchQueries && searchQueries.length > 0 ? searchQueries : undefined,
+    thinkingSearchSplitAt,
   })
   await ctx.db.patch("threads", thread._id, {
     updatedAt: Date.now(),
@@ -94,9 +105,20 @@ async function backfillGeneration(
   ctx: ViewerMutationCtx,
   threadId: Id<"threads">,
   messageId: string | undefined,
-  generation: Doc<"messages">["generation"]
+  generation: Doc<"messages">["generation"],
+  sources: Array<{ title: string; url: string }> | undefined,
+  searchQueries: Array<string> | undefined,
+  thinkingSearchSplitAt: number | undefined
 ) {
-  if (!messageId || !generation) return
+  if (
+    !messageId ||
+    (!generation &&
+      (!sources || sources.length === 0) &&
+      (!searchQueries || searchQueries.length === 0) &&
+      thinkingSearchSplitAt === undefined)
+  ) {
+    return
+  }
 
   const message = await ctx.db
     .query("messages")
@@ -104,9 +126,48 @@ async function backfillGeneration(
       query.eq("threadId", threadId).eq("messageId", messageId)
     )
     .unique()
-  if (!message || message.generation) return
+  if (!message) return
 
-  await ctx.db.patch("messages", message._id, { generation })
+  const nextGeneration =
+    !message.generation && generation ? generation : undefined
+  const nextSources =
+    !message.sources && sources && sources.length > 0 ? sources : undefined
+  const nextQueries =
+    !message.searchQueries && searchQueries && searchQueries.length > 0
+      ? searchQueries
+      : undefined
+  const nextSplitAt =
+    message.thinkingSearchSplitAt === undefined &&
+    thinkingSearchSplitAt !== undefined
+      ? thinkingSearchSplitAt
+      : undefined
+  if (!nextGeneration && !nextSources && !nextQueries && nextSplitAt === undefined)
+    return
+
+  if (nextGeneration && nextSources && nextQueries && nextSplitAt !== undefined) {
+    await ctx.db.patch("messages", message._id, {
+      generation: nextGeneration,
+      sources: nextSources,
+      searchQueries: nextQueries,
+      thinkingSearchSplitAt: nextSplitAt,
+    })
+    return
+  }
+
+  if (nextGeneration) {
+    await ctx.db.patch("messages", message._id, { generation: nextGeneration })
+  }
+  if (nextSources) {
+    await ctx.db.patch("messages", message._id, { sources: nextSources })
+  }
+  if (nextQueries) {
+    await ctx.db.patch("messages", message._id, { searchQueries: nextQueries })
+  }
+  if (nextSplitAt !== undefined) {
+    await ctx.db.patch("messages", message._id, {
+      thinkingSearchSplitAt: nextSplitAt,
+    })
+  }
 }
 
 async function finishRun(
@@ -118,6 +179,9 @@ async function finishRun(
     assistantMessageId?: string
     content: string
     thinking?: string
+    sources?: Array<{ title: string; url: string }>
+    searchQueries?: Array<string>
+    thinkingSearchSplitAt?: number
     generation?: {
       modelId: string
       modelName: string
@@ -145,7 +209,10 @@ async function finishRun(
       ctx,
       thread._id,
       run.assistantMessageId,
-      args.generation
+      args.generation,
+      args.sources,
+      args.searchQueries,
+      args.thinkingSearchSplitAt
     )
     return null
   }
@@ -158,7 +225,10 @@ async function finishRun(
     args.content,
     args.thinking ?? "",
     status,
-    args.generation
+    args.generation,
+    args.sources,
+    args.searchQueries,
+    args.thinkingSearchSplitAt
   )
   await ctx.db.patch("chatRuns", run._id, {
     assistantMessageId: args.assistantMessageId,
@@ -341,6 +411,9 @@ const finishArgs = {
   assistantMessageId: v.optional(v.string()),
   content: v.string(),
   thinking: v.optional(v.string()),
+  sources: v.optional(v.array(messageSourceValidator)),
+  searchQueries: v.optional(v.array(v.string())),
+  thinkingSearchSplitAt: v.optional(v.number()),
   generation: v.optional(generationValidator),
 }
 
@@ -368,6 +441,9 @@ export const stopFromClient = authedMutation({
     assistantMessageId: v.optional(v.string()),
     content: v.string(),
     thinking: v.optional(v.string()),
+    sources: v.optional(v.array(messageSourceValidator)),
+    searchQueries: v.optional(v.array(v.string())),
+    thinkingSearchSplitAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     if (
@@ -393,7 +469,10 @@ export const stopFromClient = authedMutation({
       args.content.slice(0, MAX_MESSAGE_CONTENT_LENGTH),
       (args.thinking ?? "").slice(0, MAX_MESSAGE_CONTENT_LENGTH),
       "stopped",
-      undefined
+      undefined,
+      args.sources,
+      args.searchQueries,
+      args.thinkingSearchSplitAt
     )
     await ctx.db.patch("chatRuns", run._id, {
       assistantMessageId: args.assistantMessageId ?? run.assistantMessageId,

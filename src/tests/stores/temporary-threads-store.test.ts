@@ -1,9 +1,36 @@
-import { afterEach, describe, expect, it } from "vitest"
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   sanitizePersistedTemporaryThreads,
   temporaryThreadsStore,
 } from "@/stores/temporary-threads-store"
+
+vi.hoisted(() => {
+  const values = new Map<string, string>()
+  const storage: Storage = {
+    get length() {
+      return values.size
+    },
+    clear() {
+      values.clear()
+    },
+    getItem(key) {
+      return values.get(key) ?? null
+    },
+    key(index) {
+      return [...values.keys()][index] ?? null
+    },
+    removeItem(key) {
+      values.delete(key)
+    },
+    setItem(key, value) {
+      values.set(key, value)
+    },
+  }
+  vi.stubGlobal("localStorage", storage)
+})
 
 const transcriptSnapshot = {
   messages: [
@@ -89,13 +116,17 @@ describe("sanitizePersistedTemporaryThreads", () => {
 describe("temporaryThreadsStore", () => {
   it("does not recreate a thread after it is removed", () => {
     const threadId = "tmp-converted"
-    temporaryThreadsStore.getState().upsertLiveTranscript(threadId, transcriptSnapshot)
+    temporaryThreadsStore
+      .getState()
+      .upsertLiveTranscript(threadId, transcriptSnapshot)
     expect(temporaryThreadsStore.getState().threads[threadId]).toBeDefined()
 
     temporaryThreadsStore.getState().removeThread(threadId)
     expect(temporaryThreadsStore.getState().threads[threadId]).toBeUndefined()
 
-    temporaryThreadsStore.getState().upsertLiveTranscript(threadId, transcriptSnapshot)
+    temporaryThreadsStore
+      .getState()
+      .upsertLiveTranscript(threadId, transcriptSnapshot)
     expect(temporaryThreadsStore.getState().threads[threadId]).toBeUndefined()
   })
 })

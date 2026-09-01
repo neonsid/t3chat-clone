@@ -28,6 +28,11 @@ export const generationValidator = v.object({
   timeToFirstTokenMs: v.number(),
 })
 
+export const messageSourceValidator = v.object({
+  title: v.string(),
+  url: v.string(),
+})
+
 export default defineSchema({
   threads: defineTable({
     ownerId: v.string(),
@@ -90,6 +95,9 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     generation: v.optional(generationValidator),
+    sources: v.optional(v.array(messageSourceValidator)),
+    searchQueries: v.optional(v.array(v.string())),
+    thinkingSearchSplitAt: v.optional(v.number()),
   })
     .index("by_threadId_and_sequence", ["threadId", "sequence"])
     .index("by_threadId_and_messageId", ["threadId", "messageId"]),
@@ -146,6 +154,8 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     createdAt: v.number(),
     expiresAt: v.optional(v.number()),
+    modelDownloadUrl: v.optional(v.string()),
+    modelDownloadUrlExpiresAt: v.optional(v.number()),
   })
     .index("by_ownerId_and_attachmentId", ["ownerId", "attachmentId"])
     .index("by_threadId_and_messageId", ["threadId", "messageId"])

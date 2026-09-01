@@ -1,5 +1,4 @@
-import { WordBoundaryStrategy } from "@tanstack/ai/client"
-import { createCodePlugin } from "@streamdown/code"
+import { ImmediateStrategy } from "@tanstack/ai/client"
 import {
   BookOpenIcon,
   CodeXmlIcon,
@@ -55,6 +54,20 @@ export const REASONING_BLOCK = {
   streamingLabel: "Reasoning…",
 } as const
 
+export const WEB_SEARCH_BLOCK = {
+  label: "Web Search",
+  streamingLabel: "Running Web Search...",
+  workingLabel: "Working",
+  faviconUrl(hostname: string) {
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`
+  },
+} as const
+
+export const WEB_SEARCH_TOOL_CALL = {
+  singular: "1 tool call",
+  plural: (count: number) => `${count} tool calls`,
+} as const
+
 export const STOPPED_RESPONSE = {
   label: "Stopped by user",
 } as const
@@ -65,20 +78,37 @@ export const MESSAGE_SCROLLER_ENSURE_END = {
 } as const
 
 /**
- * Emits UI message updates at word boundaries instead of every SSE token.
- * Cuts ChatThreadView re-renders several-fold without visible streaming lag.
+ * Flush every SSE token into useChat. WordBoundaryStrategy only emits when a
+ * delta ends with whitespace, which most model tokens do not, so the answer
+ * sat in the processor until TEXT_MESSAGE_END and painted in one dump.
+ * ChatThreadView still coalesces paints below.
  */
 export const CHAT_STREAM_PROCESSOR = {
-  chunkStrategy: new WordBoundaryStrategy(),
+  chunkStrategy: new ImmediateStrategy(),
 } as const
 
 /**
- * Ceiling on how often the streaming message reaches the DOM. Word boundaries
- * alone still emit faster than a markdown re-parse is worth, and ~16 updates a
- * second reads as continuous.
+ * Ceiling on how often the streaming message reaches the DOM. Tokens arrive
+ * faster than a markdown re-parse is worth, and ~30 updates a second still
+ * reads as continuous without a parse on every SSE tick.
  */
-export const CHAT_STREAM_RENDER_INTERVAL_MS = 60
+export const CHAT_STREAM_RENDER_INTERVAL_MS = 32
 
-export const STREAMDOWN_PLUGINS = {
-  code: createCodePlugin({ themes: ["github-light", "min-dark"] }),
-}
+export const STREAMDOWN_CODE_LANGUAGE_CLASS = /language-([^\s]+)/
+
+export const CODE_BLOCK = {
+  copy: "Copy code",
+} as const
+
+/** Streamdown's default intercepts clicks with a confirm modal that is not portaled. */
+export const STREAMDOWN_LINK_SAFETY = {
+  enabled: false,
+} as const
+
+/**
+ * Streamdown's table fullscreen overlay is z-50. Header actions are fixed z-60
+ * in the same corner as the close control, so the overlay cannot be dismissed.
+ */
+export const STREAMDOWN_CONTROLS = {
+  table: { fullscreen: false },
+} as const

@@ -6,6 +6,10 @@ export const CHAT_COMPOSER_PLACEHOLDERS = {
   loadingConversation: "Loading conversation...",
 } as const
 
+export const COMPOSER_STREAM_ERROR = {
+  saveFailed: "Couldn't save this reply. Try sending again.",
+} as const
+
 /** Published on [data-chat-shell] by ChatShellComposer; thread view reads via CSS. */
 export const CHAT_COMPOSER_OVERLAY_HEIGHT = {
   cssVar: "--chat-composer-overlay-height",
@@ -38,3 +42,19 @@ export const REASONING_EFFORTS = [
 
 export type { ReasoningEffort } from "@/lib/chat-models"
 export type ReasoningEffortOption = (typeof REASONING_EFFORTS)[number]
+
+export const SEARCH_TOGGLE = {
+  label: "Search",
+  enableTooltip: "Search the web",
+  disableTooltip: "Disable search grounding",
+  unsupportedTooltip: "Web search is not supported for this model",
+  limitEditorLabel: "Search count",
+  decreaseLimit: "Decrease search count",
+  increaseLimit: "Increase search count",
+  confirmLimit: "Done",
+  editorButtonClass:
+    "flex size-6 cursor-pointer items-center justify-center disabled:pointer-events-none disabled:opacity-40",
+  activeClass: "border-primary bg-primary text-primary-foreground",
+  idleClass:
+    "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
+} as const

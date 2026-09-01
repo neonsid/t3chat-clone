@@ -13,9 +13,9 @@ import {
 
 describe("temporary thread ids", () => {
   it("recognizes the tmp- prefix", () => {
-    expect(isTemporaryThreadId("tmp-1cd85bb5-be4e-4678-bb89-ddf64b067d3c")).toBe(
-      true
-    )
+    expect(
+      isTemporaryThreadId("tmp-1cd85bb5-be4e-4678-bb89-ddf64b067d3c")
+    ).toBe(true)
     expect(isTemporaryThreadId("guest")).toBe(false)
     expect(isTemporaryThreadId("k57abc")).toBe(false)
   })
@@ -73,13 +73,13 @@ describe("temporary thread ids", () => {
           thinking: "",
           createdAt: 10,
         },
-          {
-            id: "a1",
-            role: "assistant",
-            content: "Hi",
-            thinking: "reason",
-            createdAt: 20,
-          },
+        {
+          id: "a1",
+          role: "assistant",
+          content: "Hi",
+          thinking: "reason",
+          createdAt: 20,
+        },
       ],
       { u1: ["att-1"] },
       new Set(["a1"])
@@ -105,6 +105,121 @@ describe("temporary thread ids", () => {
         attachmentIds: undefined,
       },
     ])
+  })
+
+  it("carries web search sources through persistable messages", () => {
+    const persistable = toPersistableTemporaryMessages(
+      [
+        {
+          id: "a1",
+          role: "assistant",
+          content: "Hi",
+          thinking: "",
+          createdAt: 20,
+        },
+      ],
+      {},
+      new Set(),
+      {
+        a1: [{ title: "Example", url: "https://example.com" }],
+      }
+    )
+
+    expect(persistable[0]?.sources).toEqual([
+      { title: "Example", url: "https://example.com" },
+    ])
+    expect(
+      storedTemporaryThreadToChatThread(
+        {
+          id: "tmp-1",
+          title: "New Chat",
+          titleSource: "derived",
+          createdAt: 10,
+          updatedAt: 20,
+          messages: persistable,
+          generationStats: {},
+          stoppedMessageIds: [],
+        },
+        false
+      ).webSearchSources
+    ).toEqual({
+      a1: [{ title: "Example", url: "https://example.com" }],
+    })
+  })
+
+  it("carries web search queries through persistable messages", () => {
+    const persistable = toPersistableTemporaryMessages(
+      [
+        {
+          id: "a1",
+          role: "assistant",
+          content: "Hi",
+          thinking: "",
+          createdAt: 20,
+        },
+      ],
+      {},
+      new Set(),
+      {},
+      {
+        a1: ["agentic AI cybersecurity"],
+      }
+    )
+
+    expect(persistable[0]?.searchQueries).toEqual(["agentic AI cybersecurity"])
+    expect(
+      storedTemporaryThreadToChatThread(
+        {
+          id: "tmp-1",
+          title: "New Chat",
+          titleSource: "derived",
+          createdAt: 10,
+          updatedAt: 20,
+          messages: persistable,
+          generationStats: {},
+          stoppedMessageIds: [],
+        },
+        false
+      ).webSearchQueries
+    ).toEqual({
+      a1: ["agentic AI cybersecurity"],
+    })
+  })
+
+  it("carries the thinking search split through persistable messages", () => {
+    const persistable = toPersistableTemporaryMessages(
+      [
+        {
+          id: "a1",
+          role: "assistant",
+          content: "Hi",
+          thinking: "plan eval",
+          createdAt: 20,
+        },
+      ],
+      {},
+      new Set(),
+      {},
+      {},
+      { a1: 5 }
+    )
+
+    expect(persistable[0]?.thinkingSearchSplitAt).toBe(5)
+    expect(
+      storedTemporaryThreadToChatThread(
+        {
+          id: "tmp-1",
+          title: "New Chat",
+          titleSource: "derived",
+          createdAt: 10,
+          updatedAt: 20,
+          messages: persistable,
+          generationStats: {},
+          stoppedMessageIds: [],
+        },
+        false
+      ).thinkingSearchSplitAt
+    ).toEqual({ a1: 5 })
   })
 
   it("round-trips persistable messages into a sidebar thread", () => {

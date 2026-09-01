@@ -63,6 +63,12 @@ export const ATTACHMENT_PUT_URL_TTL_SECONDS = 10 * 60
 export const ATTACHMENT_GET_URL_UI_TTL_SECONDS = 60 * 60
 /** Signed GET for model providers (~15 minutes). */
 export const ATTACHMENT_GET_URL_MODEL_TTL_SECONDS = 15 * 60
+/** Reuse a minted model URL until it has less than two minutes left. */
+export const ATTACHMENT_MODEL_URL_REUSE_MIN_REMAINING_MS = 120_000
+
+export function canReuseModelDownloadUrl(expiresAt: number, now: number) {
+  return expiresAt - now > ATTACHMENT_MODEL_URL_REUSE_MIN_REMAINING_MS
+}
 
 /** Unbound attachment expiry window (app GC). R2 lifecycle must be longer. */
 export const ATTACHMENT_UNBOUND_TTL_MS = 24 * 60 * 60 * 1000
