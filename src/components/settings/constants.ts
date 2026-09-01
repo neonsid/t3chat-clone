@@ -73,18 +73,18 @@ export const ACCOUNT_DANGER_ZONE = {
 } as const
 
 export const ACCOUNT_PLAN = {
+  portalUnavailable: "Available after the first paid checkout.",
+  changeConfirm: (name: string) => `Switch to the ${name} plan?`,
+  cancelConfirm:
+    "Downgrade to Free at the end of the current billing period?",
+  checkoutFailed: "Unable to start checkout",
+  portalFailed: "Unable to open billing portal",
+  changeFailed: "Unable to change plan",
   deleteFailed: "Unable to delete account",
 } as const
 
-export const SETTINGS_USAGE = {
-  currentPlanId: "pro",
-  currentPlanLabel: "Pro Plan",
-  baseRemainingLabel: "3h 20m",
-  basePercent: 83,
-  burstPercent: 12,
-  renewsOnLabel: "Aug 22, 2026",
-  info: "Base usage refills on a rolling window. Burst overage is extra capacity after the base limit is used.",
-} as const
+export const SETTINGS_USAGE_INFO =
+  "Base usage refills on a rolling window. Burst overage is extra capacity after the base limit is used."
 
 export type PlanId = "free" | "pro" | "premier"
 

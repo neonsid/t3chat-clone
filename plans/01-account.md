@@ -10,7 +10,7 @@ The Account page UI is complete and static. This plan covers every clickable or 
 | Billing | None. No Polar, Stripe, or Clerk Billing. |
 | Plans | `SETTINGS_PLANS` and `SETTINGS_USAGE` in `src/components/settings/constants.ts` are hardcoded (`currentPlanId: "pro"`, `baseRemainingLabel: "3h 20m"`, `renewsOnLabel: "Aug 22, 2026"`). |
 | Preferences | `preferences` table only stores selected model, favorites, and `combineResults`. |
-| Chat quota | `/api/chat` and `chatRuns.start` do not check a plan or remaining usage. Thread message cap is the only limit. |
+| Chat quota | `/api/chat` and `chatRuns.start` do not check a plan or remaining usage. Thread message cap is the only limit. Temporary chats skip `chatRuns.start` entirely. |
 | Delete account | `user.delete()` (Clerk) only. Threads, messages, runs, attachments, and R2 objects stay. |
 | Email / devices | `clerk.openUserProfile()` — keep this; no Convex work. |
 | Theme / sign out | Client-only / Clerk — already works. |
@@ -35,40 +35,48 @@ The Account page UI is complete and static. This plan covers every clickable or 
 
 | Control | File | Required work |
 | --- | --- | --- |
-| Plan badge ("Pro Plan") | `SettingsRail.tsx`, `SidebarAccount.tsx` | Live plan from billing account |
+| Plan badge ("Pro Plan") | `SettingsRail.tsx`, `SidebarAccount.tsx` | Live plan from Polar subscription |
 | Base usage bar + remaining time | `SettingsRail.tsx` | Live remaining base quota |
 | Burst overage bar | `SettingsRail.tsx` | Live burst used / cap |
-| "Plan renews on …" | `SettingsRail.tsx` | Period end from Polar (or free-plan refill instant) |
-| Manage Billing & Invoices | `AccountSettings.tsx` | Polar customer portal URL |
-| Upgrade / Downgrade / Current Plan | `AccountSettings.tsx` | Polar checkout / portal; disable current plan |
-| Email me receipts | `AccountSettings.tsx` | Persist boolean; apply to Polar/Stripe customer |
-| Delete Account | `AccountSettings.tsx` | Wipe Convex + R2, then Clerk `user.delete()` |
+| "Plan renews on …" | `SettingsRail.tsx` | Period end from Polar (paid) or the free 24h window |
+| Manage Billing & Invoices | `AccountSettings.tsx` | Polar customer portal URL; disabled on free until a Polar customer exists |
+| Upgrade / Downgrade / Current Plan | `AccountSettings.tsx` | Checkout for a first paid plan; Polar `changeSubscription` between paid plans; cancel-at-period-end for free |
+| Email me receipts | `AccountSettings.tsx` | Persist boolean only. Polar always emails its own order receipts; there is no Polar API for this toggle. |
+| Delete Account | `AccountSettings.tsx` | Schedule Convex + R2 + Polar wipe, then Clerk `user.delete()` |
 
 ## Billing provider
 
-**Use Polar** (`@convex-dev/polar`) plus a Convex `billingAccounts` row.
+**Use Polar** (`@convex-dev/polar`) for money. Do **not** mirror Polar subscriptions into our own plan/status columns.
 
 Why Polar, not Clerk Billing:
 
 - T3 Chat uses Polar for checkout, invoices, and the customer portal.
-- Convex ships an official Polar component; Clerk Billing is still experimental.
+- Convex ships an official Polar component that already stores customers, products, and subscriptions and handles `/polar/events`.
 - Email/devices stay on Clerk. Polar only owns money.
 
-Map Polar customers to Clerk with a stable key: `identity.subject` (Clerk `user_…`) stored on `billingAccounts.clerkUserId`, plus `ownerId` = `tokenIdentifier` for every other table.
+Polar's `getUserInfo.userId` is `identity.subject` (Clerk `user_…`). That is stable and matches Clerk webhooks. Every other table keeps `ownerId` = `identity.tokenIdentifier`.
 
-Configure three Polar products that match the existing cards:
+The Polar component already:
 
-| Plan id | UI price | Polar product |
+- Upserts customers and subscriptions from Polar webhooks
+- Exposes `getCurrentSubscription`, `createCheckoutSession`, `createCustomerPortalSession`, `changeSubscription`, `cancelSubscription`
+- Registers `POST /polar/events` via `polar.registerRoutes(http)`
+
+We wrap those methods so the client sends `planId` (`pro` / `premier`), never Polar product UUIDs. Do not export `polar.api()` wholesale.
+
+Keep `SETTINGS_PLANS` as the UI catalog. Polar product keys must be `pro` and `premier`. Do not replace the custom cards with Polar's hosted pricing table.
+
+| Plan id | UI price | Polar |
 | --- | --- | --- |
-| `free` | $0 | No Polar subscription (default when no active sub) |
-| `pro` | $8 / month | Polar product `pro` |
-| `premier` | $50 / month | Polar product `premier` |
-
-Keep `SETTINGS_PLANS` as the UI catalog. Polar slugs must match `PlanId`. Do not replace the custom cards with Polar's hosted pricing table.
+| `free` | $0 | No Polar subscription (`getCurrentSubscription` returns null) |
+| `pro` | $8 / month | Polar product mapped as `pro` |
+| `premier` | $50 / month | Polar product mapped as `premier` |
 
 ## Schema
 
-No migration of existing fields. New tables only. Optional fields on new docs so older deploys cannot break.
+No migration of existing fields. New tables only.
+
+`billingAccounts` is **not** a Polar cache. It stores app-owned fields plus a Clerk id so a dashboard deletion can find Convex rows.
 
 ```ts
 // convex/schema.ts (add)
@@ -76,22 +84,10 @@ No migration of existing fields. New tables only. Optional fields on new docs so
 billingAccounts: defineTable({
   ownerId: v.string(),
   clerkUserId: v.string(),
-  planId: v.union(v.literal("free"), v.literal("pro"), v.literal("premier")),
-  polarCustomerId: v.optional(v.string()),
-  polarSubscriptionId: v.optional(v.string()),
-  status: v.union(
-    v.literal("none"),
-    v.literal("active"),
-    v.literal("past_due"),
-    v.literal("canceled"),
-  ),
-  currentPeriodEnd: v.optional(v.number()),
   emailReceipts: v.boolean(),
-  cancelAtPeriodEnd: v.optional(v.boolean()),
 })
   .index("by_ownerId", ["ownerId"])
-  .index("by_clerkUserId", ["clerkUserId"])
-  .index("by_polarCustomerId", ["polarCustomerId"]),
+  .index("by_clerkUserId", ["clerkUserId"]),
 
 usageCounters: defineTable({
   ownerId: v.string(),
@@ -105,7 +101,7 @@ usageCounters: defineTable({
 usageEvents: defineTable({
   ownerId: v.string(),
   runId: v.string(),
-  threadId: v.id("threads"),
+  threadId: v.optional(v.id("threads")),
   modelId: v.string(),
   durationMs: v.number(),
   outputTokens: v.number(),
@@ -113,15 +109,13 @@ usageEvents: defineTable({
   createdAt: v.number(),
 })
   .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
-  .index("by_runId", ["runId"]),
+  .index("by_ownerId_and_runId", ["ownerId", "runId"]),
 ```
 
 Why two usage tables:
 
 - `usageCounters` is the document the settings rail reads (one row per owner per period). Update it in the **same mutation** that completes a chat run so the meter cannot drift.
 - `usageEvents` is an audit log. Do not `.collect()` it on the settings page. Cap reads with the owner+time index if we ever show a usage breakdown.
-
-Do **not** put `baseUsedMs` on `billingAccounts`. Completing a run is high-churn; plan/status is not.
 
 Quota numbers live in `convex/billingConstants.ts` (not in components):
 
@@ -135,62 +129,77 @@ export const PLAN_QUOTAS = {
 
 Tune the hours against real model cost later. The UI already speaks in hours/minutes (`3h 13m`).
 
-Period: calendar month from Polar `currentPeriodEnd` for paid plans. Free plan: a rolling 24h window advanced by a scheduled mutation (do not call `Date.now()` inside the usage **query** — pass `now` from the client, or store `periodEnd` on the counter row).
+Period:
+
+- Paid: Polar `currentPeriodStart` / `currentPeriodEnd` (ISO strings on the Polar subscription doc; parse to ms).
+- Free: a rolling 24h window stored on the counter row. Roll lazily in mutations when `now >= periodEnd`. Do not add a cron for this.
+- `getAccount` is a query: pass `now` from the client, rounded to the current minute so the subscription stays cacheable. Never call `Date.now()` inside the query. If the stored counter is expired, return zero usage without writing.
 
 ## Convex functions
 
-All public functions: `authedQuery` / `authedMutation`, `args` + `returns` validators, derive identity from `ctx.auth` (never take `userId` from the client).
+All public functions: `authedQuery` / `authedMutation` / `authedAction`, `args` + `returns` validators, derive identity from `ctx.auth` (never take `userId` from the client).
+
+Files:
+
+- `convex/polar.ts` — Polar client, checkout / portal / change / cancel actions, `registerRoutes` used from `http.ts`
+- `convex/billing.ts` — `getAccount`, `setEmailReceipts`, `assertWithinQuota`, `recordUsage`
+- `convex/helpers/usage.ts` — shared quota + meter writes used by `chatRuns` and billing
+- `convex/accounts.ts` — delete cascade
+- `convex/http.ts` — Polar webhook + Clerk `user.deleted`
 
 ### Read
 
-- `billing.getAccount`
-  - Returns `{ planId, planLabel, status, currentPeriodEnd, emailReceipts, usage: { baseUsedMs, baseLimitMs, burstUsedMs, burstLimitMs, baseRemainingMs } }`
-  - Missing row → treat as free, zero usage, `emailReceipts: true`
-  - Client formats remaining as `3h 13m` and bar percents. Keep that formatting in `src/components/settings/logic.ts` (extend existing helpers, do not inline in the rail).
+- `billing.getAccount({ now })`
+  - Polar `getCurrentSubscription({ userId: identity.subject })` → `planId` (`free` if null)
+  - Polar `getCustomerByUserId` → `hasBillingCustomer` for the portal button
+  - Latest `usageCounters` for this owner; expired → zeros
+  - `emailReceipts` from `billingAccounts`, default `true` if missing
+  - Returns `{ planId, planLabel, status, currentPeriodEnd, cancelAtPeriodEnd, emailReceipts, hasBillingCustomer, usage: { baseUsedMs, baseLimitMs, burstUsedMs, burstLimitMs, baseRemainingMs } }`
+  - Client formats remaining as `3h 13m` and bar percents. Keep that formatting in `src/components/settings/logic.ts`.
 
 ### Write
 
-- `billing.setEmailReceipts({ enabled })` — patch `emailReceipts`. If a Polar customer exists, schedule an internal action to update Polar/Stripe invoice emails. If Polar has no such API, persist locally and only send app-generated receipts (none today).
-- `billing.createCheckout({ planId })` — action, `"use node"` in `convex/billingActions.ts`. Creates Polar checkout for `pro` or `premier`. Returns `{ url }`. Reject if `planId === current` or `planId === "free"` (free is "no subscription").
-- `billing.createPortalSession` — action. Returns Polar customer portal URL (invoices, payment method, cancel). Powers **Manage Billing & Invoices** and paid-plan **Downgrade**.
-- Polar webhook HTTP handler in `convex/http.ts` → `internal.billing.applyPolarEvent`. On subscription active/updated/canceled, upsert `billingAccounts` by `clerkUserId`. Never trust the client for `planId`.
+- `billing.setEmailReceipts({ enabled })` — ensure `billingAccounts`, patch `emailReceipts`. Do not call Polar.
+- `polar.createCheckout({ planId, origin })` — first paid plan only. Reject `free`, reject if already on that plan, reject if a paid subscription already exists (use `changePlan` instead). Returns `{ url }`. `successUrl` is `{origin}/settings`.
+- `polar.changePlan({ planId })` — paid → paid via Polar `changeSubscription`. Confirm in the UI first.
+- `polar.cancelPlan()` — cancel at period end (`revokeImmediately: false`). Powers **Downgrade** to Free.
+- `polar.createPortalSession({ returnUrl })` — Polar customer portal. Powers **Manage Billing & Invoices**. Throws if there is no Polar customer; the button stays disabled on free.
+
+No custom `applyPolarEvent`. Polar's built-in webhook persistence is the subscription source of truth. Optional `events` handlers are logging-only.
 
 ### Chat gating (required for the meters to mean anything)
 
-In `chatRuns.start` (same mutation that accepts a run):
+Shared helper used by `chatRuns.start` and `billing.assertWithinQuota`:
 
-1. Load `billingAccounts` + current `usageCounters`.
-2. If `baseUsedMs + burstUsedMs >= baseLimit + burstLimit`, throw a clear error (`"Usage limit reached. Upgrade or wait until the plan renews."`).
-3. Do **not** check wall-clock with `Date.now()` inside a query. The start mutation may use `Date.now()` to roll the period if `periodEnd` has passed, then insert a fresh counter row.
+1. Resolve plan from Polar (missing sub → free).
+2. Load or create the current `usageCounters` row (roll the period in this mutation if `periodEnd` has passed). `Date.now()` is allowed here.
+3. If `baseUsedMs + burstUsedMs >= baseLimit + burstLimit`, throw `ConvexError({ code: "USAGE_LIMIT", message: "Usage limit reached. Upgrade or wait until the plan renews." })`.
 
-When a run completes (`chatRuns.complete` / persist generation):
+When a run completes (`chatRuns.complete` / `stop` / `fail` with `generation.durationMs`):
 
-1. Insert `usageEvents` (dedupe on `by_runId`).
+1. Insert `usageEvents` (dedupe on `by_ownerId_and_runId`).
 2. Add `durationMs` to `baseUsedMs` until the base cap, then to `burstUsedMs`.
 3. Same mutation as the message patch so the rail and the chat cannot disagree.
 
-`/api/chat` should catch the quota `ConvexError` and return HTTP 429 with that message.
+`/api/chat` should catch `USAGE_LIMIT` and return HTTP 429 with that message. Temporary chats never hit `chatRuns.start`; they must call `billing.assertWithinQuota` before streaming, then `billing.recordUsage` when the stream ends so temp chats cannot bypass the meter.
 
 Model-set gating (Free = "select models", Pro = "all models") can wait until the Models tab. For Phase 1, quota is enough.
 
 ### Account deletion
 
-Replace "Clerk delete only" with:
-
-1. Client confirms (keep the existing `window.confirm` or upgrade later).
+1. Client confirms (keep the existing `window.confirm`).
 2. `accounts.scheduleDelete` mutation:
-   - Verify auth.
+   - Verify auth, ensure `billingAccounts` (clerkUserId mapping).
+   - Schedule Polar cancel (internal action, revoke immediately, no-op if no customer).
    - Schedule `internal.accounts.deleteOwnerBatch({ ownerId })`.
    - Return immediately.
-3. `deleteOwnerBatch` walks, in batches of ~64:
-   - threads in `deleting` (reuse `threads.deleteBatch`)
+3. Client then calls Clerk `user.delete()` and navigates home. Convex wipe continues in the background. The user is already logged out.
+4. `deleteOwnerBatch` walks, in batches of `THREAD_DELETE_BATCH_SIZE`:
+   - Mark the owner's threads `deleting` and reuse `threads.deleteBatch`
    - leftover `chatRuns`, `attachments` + R2, `preferences`, `usageEvents`, `usageCounters`, `billingAccounts`
-   - cancel Polar subscription if present
-4. After Convex data is gone, an action calls Clerk Backend API `users.deleteUser(clerkUserId)` **or** the client still calls `user.delete()` after the mutation succeeds.
+5. Clerk `user.deleted` webhook looks up `billingAccounts` by `clerkUserId` (fallback: reconstruct `ownerId` as `${CLERK_JWT_ISSUER_DOMAIN}|${clerkUserId}`) and runs the same batch. Idempotent if `scheduleDelete` already started.
 
-Safer order: **Convex wipe first**, then Clerk. Add a Clerk `user.deleted` webhook that runs the same batch if someone deletes the user from the Clerk dashboard.
-
-Do not `.collect()` a user's threads. Use the existing owner indexes and `THREAD_DELETE_BATCH_SIZE`.
+Do not `.collect()` a user's threads. Use the existing owner indexes.
 
 ## Frontend wiring (Account UI)
 
@@ -200,33 +209,38 @@ Keep the existing layout and cards. Do not redesign.
 | --- | --- |
 | Replace `SETTINGS_USAGE` reads with `useQuery(api.billing.getAccount)` | `SettingsRail`, `AccountSettings`, `SidebarAccount` |
 | Format remaining ms → `3h 13m` and percents | new helpers in `logic.ts` + tests in `logic.test.ts` |
-| `Manage Billing & Invoices` | `window.location` to portal URL (or disable with tooltip on free) |
-| Plan buttons | `upgrade` → checkout URL; `downgrade` → portal (or confirm + Polar cancel/switch); `current` stays disabled |
+| Base bar = remaining / limit. Burst bar = used / limit. Matches the current mock. |
+| `Manage Billing & Invoices` | `window.location` to portal URL; disable with tooltip when `!hasBillingCustomer` |
+| Plan buttons | no sub + upgrade → checkout; paid → paid → `changePlan`; downgrade to free → `cancelPlan`; `current` stays disabled |
 | Email receipts switch | `useMutation(api.billing.setEmailReceipts)` instead of `useState(true)` |
-| Delete | call `scheduleDelete`, then Clerk `user.delete()`, then navigate to `/` |
+| Delete | `scheduleDelete`, then Clerk `user.delete()`, then navigate to `/` |
 | Loading | reuse `SettingsBodySkeleton` patterns; do not flash "Free" then "Pro" |
-| Errors | toast on checkout/portal/delete failure |
+| Errors | existing animated toast on checkout/portal/delete failure |
 
 Guest users never see `/settings` (route already redirects). No guest billing.
 
 ## Polar / Clerk dashboard setup (not code)
 
-- Enable Polar sandbox; create `pro` and `premier` monthly products.
-- Set Polar webhook secret in Convex env (`POLAR_WEBHOOK_SECRET`, `POLAR_ACCESS_TOKEN`).
-- Success/cancel URLs: `/settings` and `/settings?checkout=cancel`.
-- Clerk webhook for `user.deleted` (and optionally `user.created` to pre-insert a free `billingAccounts` row).
+- Enable Polar sandbox. Create monthly products and put their UUIDs in Convex env as `POLAR_PRO_PRODUCT_ID` and `POLAR_PREMIER_PRODUCT_ID`.
+- `npx convex env set POLAR_ORGANIZATION_TOKEN …` (not `POLAR_ACCESS_TOKEN`).
+- `npx convex env set POLAR_WEBHOOK_SECRET …`
+- `npx convex env set POLAR_SERVER sandbox`
+- Webhook URL: `{CONVEX_SITE_URL}/polar/events`. Enable `product.created`, `product.updated`, `subscription.created`, `subscription.updated`.
+- Sync existing Polar products once (`internal.polar.syncProducts`) if they were created before the webhook existed.
+- Clerk webhook `{CONVEX_SITE_URL}/clerk/webhook` for `user.deleted`. Set `CLERK_WEBHOOK_SECRET` in Convex env. JWT must include `email` so Polar checkout can create a customer.
+- Success URL: `/settings`.
 
 ## Tests
 
-- `getPlanAction` already exists. Add `formatUsageRemaining` / percent helpers.
-- Convex: `billing.getAccount` defaults; period roll; quota rejection in `chatRuns.start`; usage applied once per `runId`.
-- Do not hit Polar in unit tests — stub the action.
+- `getPlanAction` already exists. Add `formatUsageRemaining`, usage percents, plan label, and renews-on date helpers.
+- Pure functions in `convex/billingLogic.ts`: period resolve, quota rejection, duration split across base/burst, usage event dedupe decision. Do not hit Polar.
+- `/api/chat` maps `USAGE_LIMIT` to 429.
 
 ## Implementation order
 
-1. Schema + constants + `billing.getAccount` (UI can switch off hardcoded `SETTINGS_USAGE`).
-2. Polar component + checkout/portal + webhook → real plan badge and buttons.
-3. Usage counters hooked to run completion + gate `chatRuns.start`.
+1. Schema + constants + billing logic + `billing.getAccount` (UI can switch off hardcoded usage).
+2. Polar component + checkout/portal/change/cancel + webhook register.
+3. Usage counters hooked to run completion + gate `chatRuns.start` and temporary chats.
 4. Email receipts mutation.
 5. Account delete cascade + Clerk webhook.
 
@@ -236,3 +250,5 @@ Guest users never see `/settings` (route already redirects). No guest billing.
 - Per-model access by plan (Models tab).
 - Invoice list rendered in-app (portal is enough).
 - Changing plan feature bullets (copy stays in `SETTINGS_PLANS`).
+- Polar-hosted pricing table.
+- Immediate revoke when downgrading to Free (period-end cancel keeps access until `currentPeriodEnd`).

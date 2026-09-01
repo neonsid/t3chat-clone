@@ -6,8 +6,11 @@ import {
   parseClerkDeletedWebhook,
   verifySvixSignature,
 } from "./helpers/clerkWebhook"
+import { polar } from "./polar"
 
 const http = httpRouter()
+
+polar.registerRoutes(http)
 
 http.route({
   path: "/clerk/webhook",

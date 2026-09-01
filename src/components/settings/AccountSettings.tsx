@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useClerk, useUser } from "@clerk/tanstack-react-start"
-import { useMutation } from "convex/react"
+import { useAction, useMutation } from "convex/react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { api } from "../../../convex/_generated/api"
@@ -10,15 +10,17 @@ import {
   ACCOUNT_SECURITY,
   PLAN_ACTION_LABEL,
   SETTINGS_PLANS,
-  SETTINGS_USAGE,
+  type PlanId,
 } from "@/components/settings/constants"
 import { convexErrorMessage, getPlanAction } from "@/components/settings/logic"
 import {
   AnimatedToastStack,
   useAnimatedToastStack,
 } from "@/components/shared/motion/animated-toast-stack"
+import { Tooltip } from "@/components/shared/motion/tooltip"
 import { Button } from "@/components/shared/ui/button"
 import { Switch } from "@/components/shared/ui/switch"
+import { useBillingAccount } from "@/hooks/useBillingAccount"
 import { DEFAULT_AUTH_REDIRECT } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
@@ -27,7 +29,9 @@ export function AccountSettings() {
 
   return (
     <div className="relative flex flex-col gap-10">
-      <PlanSelection />
+      <PlanSelection
+        onError={(title) => toasts.showToast({ title, status: "error" })}
+      />
       <BillingPreferences />
       <SecurityAndAccess />
       <DangerZone
@@ -41,8 +45,110 @@ export function AccountSettings() {
   )
 }
 
-function PlanSelection() {
-  const currentPlanId = SETTINGS_USAGE.currentPlanId
+function PlanSelection({ onError }: { onError: (title: string) => void }) {
+  const { account, isLoading } = useBillingAccount()
+  const createCheckout = useAction(api.polar.createCheckout)
+  const changePlan = useAction(api.polar.changePlan)
+  const cancelPlan = useAction(api.polar.cancelPlan)
+  const createPortalSession = useAction(api.polar.createPortalSession)
+  const [pendingPlanId, setPendingPlanId] = useState<PlanId | "portal" | null>(
+    null
+  )
+  const currentPlanId = account?.planId
+  const busy = pendingPlanId !== null
+
+  async function handlePortal() {
+    if (!account?.hasBillingCustomer || busy) return
+    setPendingPlanId("portal")
+    try {
+      const { url } = await createPortalSession({
+        returnUrl: `${window.location.origin}/settings`,
+      })
+      window.location.assign(url)
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? convexErrorMessage(error, ACCOUNT_PLAN.portalFailed)
+          : ACCOUNT_PLAN.portalFailed
+      )
+      setPendingPlanId(null)
+    }
+  }
+
+  async function handlePlanAction(planId: PlanId) {
+    if (!currentPlanId || busy) return
+    const action = getPlanAction(planId, currentPlanId)
+    if (action === "current") return
+
+    if (action === "downgrade" && planId === "free") {
+      const confirmed = window.confirm(ACCOUNT_PLAN.cancelConfirm)
+      if (!confirmed) return
+      setPendingPlanId(planId)
+      try {
+        await cancelPlan({})
+      } catch (error) {
+        onError(
+          error instanceof Error
+            ? convexErrorMessage(error, ACCOUNT_PLAN.changeFailed)
+            : ACCOUNT_PLAN.changeFailed
+        )
+      } finally {
+        setPendingPlanId(null)
+      }
+      return
+    }
+
+    if (currentPlanId !== "free") {
+      if (planId !== "pro" && planId !== "premier") return
+      const planName = SETTINGS_PLANS.find((plan) => plan.id === planId)?.name
+      const confirmed = window.confirm(
+        ACCOUNT_PLAN.changeConfirm(planName ?? planId)
+      )
+      if (!confirmed) return
+      setPendingPlanId(planId)
+      try {
+        await changePlan({ planId })
+      } catch (error) {
+        onError(
+          error instanceof Error
+            ? convexErrorMessage(error, ACCOUNT_PLAN.changeFailed)
+            : ACCOUNT_PLAN.changeFailed
+        )
+      } finally {
+        setPendingPlanId(null)
+      }
+      return
+    }
+
+    if (planId === "free") return
+    setPendingPlanId(planId)
+    try {
+      const { url } = await createCheckout({
+        planId,
+        origin: window.location.origin,
+      })
+      window.location.assign(url)
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? convexErrorMessage(error, ACCOUNT_PLAN.checkoutFailed)
+          : ACCOUNT_PLAN.checkoutFailed
+      )
+      setPendingPlanId(null)
+    }
+  }
+
+  const portalButton = (
+    <Button
+      type="button"
+      variant="outline"
+      className="rounded-md"
+      disabled={!account?.hasBillingCustomer || busy}
+      onClick={() => void handlePortal()}
+    >
+      Manage Billing & Invoices
+    </Button>
+  )
 
   return (
     <section>
@@ -50,14 +156,20 @@ function PlanSelection() {
         <h2 className="text-xl font-semibold tracking-tight">
           Choose Your Plan
         </h2>
-        <Button type="button" variant="outline" className="rounded-md">
-          Manage Billing & Invoices
-        </Button>
+        {account?.hasBillingCustomer ? (
+          portalButton
+        ) : (
+          <Tooltip content={ACCOUNT_PLAN.portalUnavailable} side="top">
+            {portalButton}
+          </Tooltip>
+        )}
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:items-stretch">
         {SETTINGS_PLANS.map((plan) => {
-          const action = getPlanAction(plan.id, currentPlanId)
+          const action = currentPlanId
+            ? getPlanAction(plan.id, currentPlanId)
+            : "current"
           return (
             <article
               key={plan.id}
@@ -107,10 +219,20 @@ function PlanSelection() {
               <Button
                 type="button"
                 variant={action === "upgrade" ? "default" : "outline"}
-                disabled={action === "current"}
+                disabled={
+                  isLoading ||
+                  !currentPlanId ||
+                  action === "current" ||
+                  busy
+                }
                 className="mt-6 w-full shrink-0 rounded-md"
+                onClick={() => void handlePlanAction(plan.id)}
               >
-                {PLAN_ACTION_LABEL[action]}
+                {pendingPlanId === plan.id
+                  ? "Working…"
+                  : isLoading || !currentPlanId
+                    ? "…"
+                    : PLAN_ACTION_LABEL[action]}
               </Button>
             </article>
           )
@@ -121,7 +243,20 @@ function PlanSelection() {
 }
 
 function BillingPreferences() {
-  const [emailReceipts, setEmailReceipts] = useState(true)
+  const { account, isLoading } = useBillingAccount()
+  const setEmailReceipts = useMutation(api.billing.setEmailReceipts)
+  const [pending, setPending] = useState(false)
+  const checked = account?.emailReceipts ?? true
+
+  async function handleChange(enabled: boolean) {
+    if (isLoading || pending) return
+    setPending(true)
+    try {
+      await setEmailReceipts({ enabled })
+    } finally {
+      setPending(false)
+    }
+  }
 
   return (
     <section>
@@ -138,8 +273,9 @@ function BillingPreferences() {
           </p>
         </div>
         <Switch
-          checked={emailReceipts}
-          onCheckedChange={setEmailReceipts}
+          checked={checked}
+          disabled={isLoading || pending}
+          onCheckedChange={(enabled) => void handleChange(enabled)}
           aria-label="Email me receipts"
         />
       </div>

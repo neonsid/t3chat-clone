@@ -18,6 +18,10 @@ import {
   getNewestCatalogModels,
   formatNewModelsBanner,
   modelVersionSubtitle,
+  formatUsageRemaining,
+  remainingBarPercent,
+  usedBarPercent,
+  formatPlanRenewsOn,
   convexErrorMessage,
 } from "@/components/settings/logic"
 import {
@@ -40,7 +44,26 @@ describe("getPlanAction", () => {
   })
 })
 
-describe("convexErrorMessage", () => {
+describe("usage formatting", () => {
+  it("formats remaining milliseconds as hours and minutes", () => {
+    expect(formatUsageRemaining(0)).toBe("0m")
+    expect(formatUsageRemaining(60_000)).toBe("1m")
+    expect(formatUsageRemaining(3 * 60 * 60_000 + 13 * 60_000)).toBe("3h 13m")
+    expect(formatUsageRemaining(4 * 60 * 60_000)).toBe("4h")
+  })
+
+  it("turns remaining and used amounts into bar percents", () => {
+    expect(remainingBarPercent(200 * 60_000, 240 * 60_000)).toBe(83)
+    expect(usedBarPercent(12, 100)).toBe(12)
+    expect(usedBarPercent(0, 0)).toBe(0)
+  })
+
+  it("formats a renews-on date", () => {
+    expect(formatPlanRenewsOn(new Date(2026, 7, 22).getTime())).toBe(
+      "Aug 22, 2026"
+    )
+  })
+
   it("reads a Convex error payload", () => {
     expect(convexErrorMessage(new ConvexError("Nope"), "fallback")).toBe("Nope")
     expect(

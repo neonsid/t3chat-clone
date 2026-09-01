@@ -31,9 +31,18 @@ import {
   streamChatModel,
 } from "@/lib/server/chat-model-executors.server"
 import { collectAndPersistStream } from "@/lib/server/chat-run-persistence.server"
+import { USAGE_LIMIT_MESSAGE } from "../../../convex/billingConstants"
+import { isUsageLimitError } from "../../../convex/billingLogic"
 
 function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status })
+}
+
+function chatStartError(error: Error) {
+  if (isUsageLimitError(error)) {
+    return errorResponse(USAGE_LIMIT_MESSAGE, 429)
+  }
+  return errorResponse(error.message || "Unable to start chat", 400)
 }
 
 const STREAM_HEADERS = {
@@ -205,6 +214,8 @@ export const Route = createFileRoute("/api/chat")({
             )
             assertModelSupportsAttachments(context, capabilities)
 
+            await convex.mutation(api.billing.assertWithinQuota, {})
+
             const startedAt = Date.now()
             const stream = streamChatModel({
               runtime: model.runtime,
@@ -217,6 +228,7 @@ export const Route = createFileRoute("/api/chat")({
               collectAndPersistStream({
                 stream,
                 convex,
+                runId: params.runId,
                 modelId,
                 modelName: catalogModel?.name ?? model.id,
                 reasoningEffort,
@@ -230,9 +242,10 @@ export const Route = createFileRoute("/api/chat")({
               }
             )
           } catch (error) {
-            return errorResponse(
-              error instanceof Error ? error.message : "Unable to start chat",
-              400
+            return chatStartError(
+              error instanceof Error
+                ? error
+                : new Error("Unable to start chat")
             )
           }
         }
@@ -348,9 +361,8 @@ export const Route = createFileRoute("/api/chat")({
               })
               .catch(() => undefined)
           }
-          return errorResponse(
-            error instanceof Error ? error.message : "Unable to start chat",
-            400
+          return chatStartError(
+            error instanceof Error ? error : new Error("Unable to start chat")
           )
         }
       },

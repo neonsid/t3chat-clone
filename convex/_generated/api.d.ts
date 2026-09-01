@@ -11,6 +11,9 @@
 import type * as accounts from "../accounts.js";
 import type * as attachmentConstants from "../attachmentConstants.js";
 import type * as attachments from "../attachments.js";
+import type * as billing from "../billing.js";
+import type * as billingConstants from "../billingConstants.js";
+import type * as billingLogic from "../billingLogic.js";
 import type * as chatRuns from "../chatRuns.js";
 import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
@@ -19,9 +22,11 @@ import type * as helpers_functions from "../helpers/functions.js";
 import type * as helpers_generateThreadTitle from "../helpers/generateThreadTitle.js";
 import type * as helpers_messages from "../helpers/messages.js";
 import type * as helpers_threads from "../helpers/threads.js";
+import type * as helpers_usage from "../helpers/usage.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
+import type * as polar from "../polar.js";
 import type * as preferences from "../preferences.js";
 import type * as r2 from "../r2.js";
 import type * as threadTitles from "../threadTitles.js";
@@ -37,6 +42,9 @@ declare const fullApi: ApiFromModules<{
   accounts: typeof accounts;
   attachmentConstants: typeof attachmentConstants;
   attachments: typeof attachments;
+  billing: typeof billing;
+  billingConstants: typeof billingConstants;
+  billingLogic: typeof billingLogic;
   chatRuns: typeof chatRuns;
   constants: typeof constants;
   crons: typeof crons;
@@ -45,9 +53,11 @@ declare const fullApi: ApiFromModules<{
   "helpers/generateThreadTitle": typeof helpers_generateThreadTitle;
   "helpers/messages": typeof helpers_messages;
   "helpers/threads": typeof helpers_threads;
+  "helpers/usage": typeof helpers_usage;
   http: typeof http;
   messages: typeof messages;
   migrations: typeof migrations;
+  polar: typeof polar;
   preferences: typeof preferences;
   r2: typeof r2;
   threadTitles: typeof threadTitles;
@@ -83,4 +93,5 @@ export declare const internal: FilterApi<
 export declare const components: {
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
+  polar: import("@convex-dev/polar/_generated/component.js").ComponentApi<"polar">;
 };

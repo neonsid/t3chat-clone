@@ -147,6 +147,37 @@ describe("collectAndPersistStream", () => {
     expect(mutation).not.toHaveBeenCalled()
   })
 
+  it("records usage for an ephemeral run", async () => {
+    const mutation =
+      vi.fn<
+        (reference: FunctionReference, payload: FinishPayload) => Promise<void>
+      >()
+    // SAFETY: persistence tests only exercise mutation(); the mock is not a ConvexHttpClient.
+    const convex: ChatRunConvexClient = {
+      mutation: mutation as ChatRunConvexClient["mutation"],
+    }
+    const source = (async function* () {
+      for (const chunk of textChunks("Hello")) yield chunk
+    })()
+    const stream = collectAndPersistStream({
+      stream: source,
+      convex,
+      runId: "temp-run-1",
+      modelId: "openai/gpt-5.6-luna",
+      modelName: "GPT-5.6 Luna",
+      reasoningEffort: "instant",
+      startedAt: Date.now(),
+      signal: new AbortController().signal,
+      persist: false,
+    })
+
+    await drain(stream)
+
+    expect(mutation.mock.calls.map(([reference]) => getFunctionName(reference))).toEqual([
+      "billing:recordUsage",
+    ])
+  })
+
   // The bug this guards: aborting ends the provider iterator instead of
   // throwing, so the loop finished normally and a half-written answer was
   // filed as a complete one — leaving the reader no sign it had been stopped.

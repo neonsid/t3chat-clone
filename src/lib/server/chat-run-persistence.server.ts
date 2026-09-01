@@ -88,6 +88,17 @@ export function collectAndPersistStream({
       generation: generation(),
     })
 
+    const recordEphemeralUsage = async () => {
+      if (persist || !persistRunId) return
+      const stats = generation()
+      await convex.mutation(api.billing.recordUsage, {
+        runId: persistRunId,
+        modelId,
+        durationMs: stats.durationMs,
+        outputTokens: stats.outputTokens,
+      })
+    }
+
     try {
       for await (const chunk of stream) {
         if (chunk.type === "TEXT_MESSAGE_START") {
@@ -134,6 +145,8 @@ export function collectAndPersistStream({
         } else {
           await convex.mutation(api.chatRuns.complete, finishPayload())
         }
+      } else {
+        await recordEphemeralUsage()
       }
       finished = true
     } catch (error) {
@@ -147,14 +160,20 @@ export function collectAndPersistStream({
               error instanceof Error ? error.message : "Generation failed",
           })
         }
+      } else {
+        await recordEphemeralUsage()
       }
       finished = true
       throw error
     } finally {
       // The client hanging up closes this generator mid-yield, which is the one
       // exit that reaches neither branch above.
-      if (!finished && canPersist) {
-        await convex.mutation(api.chatRuns.stop, finishPayload())
+      if (!finished) {
+        if (canPersist) {
+          await convex.mutation(api.chatRuns.stop, finishPayload())
+        } else {
+          await recordEphemeralUsage()
+        }
       }
     }
   })()

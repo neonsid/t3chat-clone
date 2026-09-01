@@ -11,11 +11,18 @@ import {
 } from "./constants"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
+import {
+  applyRunUsage,
+  assertWithinQuotaForViewer,
+} from "./helpers/usage"
 import { generationValidator, reasoningEffortValidator } from "./schema"
 import type { MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 
-type ViewerMutationCtx = MutationCtx & { viewerId: string }
+type ViewerMutationCtx = MutationCtx & {
+  viewerId: string
+  viewer: { subject: string }
+}
 
 async function getRun(
   ctx: ViewerMutationCtx,
@@ -147,6 +154,7 @@ async function finishRun(
       run.assistantMessageId,
       args.generation
     )
+    await maybeApplyRunUsage(ctx, run, args.generation)
     return null
   }
   if (run.status !== "running") return null
@@ -166,7 +174,29 @@ async function finishRun(
     finishedAt: Date.now(),
     errorMessage: args.errorMessage,
   })
+  await maybeApplyRunUsage(ctx, run, args.generation)
   return null
+}
+
+async function maybeApplyRunUsage(
+  ctx: ViewerMutationCtx,
+  run: Doc<"chatRuns">,
+  generation:
+    | {
+        modelId: string
+        durationMs: number
+        outputTokens: number
+      }
+    | undefined
+) {
+  if (!generation) return
+  await applyRunUsage(ctx, {
+    runId: run.runId,
+    threadId: run.threadId,
+    modelId: generation.modelId,
+    durationMs: generation.durationMs,
+    outputTokens: generation.outputTokens,
+  })
 }
 
 export const start = authedMutation({
@@ -214,6 +244,8 @@ export const start = authedMutation({
     if (existingRun) {
       return { accepted: false, status: existingRun.status }
     }
+
+    await assertWithinQuotaForViewer(ctx)
 
     const running = await ctx.db
       .query("chatRuns")

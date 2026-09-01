@@ -124,6 +124,35 @@ export default defineSchema({
     combineResults: v.boolean(),
   }).index("by_ownerId", ["ownerId"]),
 
+  billingAccounts: defineTable({
+    ownerId: v.string(),
+    clerkUserId: v.string(),
+    emailReceipts: v.boolean(),
+  })
+    .index("by_ownerId", ["ownerId"])
+    .index("by_clerkUserId", ["clerkUserId"]),
+
+  usageCounters: defineTable({
+    ownerId: v.string(),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    baseUsedMs: v.number(),
+    burstUsedMs: v.number(),
+  }).index("by_ownerId_and_periodStart", ["ownerId", "periodStart"]),
+
+  usageEvents: defineTable({
+    ownerId: v.string(),
+    runId: v.string(),
+    threadId: v.optional(v.id("threads")),
+    modelId: v.string(),
+    durationMs: v.number(),
+    outputTokens: v.number(),
+    bucket: v.union(v.literal("base"), v.literal("burst")),
+    createdAt: v.number(),
+  })
+    .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
+    .index("by_ownerId_and_runId", ["ownerId", "runId"]),
+
   attachments: defineTable({
     ownerId: v.string(),
     attachmentId: v.string(),

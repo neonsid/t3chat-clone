@@ -15,6 +15,8 @@ import {
 } from "@/components/shared/ui/popover"
 import { SETTINGS_PATH } from "@/components/settings/constants"
 import { Separator } from "@/components/shared/ui/separator"
+import { Skeleton } from "@/components/shared/ui/skeleton"
+import { useBillingAccount } from "@/hooks/useBillingAccount"
 import { DEFAULT_AUTH_REDIRECT, SIGN_IN_PATH } from "@/lib/auth"
 import { getUserProfileInfo } from "@/lib/user-profile"
 
@@ -22,6 +24,7 @@ export function SidebarAccount() {
   const { isLoaded, isSignedIn, user } = useUser()
   const clerk = useClerk()
   const returnTo = useLocation({ select: (location) => location.href })
+  const { account, isLoading } = useBillingAccount()
 
   if (!isLoaded) return <div aria-hidden="true" className="h-11" />
 
@@ -79,9 +82,13 @@ export function SidebarAccount() {
           <p className="truncate text-sm font-semibold tracking-tight">
             {profile.displayName}
           </p>
-          <span className="inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
-            Pro
-          </span>
+          {isLoading || !account ? (
+            <Skeleton className="h-5 w-16 rounded-md" />
+          ) : (
+            <span className="inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
+              {account.planLabel}
+            </span>
+          )}
         </div>
         <Separator />
         <div className="space-y-0.5 p-1.5">

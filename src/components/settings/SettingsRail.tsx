@@ -5,26 +5,40 @@ import { ClockIcon, InfoIcon } from "lucide-react"
 
 import {
   SETTINGS_SHORTCUTS,
-  SETTINGS_USAGE,
+  SETTINGS_USAGE_INFO,
 } from "@/components/settings/constants"
+import {
+  formatPlanRenewsOn,
+  formatUsageRemaining,
+  remainingBarPercent,
+  usedBarPercent,
+} from "@/components/settings/logic"
 import { Tooltip } from "@/components/shared/motion/tooltip"
+import { Skeleton } from "@/components/shared/ui/skeleton"
+import { useBillingAccount } from "@/hooks/useBillingAccount"
 import { useIsApplePlatform } from "@/hooks/useIsApplePlatform"
 import { getUserProfileInfo } from "@/lib/user-profile"
 import { cn } from "@/lib/utils"
 
 export function SettingsRail({ className }: { className?: string }) {
+  const billing = useBillingAccount()
+
   return (
     <div className={cn("flex flex-col items-center", className)}>
-      <SettingsProfile />
+      <SettingsProfile billing={billing} />
       <div className="mt-8 flex w-full flex-col gap-4">
-        <UsageLimitsCard />
+        <UsageLimitsCard billing={billing} />
         <KeyboardShortcutsCard />
       </div>
     </div>
   )
 }
 
-function SettingsProfile() {
+function SettingsProfile({
+  billing,
+}: {
+  billing: ReturnType<typeof useBillingAccount>
+}) {
   const { user } = useUser()
   const profile = getUserProfileInfo(user)
 
@@ -47,19 +61,29 @@ function SettingsProfile() {
       {profile.email ? (
         <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
       ) : null}
-      <span className="mt-3 inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
-        {SETTINGS_USAGE.currentPlanLabel}
-      </span>
+      {billing.isLoading || !billing.account ? (
+        <Skeleton className="mt-3 h-6 w-20 rounded-md" />
+      ) : (
+        <span className="mt-3 inline-flex rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
+          {billing.account.planLabel}
+        </span>
+      )}
     </div>
   )
 }
 
-function UsageLimitsCard() {
+function UsageLimitsCard({
+  billing,
+}: {
+  billing: ReturnType<typeof useBillingAccount>
+}) {
+  const { account, isLoading } = billing
+
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Usage Limits</h3>
-        <Tooltip content={SETTINGS_USAGE.info} side="top">
+        <Tooltip content={SETTINGS_USAGE_INFO} side="top">
           <button
             type="button"
             aria-label="About usage limits"
@@ -70,21 +94,36 @@ function UsageLimitsCard() {
         </Tooltip>
       </div>
 
-      <UsageMeter
-        className="mt-4"
-        label="Base"
-        valueLabel={SETTINGS_USAGE.baseRemainingLabel}
-        percent={SETTINGS_USAGE.basePercent}
-      />
-      <UsageMeter
-        className="mt-3"
-        label="Burst overage"
-        percent={SETTINGS_USAGE.burstPercent}
-      />
-
-      <p className="mt-4 text-xs text-muted-foreground">
-        Plan renews on {SETTINGS_USAGE.renewsOnLabel}
-      </p>
+      {isLoading || !account ? (
+        <div className="mt-4 flex flex-col gap-3">
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="mt-1 h-3 w-40 rounded-md" />
+        </div>
+      ) : (
+        <>
+          <UsageMeter
+            className="mt-4"
+            label="Base"
+            valueLabel={formatUsageRemaining(account.usage.baseRemainingMs)}
+            percent={remainingBarPercent(
+              account.usage.baseRemainingMs,
+              account.usage.baseLimitMs
+            )}
+          />
+          <UsageMeter
+            className="mt-3"
+            label="Burst overage"
+            percent={usedBarPercent(
+              account.usage.burstUsedMs,
+              account.usage.burstLimitMs
+            )}
+          />
+          <p className="mt-4 text-xs text-muted-foreground">
+            Plan renews on {formatPlanRenewsOn(account.currentPeriodEnd)}
+          </p>
+        </>
+      )}
     </section>
   )
 }

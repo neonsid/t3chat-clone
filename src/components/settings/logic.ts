@@ -90,6 +90,33 @@ export function getPlanAction(
   return PLAN_RANK[planId] < PLAN_RANK[currentPlanId] ? "downgrade" : "upgrade"
 }
 
+export function formatUsageRemaining(ms: number) {
+  const totalMinutes = Math.max(0, Math.ceil(ms / 60_000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours === 0) return `${minutes}m`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes}m`
+}
+
+export function remainingBarPercent(remainingMs: number, limitMs: number) {
+  if (limitMs <= 0) return 0
+  return clampPercent((remainingMs / limitMs) * 100)
+}
+
+export function usedBarPercent(usedMs: number, limitMs: number) {
+  if (limitMs <= 0) return 0
+  return clampPercent((usedMs / limitMs) * 100)
+}
+
+export function formatPlanRenewsOn(ms: number) {
+  return new Date(ms).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
 const convexErrorDataMessage = z.union([
   z.string().min(1),
   z.object({ message: z.string().min(1) }).transform((value) => value.message),
@@ -100,6 +127,11 @@ export function convexErrorMessage(error: Error, fallback: string) {
   const parsed = convexErrorDataMessage.safeParse(error.data)
   if (parsed.success) return parsed.data
   return error.message || fallback
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, Math.round(value)))
 }
 
 export function getHistoryPage<T>(

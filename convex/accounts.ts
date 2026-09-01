@@ -5,6 +5,7 @@ import { internalMutation } from "./_generated/server"
 import type { MutationCtx } from "./_generated/server"
 import { THREAD_DELETE_BATCH_SIZE } from "./constants"
 import { authedMutation } from "./helpers/functions"
+import { getOrCreateBillingAccount } from "./helpers/usage"
 
 const THREAD_STATES = ["active", "archived", "deleting"] as const
 const RUN_STATUSES = ["running", "complete", "stopped", "failed"] as const
@@ -13,6 +14,10 @@ export const scheduleDelete = authedMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await getOrCreateBillingAccount(ctx)
+    await ctx.scheduler.runAfter(0, internal.polar.cancelForUser, {
+      polarUserId: ctx.viewer.subject,
+    })
     await ctx.scheduler.runAfter(0, internal.accounts.deleteOwnerBatch, {
       ownerId: ctx.viewerId,
     })
@@ -24,9 +29,18 @@ export const deleteOwnerByClerkUserId = internalMutation({
   args: { clerkUserId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerId = ownerIdFromClerkUserId(args.clerkUserId)
+    const account = await ctx.db
+      .query("billingAccounts")
+      .withIndex("by_clerkUserId", (query) =>
+        query.eq("clerkUserId", args.clerkUserId)
+      )
+      .unique()
+    const ownerId = account?.ownerId ?? ownerIdFromClerkUserId(args.clerkUserId)
     if (!ownerId) return null
 
+    await ctx.scheduler.runAfter(0, internal.polar.cancelForUser, {
+      polarUserId: args.clerkUserId,
+    })
     await ctx.scheduler.runAfter(0, internal.accounts.deleteOwnerBatch, {
       ownerId,
     })
@@ -81,12 +95,48 @@ export const deleteOwnerBatch = internalMutation({
       return null
     }
 
+    const usageEvents = await ctx.db
+      .query("usageEvents")
+      .withIndex("by_ownerId_and_createdAt", (query) =>
+        query.eq("ownerId", args.ownerId)
+      )
+      .take(THREAD_DELETE_BATCH_SIZE)
+    if (usageEvents.length > 0) {
+      for (const event of usageEvents) {
+        await ctx.db.delete("usageEvents", event._id)
+      }
+      await ctx.scheduler.runAfter(0, internal.accounts.deleteOwnerBatch, args)
+      return null
+    }
+
+    const counters = await ctx.db
+      .query("usageCounters")
+      .withIndex("by_ownerId_and_periodStart", (query) =>
+        query.eq("ownerId", args.ownerId)
+      )
+      .take(THREAD_DELETE_BATCH_SIZE)
+    if (counters.length > 0) {
+      for (const counter of counters) {
+        await ctx.db.delete("usageCounters", counter._id)
+      }
+      await ctx.scheduler.runAfter(0, internal.accounts.deleteOwnerBatch, args)
+      return null
+    }
+
     const preferences = await ctx.db
       .query("preferences")
       .withIndex("by_ownerId", (query) => query.eq("ownerId", args.ownerId))
       .unique()
     if (preferences) {
       await ctx.db.delete("preferences", preferences._id)
+    }
+
+    const account = await ctx.db
+      .query("billingAccounts")
+      .withIndex("by_ownerId", (query) => query.eq("ownerId", args.ownerId))
+      .unique()
+    if (account) {
+      await ctx.db.delete("billingAccounts", account._id)
     }
 
     return null
