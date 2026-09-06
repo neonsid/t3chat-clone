@@ -45,6 +45,7 @@
     "convex-helpers": "^0.1.122",
     "ky": "^2.0.2",
     "lucide-react": "^1.26.0",
+    "mammoth": "^1.12.2",
     "motion": "^12.42.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

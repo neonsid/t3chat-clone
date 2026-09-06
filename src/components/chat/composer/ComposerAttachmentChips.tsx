@@ -12,6 +12,7 @@ function composerStatusLabel(attachment: ComposerAttachment) {
   if (attachment.status === "failed") {
     return attachment.errorMessage ?? "Failed"
   }
+  if (attachment.contextWarning) return attachment.contextWarning
   if (attachment.status === "processing") return "Processing…"
   return undefined
 }
@@ -57,11 +58,13 @@ export function ComposerAttachmentChips({
 
           return (
             <li key={attachment.localId} className="max-w-full min-w-0">
-              {attachment.kind === "pdf" ? (
+              {attachment.kind !== "image" ? (
                 <AttachmentFileChip
                   filename={attachment.filename}
+                  badge={attachment.kind === "docx" ? "DOC" : "PDF"}
                   statusLabel={composerStatusLabel(attachment)}
                   failed={attachment.status === "failed"}
+                  warning={Boolean(attachment.contextWarning)}
                   progress={progress}
                   indeterminate={indeterminate}
                   onOpen={

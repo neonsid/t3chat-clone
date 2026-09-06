@@ -34,6 +34,7 @@ export type TemporaryThreadsState = {
       stoppedMessageIds: string[]
     }
   ) => void
+  insertThread: (thread: StoredTemporaryThread) => void
   togglePinned: (threadId: string) => void
   archive: (threadId: string) => void
   rename: (threadId: string, title: string) => void
@@ -95,11 +96,38 @@ function sanitizeGenerationStats(value: JsonValue) {
       continue
     }
     stats[messageId] = {
+      modelId: isJsonString(entry.modelId) ? entry.modelId : undefined,
       modelName: entry.modelName,
       mode: entry.mode,
       outputTokens: entry.outputTokens,
       tokensPerSecond: entry.tokensPerSecond,
       timeToFirstTokenSeconds: entry.timeToFirstTokenSeconds,
+      promptTokens: isJsonNumber(entry.promptTokens)
+        ? entry.promptTokens
+        : undefined,
+      cachedTokens: isJsonNumber(entry.cachedTokens)
+        ? entry.cachedTokens
+        : undefined,
+      cacheWriteTokens: isJsonNumber(entry.cacheWriteTokens)
+        ? entry.cacheWriteTokens
+        : undefined,
+      inputCostPerMillion: isJsonNumber(entry.inputCostPerMillion)
+        ? entry.inputCostPerMillion
+        : undefined,
+      outputCostPerMillion: isJsonNumber(entry.outputCostPerMillion)
+        ? entry.outputCostPerMillion
+        : undefined,
+      cacheReadCostPerMillion: isJsonNumber(entry.cacheReadCostPerMillion)
+        ? entry.cacheReadCostPerMillion
+        : undefined,
+      cacheReadEstimated:
+        typeof entry.cacheReadEstimated === "boolean"
+          ? entry.cacheReadEstimated
+          : undefined,
+      promptTokensEstimated:
+        typeof entry.promptTokensEstimated === "boolean"
+          ? entry.promptTokensEstimated
+          : undefined,
     }
   }
   return stats
@@ -136,6 +164,9 @@ function sanitizeThread(value: JsonValue): StoredTemporaryThread | null {
     stoppedMessageIds: Array.isArray(value.stoppedMessageIds)
       ? value.stoppedMessageIds.filter(isJsonString)
       : [],
+    branchedFromThreadId: isJsonString(value.branchedFromThreadId)
+      ? value.branchedFromThreadId
+      : undefined,
   }
 }
 
@@ -192,6 +223,7 @@ export const temporaryThreadsStore = createStore<TemporaryThreadsState>()(
           updatedAt: existing?.updatedAt ?? Date.now(),
           pinnedAt: existing?.pinnedAt,
           archivedAt: existing?.archivedAt,
+          branchedFromThreadId: existing?.branchedFromThreadId,
           messages: snapshot.messages,
           generationStats: snapshot.generationStats,
           stoppedMessageIds: snapshot.stoppedMessageIds,
@@ -201,6 +233,15 @@ export const temporaryThreadsStore = createStore<TemporaryThreadsState>()(
           threads: {
             ...get().threads,
             [threadId]: { ...next, updatedAt: Date.now() },
+          },
+        })
+      },
+      insertThread(thread) {
+        if (get().forgottenThreadIds[thread.id]) return
+        set({
+          threads: {
+            ...get().threads,
+            [thread.id]: thread,
           },
         })
       },

@@ -15,6 +15,8 @@ export type ComposerAttachment = {
   progress: number
   errorMessage?: string
   localPreviewUrl?: string
+  extractedTokenEstimate?: number
+  contextWarning?: string
 }
 
 export type ThreadComposerState = {

@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, X } from "lucide-react"
+import { CircleAlert, CircleCheck } from "lucide-react"
 import {
   AnimatePresence,
   motion,
@@ -11,7 +11,6 @@ import {
   TEMPORARY_CHAT_TOAST_ITEM_CLASS,
   TEMPORARY_CHAT_TOAST_STACK_CLASS,
 } from "@/components/chat/temporary-chat/constants"
-import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constants"
 import type { AnimatedToast } from "@/components/shared/motion/animated-toast-stack"
 import { EASE_OUT } from "@/lib/ease"
 
@@ -24,20 +23,13 @@ const TOAST_SPRING: Transition = {
 
 export function TemporaryChatToast({
   toasts,
-  onDismiss,
 }: {
   toasts: AnimatedToast[]
-  onDismiss?: (id: string) => void
 }) {
   const visibleToast = toasts.at(-1)
 
   return (
-    <div
-      className={TEMPORARY_CHAT_TOAST_ANCHOR_CLASS}
-      style={{
-        bottom: `var(${CHAT_COMPOSER_OVERLAY_HEIGHT.cssVar}, ${CHAT_COMPOSER_OVERLAY_HEIGHT.fallbackPx}px)`,
-      }}
-    >
+    <div className={TEMPORARY_CHAT_TOAST_ANCHOR_CLASS}>
       <ol
         aria-live="polite"
         aria-atomic="false"
@@ -45,11 +37,7 @@ export function TemporaryChatToast({
       >
         <AnimatePresence initial={false}>
           {visibleToast ? (
-            <TemporaryChatToastItem
-              key={visibleToast.id}
-              toast={visibleToast}
-              onDismiss={onDismiss}
-            />
+            <TemporaryChatToastItem key={visibleToast.id} toast={visibleToast} />
           ) : null}
         </AnimatePresence>
       </ol>
@@ -57,16 +45,9 @@ export function TemporaryChatToast({
   )
 }
 
-function TemporaryChatToastItem({
-  toast,
-  onDismiss,
-}: {
-  toast: AnimatedToast
-  onDismiss?: (id: string) => void
-}) {
+function TemporaryChatToastItem({ toast }: { toast: AnimatedToast }) {
   const reduce = useReducedMotion()
   const status = toast.status ?? "neutral"
-  const canDismiss = toast.dismissible !== false && Boolean(onDismiss)
 
   return (
     <motion.li
@@ -82,7 +63,6 @@ function TemporaryChatToastItem({
             }
       }
       transition={TOAST_SPRING}
-      className="pointer-events-auto"
     >
       <div className={TEMPORARY_CHAT_TOAST_ITEM_CLASS}>
         {status === "error" ? (
@@ -90,19 +70,9 @@ function TemporaryChatToastItem({
         ) : (
           <CircleCheck className="size-4 shrink-0 text-foreground" />
         )}
-        <p className="min-w-0 truncate text-sm leading-none font-medium text-foreground">
+        <p className="min-w-0 truncate text-sm leading-5 font-medium text-foreground">
           {toast.title}
         </p>
-        {canDismiss ? (
-          <button
-            type="button"
-            onClick={() => onDismiss?.(toast.id)}
-            aria-label="Dismiss toast"
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        ) : null}
       </div>
     </motion.li>
   )

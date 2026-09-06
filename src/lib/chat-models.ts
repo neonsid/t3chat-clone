@@ -287,12 +287,28 @@ const chatModelsById = new Map<string, ModelCatalogEntry>(
   CHAT_MODEL_CATALOG.map((model) => [model.id, model])
 )
 
+const duplicateModelNames = new Set<string>()
+const chatModelsByName = new Map<string, ModelCatalogEntry>()
+for (const model of CHAT_MODEL_CATALOG) {
+  if (duplicateModelNames.has(model.name)) continue
+  if (chatModelsByName.has(model.name)) {
+    chatModelsByName.delete(model.name)
+    duplicateModelNames.add(model.name)
+    continue
+  }
+  chatModelsByName.set(model.name, model)
+}
+
 export function isChatModelId(value: string): value is ChatModelId {
   return chatModelIds.has(value)
 }
 
 export function getChatModelById(modelId: string): ModelCatalogEntry | null {
   return chatModelsById.get(modelId) ?? null
+}
+
+export function getChatModelByName(name: string): ModelCatalogEntry | null {
+  return chatModelsByName.get(name) ?? null
 }
 
 export function resolveChatModel(

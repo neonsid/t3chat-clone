@@ -2,6 +2,7 @@ import { useConvex, useQuery } from "convex/react"
 import { useEffect, useEffectEvent, useRef } from "react"
 
 import { api } from "../../convex/_generated/api"
+import { applyComposerContextGate } from "@/lib/attachment-context"
 import {
   assertAttachmentCapacity,
   createPreparingAttachment,
@@ -11,7 +12,14 @@ import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
 import { getThreadComposerState } from "@/stores/chat-ui-store"
 import type { ComposerAttachment } from "@/stores/types"
 
-export function useComposerAttachments(threadStateKey: string) {
+export function useComposerAttachments(
+  threadStateKey: string,
+  contextGate?: {
+    threadTokensWithoutComposerDocx: number
+    inputBudget: number | null
+    modelName: string
+  }
+) {
   const convex = useConvex()
   const chatUi = useChatUiStoreApi()
   const attachments = useChatUiStore(
@@ -39,12 +47,24 @@ export function useComposerAttachments(threadStateKey: string) {
         (attachment) => attachment.attachmentId === remote.attachmentId
       )
       if (!local) continue
-      if (remote.status === "ready" && local.status !== "ready") {
-        chatUi.getState().updateAttachment(threadStateKey, local.localId, {
-          status: "ready",
-          progress: 1,
-          errorMessage: undefined,
-        })
+      if (remote.status === "ready") {
+        const stillUploading =
+          local.status === "preparing" ||
+          local.status === "uploading" ||
+          local.status === "processing"
+        if (
+          stillUploading ||
+          local.extractedTokenEstimate !== remote.extractedTokenEstimate
+        ) {
+          chatUi.getState().updateAttachment(threadStateKey, local.localId, {
+            status: stillUploading ? "ready" : local.status,
+            progress: 1,
+            extractedTokenEstimate: remote.extractedTokenEstimate,
+            ...(stillUploading
+              ? { errorMessage: undefined, contextWarning: undefined }
+              : {}),
+          })
+        }
       } else if (remote.status === "failed" && local.status !== "failed") {
         chatUi.getState().updateAttachment(threadStateKey, local.localId, {
           status: "failed",
@@ -60,6 +80,17 @@ export function useComposerAttachments(threadStateKey: string) {
       }
     }
   }, [attachments, chatUi, remoteStatuses, threadStateKey])
+
+  useEffect(() => {
+    if (!contextGate) return
+    const current = getThreadComposerState(
+      chatUi.getState(),
+      threadStateKey
+    ).attachments
+    const next = applyComposerContextGate(current, contextGate)
+    if (!composerAttachmentsChanged(current, next)) return
+    chatUi.getState().setAttachments(threadStateKey, next)
+  }, [attachments, chatUi, contextGate, threadStateKey])
 
   const abortAll = useEffectEvent(() => {
     for (const controller of abortControllers.current.values()) {
@@ -180,4 +211,21 @@ export function useComposerAttachments(threadStateKey: string) {
     clearReadyAttachments,
     abortAllUploads: abortAll,
   }
+}
+
+function composerAttachmentsChanged(
+  left: Array<ComposerAttachment>,
+  right: Array<ComposerAttachment>
+) {
+  if (left.length !== right.length) return true
+  return left.some((attachment, index) => {
+    const other = right[index]
+    if (!other) return true
+    return (
+      attachment.status !== other.status ||
+      attachment.errorMessage !== other.errorMessage ||
+      attachment.contextWarning !== other.contextWarning ||
+      attachment.extractedTokenEstimate !== other.extractedTokenEstimate
+    )
+  })
 }

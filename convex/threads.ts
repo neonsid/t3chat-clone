@@ -15,6 +15,7 @@ import {
   MAX_THREAD_TITLE_LENGTH,
   THREAD_DELETE_BATCH_SIZE,
 } from "./constants"
+import { branchThreadFromMessage } from "./helpers/branchThread"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
 import { messageSourceValidator } from "./schema"
@@ -138,6 +139,17 @@ async function bindMessageAttachments(
     })
   }
 }
+
+export const branchFromMessage = authedMutation({
+  args: {
+    threadId: v.id("threads"),
+    messageId: v.string(),
+  },
+  returns: v.id("threads"),
+  handler: async (ctx, args) => {
+    return await branchThreadFromMessage(ctx, args)
+  },
+})
 
 export const createOrReuseEmpty = authedMutation({
   args: {},

@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { MAX_MESSAGE_CONTENT_LENGTH } from "../../../convex/constants"
 import type { ReasoningEffort } from "@/lib/chat-models"
+import { catalogUsageRates } from "@/lib/generation-usage"
 import type { JsonValue } from "@/lib/json-value"
 import {
   parseWebSearchTurn,
@@ -18,6 +19,41 @@ const MAX_RUN_ERROR_MESSAGE_LENGTH = 500
 
 export const CHAT_RUN_SAVE_FAILED =
   "Couldn't save this reply. Try sending again."
+
+function optionalPositiveInt(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined
+}
+
+function readFinishedUsage(usage: {
+  promptTokens?: number
+  promptTokensDetails?: {
+    cachedTokens?: number
+    cacheWriteTokens?: number
+    cacheCreationTokens?: number
+  }
+  cacheWriteTokens?: number
+} | undefined) {
+  if (!usage) {
+    return {
+      promptTokens: undefined,
+      cachedTokens: undefined,
+      cacheWriteTokens: undefined,
+    }
+  }
+
+  const details = usage.promptTokensDetails
+  return {
+    promptTokens: optionalPositiveInt(usage.promptTokens),
+    cachedTokens: optionalPositiveInt(details?.cachedTokens),
+    cacheWriteTokens: optionalPositiveInt(
+      details?.cacheWriteTokens ??
+        details?.cacheCreationTokens ??
+        usage.cacheWriteTokens
+    ),
+  }
+}
 
 function persistErrorMessage(error: Error) {
   const message = error.message.trim() || "Generation failed"
@@ -113,24 +149,50 @@ export function collectAndPersistStream({
     let hasSeenReasoningEvents = false
     let firstTokenAt: number | undefined
     let outputTokens = 0
+    let promptTokens: number | undefined
+    let cachedTokens: number | undefined
+    let cacheWriteTokens: number | undefined
     let streamedChunks = 0
     let finished = false
     let sources: WebSearchSource[] = []
     let searchQueries: string[] = []
     let thinkingSearchSplitAt: number | undefined
 
-    const generation = () => ({
-      modelId,
-      modelName,
-      reasoningEffort,
-      // Usage only rides on RUN_FINISHED, which a stopped or failed run never
-      // reaches. Providers stream roughly a token per chunk, so the chunk count
-      // stands in for a count the UI then marks as approximate — better than
-      // telling the reader a truncated answer cost zero tokens.
-      outputTokens: outputTokens || streamedChunks,
-      durationMs: Date.now() - startedAt,
-      timeToFirstTokenMs: firstTokenAt ? firstTokenAt - startedAt : 0,
-    })
+    const generation = (includePromptUsage: boolean) => {
+      const rates =
+        includePromptUsage && promptTokens != null
+          ? catalogUsageRates(modelId)
+          : null
+      return {
+        modelId,
+        modelName,
+        reasoningEffort,
+        // Usage only rides on RUN_FINISHED, which a stopped or failed run never
+        // reaches. Providers stream roughly a token per chunk, so the chunk count
+        // stands in for a count the UI then marks as approximate — better than
+        // telling the reader a truncated answer cost zero tokens.
+        outputTokens: outputTokens || streamedChunks,
+        durationMs: Date.now() - startedAt,
+        timeToFirstTokenMs: firstTokenAt ? firstTokenAt - startedAt : 0,
+        ...(includePromptUsage && promptTokens != null
+          ? { promptTokens }
+          : {}),
+        ...(includePromptUsage && cachedTokens != null
+          ? { cachedTokens }
+          : {}),
+        ...(includePromptUsage && cacheWriteTokens != null
+          ? { cacheWriteTokens }
+          : {}),
+        ...(rates
+          ? {
+              inputCostPerMillion: rates.inputCostPerMillion,
+              outputCostPerMillion: rates.outputCostPerMillion,
+              cacheReadCostPerMillion: rates.cacheReadCostPerMillion,
+              cacheReadEstimated: rates.cacheReadEstimated,
+            }
+          : {}),
+      }
+    }
 
     const persistThreadId = threadId
     const persistRunId = runId
@@ -154,7 +216,12 @@ export function collectAndPersistStream({
       searchQueries: searchQueries.length > 0 ? searchQueries : undefined,
       thinkingSearchSplitAt:
         persistableThinkingSearchSplitAt(thinkingSearchSplitAt),
-      generation: generation(),
+      generation: generation(false),
+    })
+
+    const finishPayloadWithUsage = () => ({
+      ...finishPayload(),
+      generation: generation(true),
     })
 
     try {
@@ -201,14 +268,10 @@ export function collectAndPersistStream({
           }
         } else if (chunk.type === "RUN_FINISHED") {
           outputTokens = chunk.usage?.completionTokens ?? 0
-          const cachedTokens = chunk.usage?.promptTokensDetails?.cachedTokens
-          if (cachedTokens && cachedTokens > 0) {
-            console.log("OpenAI prompt cache hit", {
-              modelId,
-              cachedTokens,
-              promptTokens: chunk.usage?.promptTokens,
-            })
-          }
+          const finishedUsage = readFinishedUsage(chunk.usage)
+          promptTokens = finishedUsage.promptTokens
+          cachedTokens = finishedUsage.cachedTokens
+          cacheWriteTokens = finishedUsage.cacheWriteTokens
         } else if (chunk.type === "RUN_ERROR") {
           throw new Error(chunk.message || "Model generation failed")
         }
@@ -223,7 +286,11 @@ export function collectAndPersistStream({
         if (signal.aborted) {
           await persistRunOutcome(convex, api.chatRuns.stop, finishPayload())
         } else {
-          await persistRunOutcome(convex, api.chatRuns.complete, finishPayload())
+          await persistRunOutcome(
+            convex,
+            api.chatRuns.complete,
+            finishPayloadWithUsage()
+          )
         }
       }
       finished = true

@@ -51,16 +51,7 @@ async function saveAssistantMessage(
   content: string,
   thinking: string,
   status: "complete" | "stopped" | "failed",
-  generation:
-    | {
-        modelId: string
-        modelName: string
-        reasoningEffort: "instant" | "low" | "medium" | "high"
-        outputTokens: number
-        durationMs: number
-        timeToFirstTokenMs: number
-      }
-    | undefined,
+  generation: Doc<"messages">["generation"],
   sources: Array<{ title: string; url: string }> | undefined,
   searchQueries: Array<string> | undefined,
   thinkingSearchSplitAt: number | undefined

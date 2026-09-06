@@ -18,7 +18,13 @@ import type { ThreadMessageAttachment } from "@/components/chat/attachments/type
 import { ReasoningBlock } from "@/components/chat/thread/ReasoningBlock"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { WebSearchBlock } from "@/components/chat/thread/WebSearchBlock"
-import { STOPPED_RESPONSE } from "@/components/chat/thread/constants"
+import { showShellToast } from "@/components/chat/shell/shell-toast"
+import { MessageBranchPicker } from "@/components/chat/thread/MessageBranchPicker"
+import {
+  MESSAGE_CHROME,
+  MESSAGE_COPY,
+  STOPPED_RESPONSE,
+} from "@/components/chat/thread/constants"
 import {
   resolveAssistantMessageChrome,
   splitThinkingAroundSearch,
@@ -34,6 +40,7 @@ import {
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
 import type { WebSearchSource } from "@/lib/web-search"
+import { cn } from "@/lib/utils"
 
 async function copyText(text: string) {
   if (!text) return
@@ -43,9 +50,11 @@ async function copyText(text: string) {
 function MessageCopyControl({
   text,
   attachments = [],
+  onCopied,
 }: {
   text: string
   attachments?: Array<ThreadMessageAttachment>
+  onCopied?: () => void
 }) {
   const getDownloadUrl = useAction(api.r2.getDownloadUrl)
   const [copied, setCopied] = useState(false)
@@ -56,33 +65,37 @@ function MessageCopyControl({
       type="button"
       size="icon-xs"
       variant="ghost"
-      className="size-6 text-muted-foreground hover:text-foreground"
+      className={cn(MESSAGE_CHROME.iconButtonClassName)}
       aria-label={copied ? "Copied" : "Copy message"}
       onClick={() => {
         void (async () => {
-          const links: Array<{ filename: string; url: string }> = []
-          for (const attachment of attachments) {
-            try {
-              const result = await getDownloadUrl({
-                attachmentId: attachment.attachmentId,
-                purpose: "ui",
-              })
-              links.push({ filename: attachment.filename, url: result.url })
-            } catch {
-              continue
+          try {
+            const links: Array<{ filename: string; url: string }> = []
+            for (const attachment of attachments) {
+              try {
+                const result = await getDownloadUrl({
+                  attachmentId: attachment.attachmentId,
+                  purpose: "ui",
+                })
+                links.push({ filename: attachment.filename, url: result.url })
+              } catch {
+                continue
+              }
             }
+            await copyText(formatUserMessageClipboard(text, links))
+            onCopied?.()
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1200)
+          } catch {
+            return
           }
-          await copyText(formatUserMessageClipboard(text, links))
-        })().then(() => {
-          setCopied(true)
-          window.setTimeout(() => setCopied(false), 1200)
-        })
+        })()
       }}
     >
       {copied ? (
-        <CheckIcon className="size-3" />
+        <CheckIcon className="size-3.5" />
       ) : (
-        <CopyIcon className="size-3" />
+        <CopyIcon className="size-3.5" />
       )}
     </Button>
   )
@@ -99,6 +112,8 @@ type ChatMessageProps = {
   queries?: string[]
   thinkingSearchSplitAt?: number
   isSearchingWeb?: boolean
+  canBranch?: boolean
+  onBranch?: () => void | Promise<void>
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -112,6 +127,8 @@ export const ChatMessage = memo(function ChatMessage({
   queries = [],
   thinkingSearchSplitAt,
   isSearchingWeb = false,
+  canBranch = false,
+  onBranch,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
@@ -134,7 +151,7 @@ export const ChatMessage = memo(function ChatMessage({
           ) : null}
           {text ? <div className="whitespace-pre-wrap">{text}</div> : null}
         </div>
-        <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
+        <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100">
           <div className="flex shrink-0 items-center gap-2">
             {timestamp ? (
               <p className="text-xs text-muted-foreground tabular-nums">
@@ -146,15 +163,16 @@ export const ChatMessage = memo(function ChatMessage({
                 type="button"
                 size="icon-xs"
                 variant="ghost"
-                className="size-6 text-muted-foreground hover:text-foreground"
+                className={MESSAGE_CHROME.iconButtonClassName}
                 aria-label="Reply"
                 disabled
               >
-                <Undo2Icon className="size-3" />
+                <Undo2Icon className="size-3.5" />
               </Button>
               {text || attachments.length > 0 ? (
                 <MessageCopyControl text={text} attachments={attachments} />
               ) : null}
+              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
             </div>
           </div>
         </div>
@@ -172,16 +190,15 @@ export const ChatMessage = memo(function ChatMessage({
     isStreamingThinkingAfter,
     showWebSearch,
     isSearching,
-  } =
-    resolveAssistantMessageChrome({
-      thinkingBefore,
-      thinkingAfter,
-      text,
-      isStreaming,
-      sourcesCount: sources.length,
-      queriesCount: queries.length,
-      isSearchingWeb,
-    })
+  } = resolveAssistantMessageChrome({
+    thinkingBefore,
+    thinkingAfter,
+    text,
+    isStreaming,
+    sourcesCount: sources.length,
+    queriesCount: queries.length,
+    isSearchingWeb,
+  })
 
   return (
     <div className="group/assistant pb-2">
@@ -226,7 +243,22 @@ export const ChatMessage = memo(function ChatMessage({
 
         {(text || timestamp || generationStats || toolCallCount > 0) &&
         !isStreaming ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100">
+            <div className="flex items-center gap-0.5">
+              {text ? (
+                <MessageCopyControl
+                  text={text}
+                  onCopied={() =>
+                    showShellToast({
+                      title: MESSAGE_COPY.copied,
+                      status: "success",
+                      duration: MESSAGE_COPY.toastDurationMs,
+                    })
+                  }
+                />
+              ) : null}
+              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+            </div>
             {generationStats ? (
               <div
                 data-assistant-generation-stats="true"
@@ -281,14 +313,11 @@ export const ChatMessage = memo(function ChatMessage({
                 {webSearchToolCallLabel(toolCallCount)}
               </span>
             ) : null}
-            <div className="flex items-center gap-2">
-              {text ? <MessageCopyControl text={text} /> : null}
-              {timestamp && !isStopped ? (
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {timestamp}
-                </p>
-              ) : null}
-            </div>
+            {timestamp && !isStopped ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {timestamp}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -6,6 +6,7 @@
 export const ATTACHMENT_KIND = {
   image: "image",
   pdf: "pdf",
+  docx: "docx",
 } as const
 
 export type AttachmentKind =
@@ -31,13 +32,19 @@ export const ATTACHMENT_BINDING_STATUS = {
 export type AttachmentBindingStatus =
   (typeof ATTACHMENT_BINDING_STATUS)[keyof typeof ATTACHMENT_BINDING_STATUS]
 
-/** Allowed MIME types for v1 (images + PDF only). */
+export const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+export const LEGACY_DOC_MIME_TYPE = "application/msword"
+
+/** Allowed MIME types (images, PDF, Word). */
 export const ALLOWED_ATTACHMENT_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/gif",
   "image/webp",
   "application/pdf",
+  DOCX_MIME_TYPE,
 ] as const
 
 export type AllowedAttachmentMimeType =
@@ -50,9 +57,15 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS = [
   ".gif",
   ".webp",
   ".pdf",
+  ".docx",
 ] as const
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+export const MAX_WORD_ATTACHMENT_BYTES = 5 * 1024 * 1024
+export const MAX_DOCX_EXTRACTED_CHARS = 200_000
+export const ATTACHMENT_UNSUPPORTED_ERROR =
+  "Only JPEG, PNG, GIF, WebP, PDF, and Word (.docx) files are supported"
+export const LEGACY_DOC_ERROR = "Save as .docx and try again"
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5
 export const MAX_ATTACHMENT_FILENAME_LENGTH = 200
 export const MAX_ATTACHMENT_ID_LENGTH = 80
@@ -82,6 +95,7 @@ export const MIME_TO_KIND = {
   "image/gif": "image",
   "image/webp": "image",
   "application/pdf": "pdf",
+  [DOCX_MIME_TYPE]: "docx",
 } as const satisfies Record<AllowedAttachmentMimeType, AttachmentKind>
 
 export function isAllowedAttachmentMimeType(
@@ -104,5 +118,16 @@ export function extensionForMimeType(
       return ".webp"
     case "application/pdf":
       return ".pdf"
+    case DOCX_MIME_TYPE:
+      return ".docx"
   }
+}
+
+export function maxBytesForAttachmentKind(kind: AttachmentKind) {
+  return kind === "docx" ? MAX_WORD_ATTACHMENT_BYTES : MAX_ATTACHMENT_BYTES
+}
+
+export function isLegacyWordFilename(filename: string) {
+  const lower = filename.toLowerCase()
+  return lower.endsWith(".doc") && !lower.endsWith(".docx")
 }

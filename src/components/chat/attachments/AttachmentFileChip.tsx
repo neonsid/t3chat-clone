@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils"
 
 export function AttachmentFileChip({
   filename,
+  badge = "PDF",
   statusLabel,
   failed,
+  warning,
   progress,
   indeterminate,
   onOpen,
@@ -18,8 +20,10 @@ export function AttachmentFileChip({
   removeDisabled,
 }: {
   filename: string
+  badge?: string
   statusLabel?: string
   failed?: boolean
+  warning?: boolean
   progress?: number
   indeterminate?: boolean
   onOpen?: () => void
@@ -33,7 +37,11 @@ export function AttachmentFileChip({
     <div
       className={cn(
         ATTACHMENT_FILE_CHIP.root,
-        failed ? "border-destructive/40" : "border-border/70"
+        failed
+          ? "border-destructive/40"
+          : warning
+            ? "border-amber-500/50"
+            : "border-border/70"
       )}
     >
       {onOpen ? (
@@ -43,14 +51,14 @@ export function AttachmentFileChip({
           aria-label={`Open ${filename}`}
           onClick={onOpen}
         >
-          <span className={ATTACHMENT_FILE_CHIP.badge}>PDF</span>
+          <span className={ATTACHMENT_FILE_CHIP.badge}>{badge}</span>
           <span className={ATTACHMENT_FILE_CHIP.filename} title={filename}>
             {filename}
           </span>
         </button>
       ) : (
         <>
-          <span className={ATTACHMENT_FILE_CHIP.badge}>PDF</span>
+          <span className={ATTACHMENT_FILE_CHIP.badge}>{badge}</span>
           <span className={ATTACHMENT_FILE_CHIP.filename} title={filename}>
             {filename}
           </span>
@@ -92,6 +100,9 @@ export function AttachmentFileChip({
   )
 
   if (failed && statusLabel) {
+    return <Tooltip content={statusLabel}>{body}</Tooltip>
+  }
+  if (warning && statusLabel) {
     return <Tooltip content={statusLabel}>{body}</Tooltip>
   }
 

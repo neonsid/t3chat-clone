@@ -13,13 +13,18 @@ import { ConvexError, v } from "convex/values"
 import { components, internal } from "./_generated/api"
 import { action, internalAction } from "./_generated/server"
 import type { ActionCtx } from "./_generated/server"
+import mammoth from "mammoth"
+
+import { prepareExtractedDocxText } from "./docxExtract"
 import {
   ATTACHMENT_DELETE_BATCH_SIZE,
   ATTACHMENT_GET_URL_MODEL_TTL_SECONDS,
   ATTACHMENT_GET_URL_UI_TTL_SECONDS,
   ATTACHMENT_PUT_URL_TTL_SECONDS,
+  DOCX_MIME_TYPE,
   canReuseModelDownloadUrl,
 } from "./attachmentConstants"
+import { attachmentKindValidator } from "./schema"
 
 function r2Options() {
   const accessKeyId = process.env.R2_ACCESS_KEY_ID
@@ -83,6 +88,9 @@ async function requireViewerId(ctx: {
 }
 
 function matchesMagicBytes(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === DOCX_MIME_TYPE) {
+    return bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b
+  }
   if (mimeType === "application/pdf") {
     return (
       bytes.length >= 5 &&
@@ -139,6 +147,19 @@ function matchesMagicBytes(bytes: Uint8Array, mimeType: string): boolean {
     )
   }
   return false
+}
+
+async function readObjectBytes(r2: R2, objectKey: string): Promise<Buffer> {
+  const response = await r2.client.send(
+    new GetObjectCommand({
+      Bucket: r2.config.bucket,
+      Key: objectKey,
+    })
+  )
+  const body = response.Body
+  if (!body) throw new Error("Empty object body")
+  const bytes = await body.transformToByteArray()
+  return Buffer.from(bytes)
 }
 
 async function readObjectPrefix(
@@ -218,7 +239,7 @@ export const getDownloadUrl = action({
     expiresInSeconds: v.number(),
     mimeType: v.string(),
     filename: v.string(),
-    kind: v.union(v.literal("image"), v.literal("pdf")),
+    kind: attachmentKindValidator,
   }),
   handler: async (
     ctx,
@@ -228,14 +249,14 @@ export const getDownloadUrl = action({
     expiresInSeconds: number
     mimeType: string
     filename: string
-    kind: "image" | "pdf"
+    kind: "image" | "pdf" | "docx"
   }> => {
     const ownerId = await requireViewerId(ctx)
     const attachment: {
       objectKey: string
       mimeType: string
       filename: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       status: string
     } | null = await ctx.runQuery(internal.attachments.authorizeForOwner, {
       ownerId,
@@ -276,7 +297,7 @@ export const mintModelDownloadUrls = action({
       attachmentId: v.string(),
       url: v.string(),
       mimeType: v.string(),
-      kind: v.union(v.literal("image"), v.literal("pdf")),
+      kind: attachmentKindValidator,
       filename: v.string(),
     })
   ),
@@ -288,7 +309,7 @@ export const mintModelDownloadUrls = action({
       attachmentId: string
       url: string
       mimeType: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       filename: string
     }>
   > => {
@@ -301,7 +322,7 @@ export const mintModelDownloadUrls = action({
       objectKey: string
       filename: string
       mimeType: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       status: string
       modelDownloadUrl?: string
       modelDownloadUrlExpiresAt?: number
@@ -316,11 +337,12 @@ export const mintModelDownloadUrls = action({
       attachmentId: string
       url: string
       mimeType: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       filename: string
     }> = []
     for (const attachment of rows) {
       if (attachment.status !== "ready") continue
+      if (attachment.kind === "docx") continue
       const url = await signedModelDownloadUrl(ctx, r2, ownerId, attachment)
       results.push({
         attachmentId: attachment.attachmentId,
@@ -343,9 +365,11 @@ export const mintOwnedModelDownloadUrls = action({
       attachmentId: v.string(),
       url: v.string(),
       mimeType: v.string(),
-      kind: v.union(v.literal("image"), v.literal("pdf")),
+      kind: attachmentKindValidator,
       filename: v.string(),
       sizeBytes: v.number(),
+      extractedText: v.optional(v.string()),
+      extractedTokenEstimate: v.optional(v.number()),
     })
   ),
   handler: async (
@@ -356,9 +380,11 @@ export const mintOwnedModelDownloadUrls = action({
       attachmentId: string
       url: string
       mimeType: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       filename: string
       sizeBytes: number
+      extractedText?: string
+      extractedTokenEstimate?: number
     }>
   > => {
     const ownerId = await requireViewerId(ctx)
@@ -370,9 +396,11 @@ export const mintOwnedModelDownloadUrls = action({
       attachmentId: string
       url: string
       mimeType: string
-      kind: "image" | "pdf"
+      kind: "image" | "pdf" | "docx"
       filename: string
       sizeBytes: number
+      extractedText?: string
+      extractedTokenEstimate?: number
     }> = []
 
     for (const attachmentId of uniqueIds) {
@@ -380,10 +408,12 @@ export const mintOwnedModelDownloadUrls = action({
         objectKey: string
         mimeType: string
         filename: string
-        kind: "image" | "pdf"
+        kind: "image" | "pdf" | "docx"
         status: string
         sizeBytes: number
         attachmentId: string
+        extractedText?: string
+        extractedTokenEstimate?: number
         modelDownloadUrl?: string
         modelDownloadUrlExpiresAt?: number
       } | null = await ctx.runQuery(internal.attachments.authorizeForOwner, {
@@ -391,6 +421,19 @@ export const mintOwnedModelDownloadUrls = action({
         attachmentId,
       })
       if (!attachment || attachment.status !== "ready") continue
+      if (attachment.kind === "docx") {
+        results.push({
+          attachmentId: attachment.attachmentId,
+          url: "",
+          mimeType: attachment.mimeType,
+          kind: attachment.kind,
+          filename: attachment.filename,
+          sizeBytes: attachment.sizeBytes,
+          extractedText: attachment.extractedText,
+          extractedTokenEstimate: attachment.extractedTokenEstimate,
+        })
+        continue
+      }
       const url = await signedModelDownloadUrl(ctx, r2, ownerId, attachment)
       results.push({
         attachmentId: attachment.attachmentId,
@@ -474,6 +517,43 @@ export const verifyObject = internalAction({
           ownerId: args.ownerId,
           attachmentId: args.attachmentId,
           errorMessage: "File contents do not match the declared type",
+        })
+        return null
+      }
+
+      if (attachment.kind === "docx") {
+        let rawText: string
+        try {
+          const buffer = await readObjectBytes(r2, attachment.objectKey)
+          const result = await mammoth.extractRawText({ buffer })
+          rawText = result.value
+        } catch {
+          await ctx.runMutation(internal.attachments.markFailed, {
+            ownerId: args.ownerId,
+            attachmentId: args.attachmentId,
+            errorMessage: "Couldn't read this Word file",
+          })
+          return null
+        }
+
+        const extracted = prepareExtractedDocxText(
+          rawText,
+          attachment.filename
+        )
+        if (!extracted.ok) {
+          await ctx.runMutation(internal.attachments.markFailed, {
+            ownerId: args.ownerId,
+            attachmentId: args.attachmentId,
+            errorMessage: extracted.error,
+          })
+          return null
+        }
+
+        await ctx.runMutation(internal.attachments.markReady, {
+          ownerId: args.ownerId,
+          attachmentId: args.attachmentId,
+          extractedText: extracted.extractedText,
+          extractedTokenEstimate: extracted.extractedTokenEstimate,
         })
         return null
       }

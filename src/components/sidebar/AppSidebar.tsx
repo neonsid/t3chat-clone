@@ -4,6 +4,7 @@ import {
   ArchiveIcon,
   ChevronUpIcon,
   ClockIcon,
+  GitForkIcon,
   LoaderCircleIcon,
   PinIcon,
   SearchIcon,
@@ -22,6 +23,7 @@ import {
   SIDEBAR_SEARCH_SHORTCUT,
   SIDEBAR_THREAD_ACTION_TOOLTIP_DELAY_MS,
   SIDEBAR_THREAD_BUTTON_CLASS,
+  SIDEBAR_THREAD_LEADING_ICON_CLASS,
   SIDEBAR_THREAD_HOVER_ACTION_CLASS,
   SIDEBAR_THREAD_ROW_TOOLTIP_DELAY_MS,
   SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS,
@@ -99,6 +101,7 @@ function ThreadHoverAction({
 function ThreadRowButton({
   isRenaming,
   isTemporary,
+  isBranched,
   isActive,
   isBusy,
   isTitlePending,
@@ -111,6 +114,7 @@ function ThreadRowButton({
 }: {
   isRenaming: boolean;
   isTemporary: boolean;
+  isBranched: boolean;
   isActive: boolean;
   isBusy: boolean;
   isTitlePending: boolean;
@@ -169,8 +173,10 @@ function ThreadRowButton({
         className={cn(SIDEBAR_THREAD_BUTTON_CLASS, isBusy && "pe-9")}
         onClick={onSelect}
       >
-        {isTemporary ? (
-          <ClockIcon aria-hidden="true" className="size-3.5 text-sidebar-foreground/80" />
+        {isBranched ? (
+          <GitForkIcon aria-hidden="true" className={SIDEBAR_THREAD_LEADING_ICON_CLASS} />
+        ) : isTemporary ? (
+          <ClockIcon aria-hidden="true" className={SIDEBAR_THREAD_LEADING_ICON_CLASS} />
         ) : null}
         {isTitlePending ? (
           <span
@@ -374,6 +380,7 @@ export function AppSidebar({
     const isPinned = Boolean(thread.pinnedAt);
     const isTitlePending = thread.titleSource === "pending";
     const isTemporary = Boolean(thread.isTemporary);
+    const isBranched = Boolean(thread.branchedFromThreadId);
     const isBusy = isTitlePending || thread.isStreaming;
     const isRenaming = renamingThreadId === thread.id;
     const displayTitle =
@@ -389,6 +396,7 @@ export function AppSidebar({
           <ThreadRowButton
             isRenaming={isRenaming}
             isTemporary={isTemporary}
+            isBranched={isBranched}
             isActive={isActive}
             isBusy={isBusy}
             isTitlePending={isTitlePending}
@@ -411,6 +419,7 @@ export function AppSidebar({
               <ThreadRowButton
                 isRenaming={isRenaming}
                 isTemporary={isTemporary}
+                isBranched={isBranched}
                 isActive={isActive}
                 isBusy={isBusy}
                 isTitlePending={isTitlePending}

@@ -48,10 +48,11 @@ function RemoteAttachmentThumb({
     }
   })
 
-  if (attachment.kind === "pdf") {
+  if (attachment.kind !== "image") {
     return (
       <AttachmentFileChip
         filename={attachment.filename}
+        badge={attachment.kind === "docx" ? "DOC" : "PDF"}
         onOpen={
           url
             ? () => window.open(url, "_blank", "noopener,noreferrer")

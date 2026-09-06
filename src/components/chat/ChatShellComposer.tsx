@@ -3,6 +3,7 @@ import { useCallback, useLayoutEffect, useRef } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import { ChatComposer } from "@/components/chat/composer/ChatComposer"
+import { useComposerUsage } from "@/hooks/useComposerUsage"
 import {
   CHAT_COMPOSER_OVERLAY_HEIGHT,
   CHAT_COMPOSER_PLACEHOLDERS,
@@ -43,6 +44,7 @@ export function ChatShellComposer({
 }: ChatShellComposerProps) {
   const composerOverlayRef = useRef<HTMLDivElement | null>(null)
   const chatUi = useChatUiStoreApi()
+  const { usage, contextGate } = useComposerUsage(threadStateKey)
   const clearDraft = useChatUiStore((state) => state.clearDraft)
   const clearAttachments = useChatUiStore((state) => state.clearAttachments)
   const {
@@ -162,6 +164,8 @@ export function ChatShellComposer({
             threadStateKey={threadStateKey}
             effectiveReasoningEffort={effectiveReasoningEffort}
             supportedReasoningEfforts={supportedReasoningEfforts}
+            usage={usage}
+            contextGate={contextGate}
             onSubmit={handleSubmit}
             onStop={stop ?? undefined}
             isLoading={isBusy}

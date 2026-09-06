@@ -17,11 +17,13 @@ import {
   ATTACHMENT_UPLOAD_TOAST_ID,
 } from "@/components/chat/attachments/constants"
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
+import { ComposerUsageButton } from "@/components/chat/composer/ComposerUsageButton"
 import { ReasoningEffortSelect } from "@/components/chat/composer/ReasoningEffortSelect"
 import {
   CHAT_COMPOSER_PLACEHOLDERS,
   SEARCH_TOGGLE,
 } from "@/components/chat/composer/constants"
+import type { ComposerUsageStripData } from "@/hooks/useComposerUsage"
 import { webSearchTooltip } from "@/components/chat/composer/logic"
 import {
   AnimatedToastStack,
@@ -37,6 +39,7 @@ import {
 } from "@/hooks/useThreadComposerState"
 import {
   ATTACHMENT_ACCEPT,
+  DOCX_MIME_TYPE,
   normalizeAttachmentMimeType,
 } from "@/lib/attachment-limits"
 import { useChatUiStore } from "@/stores/AppStateProvider"
@@ -59,6 +62,12 @@ interface ChatComposerProps {
   disabled?: boolean
   placeholder?: string
   className?: string
+  usage?: ComposerUsageStripData
+  contextGate?: {
+    threadTokensWithoutComposerDocx: number
+    inputBudget: number | null
+    modelName: string
+  }
 }
 
 export const ChatComposer = memo(function ChatComposer({
@@ -71,6 +80,8 @@ export const ChatComposer = memo(function ChatComposer({
   disabled = false,
   placeholder = CHAT_COMPOSER_PLACEHOLDERS.newThread,
   className,
+  usage,
+  contextGate,
 }: ChatComposerProps) {
   // Latest-ref: stable onSubmit for ComposerDraftField without stale closures.
   // Prefer this over useEffectEvent here — Effect Events must not be child props.
@@ -81,7 +92,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, [])
 
   const { attachments, addFiles, removeAttachment } =
-    useComposerAttachments(threadStateKey)
+    useComposerAttachments(threadStateKey, contextGate)
   const toasts = useAnimatedToastStack({ limit: 1 })
   const uploadToastActive = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -94,17 +105,18 @@ export const ChatComposer = memo(function ChatComposer({
   async function handleFilesSelected(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return
 
-    const pdfCount = Array.from(fileList).filter(
-      (file) => normalizeAttachmentMimeType(file) === "application/pdf"
-    ).length
+    const fileCount = Array.from(fileList).filter((file) => {
+      const mime = normalizeAttachmentMimeType(file)
+      return mime === "application/pdf" || mime === DOCX_MIME_TYPE
+    }).length
 
     await addFiles(fileList, {
       onBatchStart: () => {
-        if (pdfCount === 0) return
+        if (fileCount === 0) return
         uploadToastActive.current = true
         toasts.showToast({
           id: ATTACHMENT_UPLOAD_TOAST_ID,
-          title: ATTACHMENT_UPLOAD_TOAST.uploading(pdfCount),
+          title: ATTACHMENT_UPLOAD_TOAST.uploading(fileCount),
           status: "loading",
           duration: 0,
           dismissible: false,
@@ -198,6 +210,7 @@ export const ChatComposer = memo(function ChatComposer({
             threadStateKey={threadStateKey}
             effectiveReasoningEffort={effectiveReasoningEffort}
             supportedReasoningEfforts={supportedReasoningEfforts}
+            usage={usage}
             isLoading={isLoading}
             disabled={disabled}
             onStop={onStop}
@@ -276,6 +289,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
   threadStateKey,
   effectiveReasoningEffort,
   supportedReasoningEfforts,
+  usage,
   isLoading,
   disabled,
   onStop,
@@ -286,6 +300,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
   threadStateKey: string
   effectiveReasoningEffort: ReasoningEffort
   supportedReasoningEfforts: ReadonlyArray<ReasoningEffort>
+  usage?: ComposerUsageStripData
   isLoading: boolean
   disabled: boolean
   onStop?: () => void
@@ -356,6 +371,7 @@ const ComposerToolbar = memo(function ComposerToolbar({
               </button>
             </span>
           </Tooltip>
+          <ComposerUsageButton usage={usage} />
         </div>
       </div>
 

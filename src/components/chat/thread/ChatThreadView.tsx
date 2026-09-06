@@ -45,6 +45,7 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
+import { useBranchChat } from "@/hooks/useBranchChat"
 import { useCoalescedValue } from "@/hooks/useCoalescedValue"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
 import {
@@ -185,6 +186,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   queries,
   thinkingSearchSplitAt,
   isSearchingWeb,
+  canBranch,
+  onBranch,
 }: {
   message: UIMessage
   isStreaming: boolean
@@ -197,6 +200,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   queries: string[]
   thinkingSearchSplitAt?: number
   isSearchingWeb: boolean
+  canBranch?: boolean
+  onBranch?: () => void | Promise<void>
 }) {
   return (
     <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
@@ -211,6 +216,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
         queries={queries}
         thinkingSearchSplitAt={thinkingSearchSplitAt}
         isSearchingWeb={isSearchingWeb}
+        canBranch={canBranch}
+        onBranch={onBranch}
       />
     </MessageScrollerItem>
   )
@@ -268,6 +275,7 @@ export function ChatThreadView({
   const streamingThinkingLengthRef = useRef(0)
   const [searchThisTurn, setSearchThisTurn] = useState(false)
   const isTemporary = isTemporaryThreadId(threadId)
+  const { branchFromMessage } = useBranchChat({ threadId, isTemporary })
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
     api.attachments.listForThreadMessages,
@@ -451,6 +459,7 @@ export function ChatThreadView({
       nextStats[message.id] = estimateTemporaryGenerationStats({
         text: chatMessageText(message),
         thinking: chatMessageThinking(message),
+        modelId: selectedModelId,
         modelName,
         mode,
       })
@@ -586,18 +595,24 @@ export function ChatThreadView({
             lastAssistantMessageId,
           })}
           isSearchingWeb={false}
+          canBranch={!isLoading && !activeTurn && threadId !== "guest"}
+          onBranch={() => branchFromMessage(message.id)}
         />
       )),
     [
+      activeTurn,
       attachmentsByMessageId,
+      branchFromMessage,
       resolvedGenerationStats,
       history,
+      isLoading,
       isTemporary,
       lastAssistantMessageId,
       latestUserMessageId,
       locallyStoppedMessageIds,
       scrollAnchorId,
       stoppedMessageIds,
+      threadId,
       turnWebSearchQueries,
       turnWebSearchSources,
       turnThinkingSearchSplitAt,
