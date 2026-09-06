@@ -48,6 +48,38 @@ export async function cloneReadyAttachment(
   return attachmentId
 }
 
+export async function cloneReadyAttachmentForFork(
+  ctx: ViewerMutationCtx,
+  source: Doc<"attachments">,
+  bind: {
+    threadId: Id<"threads">
+    messageId: string
+  }
+): Promise<string> {
+  if (source.status !== "ready") {
+    throw new ConvexError("Attachment is not ready")
+  }
+
+  const attachmentId = crypto.randomUUID()
+  await ctx.db.insert("attachments", {
+    ownerId: ctx.viewerId,
+    attachmentId,
+    objectKey: source.objectKey,
+    filename: source.filename,
+    mimeType: source.mimeType,
+    sizeBytes: source.sizeBytes,
+    kind: source.kind,
+    extractedText: source.extractedText,
+    extractedTokenEstimate: source.extractedTokenEstimate,
+    status: "ready",
+    bindingStatus: "bound",
+    threadId: bind.threadId,
+    messageId: bind.messageId,
+    createdAt: Date.now(),
+  })
+  return attachmentId
+}
+
 export async function getOwnedAttachmentById(
   ctx: ViewerMutationCtx,
   attachmentId: string

@@ -1,0 +1,30 @@
+export const THREAD_SHARE = {
+  label: "Share",
+  title: (threadTitle: string) => `Share '${threadTitle}'?`,
+  description:
+    "Generate a public link to share the current state of this conversation. Anyone with the link can read it or fork it to continue on their own account.",
+  newLink: "New Link",
+  copyLink: "Copy Link",
+  copied: "Copied",
+  autoUpdate: "Auto-update",
+  autoUpdateDescription:
+    "Automatically update when the thread changes. Existing forks will not be modified.",
+  includeAttachments: "Include attachments",
+  includeAttachmentsDescription:
+    "Allow viewers of the shared link to see attachments. When disabled, only filenames are shown.",
+  delete: "Delete",
+  refreshSnapshot: "Refresh snapshot",
+  close: "Close",
+  copyUrl: "Copy URL",
+  views: "Views",
+  forks: "Forks",
+  fork: "Fork",
+  forking: "Forking",
+  notFoundTitle: "Share not found",
+  notFoundDescription: "This link is missing or was deleted.",
+  empty: "This share has no messages.",
+  createFailed: "Could not create a share link",
+  forkFailed: "Could not fork this chat",
+  loading: "Loading share",
+  backToChat: "Back to chat",
+} as const

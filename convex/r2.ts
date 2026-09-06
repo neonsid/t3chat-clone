@@ -229,6 +229,53 @@ export const getUploadUrl = action({
   },
 })
 
+export const getShareDownloadUrl = action({
+  args: {
+    publicId: v.string(),
+    attachmentId: v.string(),
+  },
+  returns: v.object({
+    url: v.string(),
+    expiresInSeconds: v.number(),
+    mimeType: v.string(),
+    filename: v.string(),
+    kind: attachmentKindValidator,
+  }),
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    url: string
+    expiresInSeconds: number
+    mimeType: string
+    filename: string
+    kind: "image" | "pdf" | "docx"
+  }> => {
+    const attachment: {
+      objectKey: string
+      mimeType: string
+      filename: string
+      kind: "image" | "pdf" | "docx"
+    } | null = await ctx.runQuery(internal.threadShares.authorizeDownload, {
+      publicId: args.publicId,
+      attachmentId: args.attachmentId,
+    })
+    if (!attachment) throw new ConvexError("Attachment not found")
+
+    const url: string = await getR2().getUrl(attachment.objectKey, {
+      expiresIn: ATTACHMENT_GET_URL_UI_TTL_SECONDS,
+    })
+
+    return {
+      url,
+      expiresInSeconds: ATTACHMENT_GET_URL_UI_TTL_SECONDS,
+      mimeType: attachment.mimeType,
+      filename: attachment.filename,
+      kind: attachment.kind,
+    }
+  },
+})
+
 export const getDownloadUrl = action({
   args: {
     attachmentId: v.string(),

@@ -181,4 +181,20 @@ export default defineSchema({
     .index("by_bindingStatus_and_expiresAt", ["bindingStatus", "expiresAt"])
     .index("by_threadId_and_status", ["threadId", "status"])
     .index("by_objectKey", ["objectKey"]),
+
+  threadShares: defineTable({
+    ownerId: v.string(),
+    threadId: v.id("threads"),
+    publicId: v.string(),
+    autoUpdate: v.boolean(),
+    includeAttachments: v.boolean(),
+    snapshotAt: v.number(),
+    viewCount: v.number(),
+    forkCount: v.number(),
+    createdAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_publicId", ["publicId"])
+    .index("by_threadId", ["threadId"])
+    .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"]),
 })

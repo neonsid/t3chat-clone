@@ -12,6 +12,7 @@ import {
   ChatShell,
   SidebarControl,
 } from "@/components/chat/shell/ChatShellChrome"
+import { ShareThreadDialog } from "@/components/chat/share/ShareThreadDialog"
 import { ConvertTemporaryChatDialog } from "@/components/chat/temporary-chat/ConvertTemporaryChatDialog"
 import { TemporaryChatToast } from "@/components/chat/temporary-chat/TemporaryChatToast"
 import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
@@ -73,6 +74,8 @@ export function ChatShellLayout() {
   const [convertOpen, setConvertOpen] = useState(false)
   const [convertPending, setConvertPending] = useState(false)
   const [convertThreadId, setConvertThreadId] = useState<string | null>(null)
+  const [shareThreadId, setShareThreadId] = useState<string | null>(null)
+  const [shareTitle, setShareTitle] = useState("")
   const storedTemporaryThreads = useTemporaryThreadsStore(
     (state) => state.threads
   )
@@ -318,6 +321,22 @@ export function ChatShellLayout() {
     setConvertOpen(true)
   }, [])
 
+  const openShareDialog = useCallback(
+    (targetThreadId: string, title?: string) => {
+      if (isTemporaryThreadId(targetThreadId) || targetThreadId === "guest") {
+        return
+      }
+      setShareThreadId(targetThreadId)
+      setShareTitle(
+        title ??
+          sidebarThreads.find((thread) => thread.id === targetThreadId)
+            ?.title ??
+          "chat"
+      )
+    },
+    [sidebarThreads]
+  )
+
   const sidebarActions = useMemo(
     () => ({
       select: openThread,
@@ -328,11 +347,13 @@ export function ChatShellLayout() {
       rename: renameChat,
       regenerateTitle: (id: string) => void regenerateThreadTitle(id),
       convert: openConvertDialog,
+      share: (id: string) => openShareDialog(id),
     }),
     [
       archiveChat,
       createNewThread,
       openConvertDialog,
+      openShareDialog,
       openThread,
       pinChat,
       regenerateThreadTitle,
@@ -366,6 +387,7 @@ export function ChatShellLayout() {
     isTemporary,
     isTemporaryChatPreference,
     isTemporaryToggleDisabled,
+    threadId,
     navigate,
     setTemporaryChat,
   ])
@@ -448,6 +470,14 @@ export function ChatShellLayout() {
         <ChatHeaderActions
           isTemporaryChat={isHeaderTemporary}
           disabled={isTemporaryToggleDisabled}
+          showShare={
+            hasConversation &&
+            !isTemporary &&
+            !isDraft &&
+            isAuthenticated &&
+            canPersistThread
+          }
+          onShare={() => openShareDialog(threadId)}
           onToggleTemporaryChat={handleToggleTemporaryChat}
         />
         <ChatShell>
@@ -475,6 +505,14 @@ export function ChatShellLayout() {
           }}
           onConfirm={handleConvert}
           isPending={convertPending}
+        />
+        <ShareThreadDialog
+          open={shareThreadId != null}
+          threadId={shareThreadId}
+          threadTitle={shareTitle}
+          onOpenChange={(open) => {
+            if (!open) setShareThreadId(null)
+          }}
         />
       </AppSidebarProvider>
     </LazyMotion>

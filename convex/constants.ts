@@ -13,6 +13,8 @@ export const MAX_PINNED_THREADS = 100
 export const MAX_SEARCH_RESULTS = 50
 export const MAX_SEARCH_LENGTH = 100
 export const THREAD_DELETE_BATCH_SIZE = 64
+export const MAX_SHARES_PER_THREAD = 20
+export const SHARE_PUBLIC_ID_ATTEMPTS = 8
 export const RUN_LEASE_DURATION_MS = 15 * 60 * 1000
 export const MAX_RUNNING_THREAD_IDS = 100
 

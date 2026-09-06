@@ -20,6 +20,7 @@ import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as SettingsCustomizationRouteImport } from './routes/settings/customization'
 import { Route as SettingsHistoryRouteImport } from './routes/settings/history'
 import { Route as SettingsModelsRouteImport } from './routes/settings/models'
+import { Route as SharePublicIdRouteImport } from './routes/share.$publicId'
 import { Route as ChatChatThreadIdRouteImport } from './routes/_chat/chat.$threadId'
 
 const ChatRouteRoute = ChatRouteRouteImport.update({
@@ -76,6 +77,11 @@ const SettingsModelsRoute = SettingsModelsRouteImport.update({
   path: '/models',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const SharePublicIdRoute = SharePublicIdRouteImport.update({
+  id: '/share/$publicId',
+  path: '/share/$publicId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatChatThreadIdRoute = ChatChatThreadIdRouteImport.update({
   id: '/chat/$threadId',
   path: '/chat/$threadId',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/settings/customization': typeof SettingsCustomizationRoute
   '/settings/history': typeof SettingsHistoryRoute
   '/settings/models': typeof SettingsModelsRoute
+  '/share/$publicId': typeof SharePublicIdRoute
   '/settings/': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
 }
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/settings/customization': typeof SettingsCustomizationRoute
   '/settings/history': typeof SettingsHistoryRoute
   '/settings/models': typeof SettingsModelsRoute
+  '/share/$publicId': typeof SharePublicIdRoute
   '/': typeof ChatIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/chat/$threadId': typeof ChatChatThreadIdRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/settings/customization': typeof SettingsCustomizationRoute
   '/settings/history': typeof SettingsHistoryRoute
   '/settings/models': typeof SettingsModelsRoute
+  '/share/$publicId': typeof SharePublicIdRoute
   '/_chat/': typeof ChatIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/_chat/chat/$threadId': typeof ChatChatThreadIdRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/settings/customization'
     | '/settings/history'
     | '/settings/models'
+    | '/share/$publicId'
     | '/settings/'
     | '/chat/$threadId'
   fileRoutesByTo: FileRoutesByTo
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/settings/customization'
     | '/settings/history'
     | '/settings/models'
+    | '/share/$publicId'
     | '/'
     | '/settings'
     | '/chat/$threadId'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/settings/customization'
     | '/settings/history'
     | '/settings/models'
+    | '/share/$publicId'
     | '/_chat/'
     | '/settings/'
     | '/_chat/chat/$threadId'
@@ -170,6 +182,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SsoCallbackRoute: typeof SsoCallbackRoute
   ApiChatRoute: typeof ApiChatRoute
+  SharePublicIdRoute: typeof SharePublicIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsModelsRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
+    '/share/$publicId': {
+      id: '/share/$publicId'
+      path: '/share/$publicId'
+      fullPath: '/share/$publicId'
+      preLoaderRoute: typeof SharePublicIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_chat/chat/$threadId': {
       id: '/_chat/chat/$threadId'
       path: '/chat/$threadId'
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SsoCallbackRoute: SsoCallbackRoute,
   ApiChatRoute: ApiChatRoute,
+  SharePublicIdRoute: SharePublicIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

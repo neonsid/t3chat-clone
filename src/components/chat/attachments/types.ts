@@ -4,4 +4,5 @@ export type ThreadMessageAttachment = {
   filename: string
   kind: "image" | "pdf" | "docx"
   src?: string
+  hideDownload?: boolean
 }

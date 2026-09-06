@@ -74,6 +74,14 @@ function MessageCopyControl({
           try {
             const links: Array<{ filename: string; url: string }> = []
             for (const attachment of attachments) {
+              if (attachment.src) {
+                links.push({
+                  filename: attachment.filename,
+                  url: attachment.src,
+                })
+                continue
+              }
+              if (attachment.hideDownload) continue
               try {
                 const result = await getDownloadUrl({
                   attachmentId: attachment.attachmentId,
@@ -118,6 +126,7 @@ type ChatMessageProps = {
   onBranch?: () => void | Promise<void>
   canRetry?: boolean
   onRetry?: (action?: MessageModelAction) => void | Promise<void>
+  readOnly?: boolean
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -135,6 +144,7 @@ export const ChatMessage = memo(function ChatMessage({
   onBranch,
   canRetry = false,
   onRetry,
+  readOnly = false,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
@@ -165,20 +175,24 @@ export const ChatMessage = memo(function ChatMessage({
               </p>
             ) : null}
             <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="ghost"
-                className={MESSAGE_CHROME.iconButtonClassName}
-                aria-label="Reply"
-                disabled
-              >
-                <Undo2Icon className="size-3.5" />
-              </Button>
+              {readOnly ? null : (
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  className={MESSAGE_CHROME.iconButtonClassName}
+                  aria-label="Reply"
+                  disabled
+                >
+                  <Undo2Icon className="size-3.5" />
+                </Button>
+              )}
               {text || attachments.length > 0 ? (
                 <MessageCopyControl text={text} attachments={attachments} />
               ) : null}
-              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+              {readOnly ? null : (
+                <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+              )}
             </div>
           </div>
         </div>
@@ -263,8 +277,12 @@ export const ChatMessage = memo(function ChatMessage({
                   }
                 />
               ) : null}
-              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
-              <MessageRetryPicker disabled={!canRetry} onRetry={onRetry} />
+              {readOnly ? null : (
+                <>
+                  <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+                  <MessageRetryPicker disabled={!canRetry} onRetry={onRetry} />
+                </>
+              )}
             </div>
             {generationStats ? (
               <div

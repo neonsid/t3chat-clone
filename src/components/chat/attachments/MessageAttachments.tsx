@@ -32,6 +32,7 @@ function RemoteAttachmentThumb({
       rememberAttachmentPreview(attachment.attachmentId, cachedUrl)
       return
     }
+    if (attachment.hideDownload) return
     let cancelled = false
     void getDownloadUrl({
       attachmentId: attachment.attachmentId,
