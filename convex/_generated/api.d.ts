@@ -22,6 +22,7 @@ import type * as helpers_functions from "../helpers/functions.js";
 import type * as helpers_generateThreadTitle from "../helpers/generateThreadTitle.js";
 import type * as helpers_messages from "../helpers/messages.js";
 import type * as helpers_threads from "../helpers/threads.js";
+import type * as helpers_truncateThread from "../helpers/truncateThread.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   "helpers/generateThreadTitle": typeof helpers_generateThreadTitle;
   "helpers/messages": typeof helpers_messages;
   "helpers/threads": typeof helpers_threads;
+  "helpers/truncateThread": typeof helpers_truncateThread;
   http: typeof http;
   messages: typeof messages;
   migrations: typeof migrations;

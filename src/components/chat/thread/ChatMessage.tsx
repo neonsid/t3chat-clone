@@ -20,6 +20,8 @@ import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
 import { WebSearchBlock } from "@/components/chat/thread/WebSearchBlock"
 import { showShellToast } from "@/components/chat/shell/shell-toast"
 import { MessageBranchPicker } from "@/components/chat/thread/MessageBranchPicker"
+import { MessageRetryPicker } from "@/components/chat/thread/MessageRetryPicker"
+import type { MessageModelAction } from "@/components/chat/thread/MessageModelActionPicker"
 import {
   MESSAGE_CHROME,
   MESSAGE_COPY,
@@ -114,6 +116,8 @@ type ChatMessageProps = {
   isSearchingWeb?: boolean
   canBranch?: boolean
   onBranch?: () => void | Promise<void>
+  canRetry?: boolean
+  onRetry?: (action?: MessageModelAction) => void | Promise<void>
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -129,6 +133,8 @@ export const ChatMessage = memo(function ChatMessage({
   isSearchingWeb = false,
   canBranch = false,
   onBranch,
+  canRetry = false,
+  onRetry,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
@@ -258,6 +264,7 @@ export const ChatMessage = memo(function ChatMessage({
                 />
               ) : null}
               <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+              <MessageRetryPicker disabled={!canRetry} onRetry={onRetry} />
             </div>
             {generationStats ? (
               <div

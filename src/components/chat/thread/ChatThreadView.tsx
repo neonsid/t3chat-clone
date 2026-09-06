@@ -23,6 +23,7 @@ import {
 import { BouncingDots } from "@/components/chat/thread/BouncingDots"
 import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
+import type { MessageModelAction } from "@/components/chat/thread/MessageModelActionPicker"
 import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
 import {
   deriveTimelineMinimapItems,
@@ -46,6 +47,7 @@ import {
   useMessageScroller,
 } from "@/components/shared/ui/message-scroller"
 import { useBranchChat } from "@/hooks/useBranchChat"
+import { useRetryChat } from "@/hooks/useRetryChat"
 import { useCoalescedValue } from "@/hooks/useCoalescedValue"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
 import {
@@ -59,6 +61,7 @@ import {
   isChatModelId,
   resolveChatModel,
 } from "@/lib/chat-models"
+import { sliceUiMessagesThroughPrecedingUser } from "@/lib/thread-retry"
 import {
   rememberComposerPreviews,
   sentAttachmentsForMessage,
@@ -188,6 +191,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isSearchingWeb,
   canBranch,
   onBranch,
+  canRetry,
+  onRetry,
 }: {
   message: UIMessage
   isStreaming: boolean
@@ -202,6 +207,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isSearchingWeb: boolean
   canBranch?: boolean
   onBranch?: () => void | Promise<void>
+  canRetry?: boolean
+  onRetry?: (action?: MessageModelAction) => void | Promise<void>
 }) {
   return (
     <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
@@ -218,6 +225,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
         isSearchingWeb={isSearchingWeb}
         canBranch={canBranch}
         onBranch={onBranch}
+        canRetry={canRetry}
+        onRetry={onRetry}
       />
     </MessageScrollerItem>
   )
@@ -276,6 +285,7 @@ export function ChatThreadView({
   const [searchThisTurn, setSearchThisTurn] = useState(false)
   const isTemporary = isTemporaryThreadId(threadId)
   const { branchFromMessage } = useBranchChat({ threadId, isTemporary })
+  const { truncateForRetry } = useRetryChat({ threadId, isTemporary })
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
   const threadAttachmentDocs = useQuery(
     api.attachments.listForThreadMessages,
@@ -385,14 +395,15 @@ export function ChatThreadView({
     }
   }, [])
 
-  const { messages, sendMessage, stop, isLoading, error } = useChat({
-    threadId,
-    initialMessages,
-    forwardedProps: forwardedPropsRef.current,
-    connection: fetchServerSentEvents("/api/chat"),
-    streamProcessor: CHAT_STREAM_PROCESSOR,
-    onChunk,
-  })
+  const { messages, sendMessage, setMessages, reload, stop, isLoading, error } =
+    useChat({
+      threadId,
+      initialMessages,
+      forwardedProps: forwardedPropsRef.current,
+      connection: fetchServerSentEvents("/api/chat"),
+      streamProcessor: CHAT_STREAM_PROCESSOR,
+      onChunk,
+    })
 
   const isEmptyThread = messages.length === 0
   // A turn is underway from the moment it is dispatched, which is before the
@@ -550,6 +561,73 @@ export function ChatThreadView({
   const latestUserMessageId = findLastUserMessageId(displayMessages)
   const scrollAnchorId = isLoading ? latestUserMessageId : null
 
+  const retryFromMessage = useCallback(
+    async (assistantMessageId: string, action?: MessageModelAction) => {
+      if (!isReady || isLoading || activeTurn) return
+      if (!isAuthenticated) {
+        onRequireAuthentication()
+        return
+      }
+
+      const kept = sliceUiMessagesThroughPrecedingUser(
+        messages,
+        assistantMessageId
+      )
+      const userMessage = kept?.at(-1)
+      if (!kept || userMessage?.role !== "user") return
+
+      const nextModelId =
+        action?.modelId && isChatModelId(action.modelId)
+          ? action.modelId
+          : undefined
+      if (nextModelId) {
+        const nextEffort = CHAT_MODEL_CONFIG[nextModelId].defaultReasoningEffort
+        chatUi.getState().setReasoningEffort(threadStateKey, nextEffort)
+        forwardedPropsRef.current.modelId = nextModelId
+        forwardedPropsRef.current.reasoningEffort = nextEffort
+      }
+
+      const attachmentIds =
+        attachmentIdsByMessageRef.current[userMessage.id] ??
+        (attachmentsByMessageId.get(userMessage.id) ?? []).map(
+          (attachment) => attachment.attachmentId
+        )
+      forwardedPropsRef.current.attachmentIds = attachmentIds
+      setSearchThisTurn(
+        searchEnabled && modelSupportsWebSearch(nextModelId ?? selectedModelId)
+      )
+      setTurnWebSearchSources([])
+      setTurnWebSearchQueries([])
+      setTurnThinkingSearchSplitAt(undefined)
+      setWorkStartedAt(Date.now())
+
+      try {
+        const truncated = await truncateForRetry(assistantMessageId)
+        if (!truncated) return
+        setMessages(kept)
+        await reload()
+      } catch {
+        return
+      }
+    },
+    [
+      activeTurn,
+      attachmentsByMessageId,
+      chatUi,
+      isAuthenticated,
+      isLoading,
+      isReady,
+      messages,
+      onRequireAuthentication,
+      reload,
+      searchEnabled,
+      selectedModelId,
+      setMessages,
+      threadStateKey,
+      truncateForRetry,
+    ]
+  )
+
   const historyRows = useMemo(
     () =>
       history.map((message) => (
@@ -597,6 +675,17 @@ export function ChatThreadView({
           isSearchingWeb={false}
           canBranch={!isLoading && !activeTurn && threadId !== "guest"}
           onBranch={() => branchFromMessage(message.id)}
+          canRetry={
+            message.role === "assistant" &&
+            !isLoading &&
+            !activeTurn &&
+            threadId !== "guest"
+          }
+          onRetry={
+            message.role === "assistant"
+              ? (action) => retryFromMessage(message.id, action)
+              : undefined
+          }
         />
       )),
     [
@@ -610,6 +699,7 @@ export function ChatThreadView({
       lastAssistantMessageId,
       latestUserMessageId,
       locallyStoppedMessageIds,
+      retryFromMessage,
       scrollAnchorId,
       stoppedMessageIds,
       threadId,
