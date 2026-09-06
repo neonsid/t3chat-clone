@@ -16,6 +16,7 @@ import {
   THREAD_DELETE_BATCH_SIZE,
 } from "./constants"
 import { branchThreadFromMessage } from "./helpers/branchThread"
+import { truncateThreadFromMessage } from "./helpers/truncateThread"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
 import { messageSourceValidator } from "./schema"
@@ -148,6 +149,17 @@ export const branchFromMessage = authedMutation({
   returns: v.id("threads"),
   handler: async (ctx, args) => {
     return await branchThreadFromMessage(ctx, args)
+  },
+})
+
+export const truncateFromMessage = authedMutation({
+  args: {
+    threadId: v.id("threads"),
+    messageId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    return await truncateThreadFromMessage(ctx, args)
   },
 })
 

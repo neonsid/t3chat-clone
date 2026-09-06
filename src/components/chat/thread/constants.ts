@@ -110,6 +110,11 @@ export const MESSAGE_CHROME = {
     "size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
 } as const
 
+export const MESSAGE_RETRY = {
+  label: "Retry response",
+  retrySame: "Retry same",
+} as const
+
 export const MESSAGE_BRANCH = {
   label: "Branch chat",
   branchOff: "Branch off",
