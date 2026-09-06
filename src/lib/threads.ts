@@ -4,11 +4,20 @@ import type { Doc } from "../../convex/_generated/dataModel"
 import type { WebSearchSource } from "@/lib/web-search"
 
 export type AssistantGenerationStats = {
+  modelId?: string
   modelName: string
   mode: string
   outputTokens: number
   tokensPerSecond: number
   timeToFirstTokenSeconds: number
+  promptTokens?: number
+  cachedTokens?: number
+  cacheWriteTokens?: number
+  inputCostPerMillion?: number
+  outputCostPerMillion?: number
+  cacheReadCostPerMillion?: number
+  cacheReadEstimated?: boolean
+  promptTokensEstimated?: boolean
 }
 
 export type ChatThread = {
@@ -25,6 +34,7 @@ export type ChatThread = {
   thinkingSearchSplitAt: Record<string, number>
   pinnedAt?: number
   isTemporary?: boolean
+  branchedFromThreadId?: string
 }
 
 export function createPendingChatThread(id: string): ChatThread {
@@ -118,11 +128,20 @@ function toAssistantGenerationStats(
   )
 
   return {
+    modelId: generation.modelId,
     modelName: generation.modelName,
     mode: `${generation.reasoningEffort.charAt(0).toUpperCase()}${generation.reasoningEffort.slice(1)}`,
     outputTokens: generation.outputTokens,
     tokensPerSecond: generation.outputTokens / generationSeconds,
     timeToFirstTokenSeconds: generation.timeToFirstTokenMs / 1000,
+    promptTokens: generation.promptTokens,
+    cachedTokens: generation.cachedTokens,
+    cacheWriteTokens: generation.cacheWriteTokens,
+    inputCostPerMillion: generation.inputCostPerMillion,
+    outputCostPerMillion: generation.outputCostPerMillion,
+    cacheReadCostPerMillion: generation.cacheReadCostPerMillion,
+    cacheReadEstimated: generation.cacheReadEstimated,
+    promptTokensEstimated: generation.promptTokensEstimated,
   }
 }
 
@@ -149,11 +168,20 @@ function isSameGenerationStats(
   right: AssistantGenerationStats
 ) {
   return (
+    left.modelId === right.modelId &&
     left.modelName === right.modelName &&
     left.mode === right.mode &&
     left.outputTokens === right.outputTokens &&
     left.tokensPerSecond === right.tokensPerSecond &&
-    left.timeToFirstTokenSeconds === right.timeToFirstTokenSeconds
+    left.timeToFirstTokenSeconds === right.timeToFirstTokenSeconds &&
+    left.promptTokens === right.promptTokens &&
+    left.cachedTokens === right.cachedTokens &&
+    left.cacheWriteTokens === right.cacheWriteTokens &&
+    left.inputCostPerMillion === right.inputCostPerMillion &&
+    left.outputCostPerMillion === right.outputCostPerMillion &&
+    left.cacheReadCostPerMillion === right.cacheReadCostPerMillion &&
+    left.cacheReadEstimated === right.cacheReadEstimated &&
+    left.promptTokensEstimated === right.promptTokensEstimated
   )
 }
 
@@ -380,6 +408,7 @@ export function toActiveChatThread(
     webSearchQueries,
     thinkingSearchSplitAt,
     pinnedAt: thread.pinnedAt,
+    branchedFromThreadId: thread.branchedFromThreadId,
   }
 }
 

@@ -17,7 +17,16 @@ type FinishCall = {
 
 type FinishPayload = {
   content: string
-  generation: { outputTokens: number }
+  generation: {
+    outputTokens: number
+    promptTokens?: number
+    cachedTokens?: number
+    cacheWriteTokens?: number
+    inputCostPerMillion?: number
+    outputCostPerMillion?: number
+    cacheReadCostPerMillion?: number
+    cacheReadEstimated?: boolean
+  }
   sources?: Array<{ title: string; url: string }>
   searchQueries?: string[]
   thinking?: string
@@ -39,7 +48,8 @@ function asStreamChunk(value: {
   value?: unknown
   usage?: {
     completionTokens: number
-    promptTokensDetails?: { cachedTokens?: number }
+    promptTokens?: number
+    promptTokensDetails?: { cachedTokens?: number; cacheWriteTokens?: number }
   }
 }): StreamChunk {
   // SAFETY: AG-UI chunk type is a string enum @tanstack/ai does not re-export.
@@ -211,6 +221,95 @@ describe("collectAndPersistStream", () => {
     expect(finishCalls()).toEqual([
       { name: "chatRuns:complete", content: "ab", outputTokens: 42 },
     ])
+  })
+
+  it("persists prompt and cache tokens from RUN_FINISHED", async () => {
+    const mutation =
+      vi.fn<
+        (reference: FunctionReference, payload: FinishPayload) => Promise<void>
+      >()
+    const convex: ChatRunConvexClient = {
+      mutation: mutation as ChatRunConvexClient["mutation"],
+    }
+    const source = (async function* () {
+      for (const chunk of [
+        ...textChunks("ok"),
+        asStreamChunk({
+          type: "RUN_FINISHED",
+          threadId: "thread-1",
+          runId: "run-1",
+          usage: {
+            completionTokens: 9,
+            promptTokens: 120,
+            promptTokensDetails: { cachedTokens: 40, cacheWriteTokens: 8 },
+          },
+        }),
+      ]) {
+        yield chunk
+      }
+    })()
+    const stream = collectAndPersistStream({
+      stream: source,
+      convex,
+      threadId: asThreadId("thread-1"),
+      runId: "run-1",
+      completionSecret: "secret",
+      modelId: "openai/gpt-5.6-luna",
+      modelName: "GPT-5.6 Luna",
+      reasoningEffort: "instant",
+      startedAt: Date.now(),
+      signal: new AbortController().signal,
+    })
+
+    await drain(stream)
+
+    expect(mutation.mock.calls[0]?.[1].generation).toMatchObject({
+      outputTokens: 9,
+      promptTokens: 120,
+      cachedTokens: 40,
+      cacheWriteTokens: 8,
+      inputCostPerMillion: 1,
+      outputCostPerMillion: 6,
+      cacheReadCostPerMillion: 0.5,
+      cacheReadEstimated: true,
+    })
+  })
+
+  it("omits prompt and cache usage on a stopped run", async () => {
+    const mutation =
+      vi.fn<
+        (reference: FunctionReference, payload: FinishPayload) => Promise<void>
+      >()
+    const convex: ChatRunConvexClient = {
+      mutation: mutation as ChatRunConvexClient["mutation"],
+    }
+    const controller = new AbortController()
+    const source = (async function* () {
+      for (const chunk of textChunks("Hello ", "wor")) {
+        yield chunk
+        controller.abort()
+      }
+    })()
+    const stream = collectAndPersistStream({
+      stream: source,
+      convex,
+      threadId: asThreadId("thread-1"),
+      runId: "run-1",
+      completionSecret: "secret",
+      modelId: "openai/gpt-5.6-luna",
+      modelName: "GPT-5.6 Luna",
+      reasoningEffort: "instant",
+      startedAt: Date.now(),
+      signal: controller.signal,
+    })
+
+    await drain(stream)
+
+    const generation = mutation.mock.calls[0]?.[1].generation
+    expect(generation?.outputTokens).toBeGreaterThan(0)
+    expect(generation?.promptTokens).toBeUndefined()
+    expect(generation?.cachedTokens).toBeUndefined()
+    expect(generation?.inputCostPerMillion).toBeUndefined()
   })
 
   it("files CUSTOM web-search sources on complete", async () => {

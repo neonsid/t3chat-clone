@@ -51,10 +51,12 @@ describe("temporary thread ids", () => {
       estimateTemporaryGenerationStats({
         text: "abcd",
         thinking: "efgh",
+        modelId: "openai/gpt-5.5",
         modelName: "GPT-5.5",
         mode: "Instant",
       })
     ).toEqual({
+      modelId: "openai/gpt-5.5",
       modelName: "GPT-5.5",
       mode: "Instant",
       outputTokens: 2,
@@ -262,12 +264,14 @@ describe("temporary thread ids", () => {
           },
         },
         stoppedMessageIds: [],
+        branchedFromThreadId: "tmp-source",
       },
       false
     )
 
     expect(thread.title).toBe("Renamed")
     expect(thread.pinnedAt).toBe(30)
+    expect(thread.branchedFromThreadId).toBe("tmp-source")
     expect(thread.isTemporary).toBe(true)
     expect(persistableMessagesToUiMessages(persistable)).toEqual([
       {

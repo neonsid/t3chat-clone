@@ -5,14 +5,17 @@ import { MAX_MODEL_CONTEXT_MESSAGES, MAX_THREAD_MESSAGES } from "./constants"
 import { authedQuery } from "./helpers/functions"
 import { getMessageContent, getMessageThinking } from "./helpers/messages"
 import { getOwnedThread } from "./helpers/threads"
+import { attachmentKindValidator } from "./schema"
 
 const contextAttachmentValidator = v.object({
   attachmentId: v.string(),
-  kind: v.union(v.literal("image"), v.literal("pdf")),
+  kind: attachmentKindValidator,
   mimeType: v.string(),
   filename: v.string(),
   objectKey: v.string(),
   sizeBytes: v.number(),
+  extractedText: v.optional(v.string()),
+  extractedTokenEstimate: v.optional(v.number()),
 })
 
 export const listForThread = authedQuery({
@@ -51,6 +54,7 @@ export const getContext = authedQuery({
       content: v.string(),
       thinking: v.optional(v.string()),
       createdAt: v.number(),
+      promptTokens: v.optional(v.number()),
       attachments: v.array(contextAttachmentValidator),
     })
   ),
@@ -88,6 +92,7 @@ export const getContext = authedQuery({
         content: getMessageContent(message),
         thinking: getMessageThinking(message) || undefined,
         createdAt: message.createdAt,
+        promptTokens: message.generation?.promptTokens,
         attachments: attachments
           .filter((attachment) => attachment.status === "ready")
           .map((attachment) => ({
@@ -97,6 +102,8 @@ export const getContext = authedQuery({
             filename: attachment.filename,
             objectKey: attachment.objectKey,
             sizeBytes: attachment.sizeBytes,
+            extractedText: attachment.extractedText,
+            extractedTokenEstimate: attachment.extractedTokenEstimate,
           })),
       })
     }

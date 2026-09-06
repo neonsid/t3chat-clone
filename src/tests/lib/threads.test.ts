@@ -91,6 +91,36 @@ describe("createMessageProjectionCache", () => {
     expect(second[1]).not.toBe(first[1])
   })
 
+  it("projects prompt and cache usage onto assistant stats", () => {
+    const cache = createMessageProjectionCache()
+    const stats = cache.generationStats([
+      storedMessage({
+        messageId: "message-1",
+        generation: {
+          ...generation,
+          promptTokens: 120,
+          cachedTokens: 40,
+          cacheWriteTokens: 8,
+          inputCostPerMillion: 5,
+          outputCostPerMillion: 30,
+          cacheReadCostPerMillion: 2.5,
+          cacheReadEstimated: true,
+        },
+      }),
+    ])
+
+    expect(stats["message-1"]).toMatchObject({
+      modelId: "model-id",
+      promptTokens: 120,
+      cachedTokens: 40,
+      cacheWriteTokens: 8,
+      inputCostPerMillion: 5,
+      outputCostPerMillion: 30,
+      cacheReadCostPerMillion: 2.5,
+      cacheReadEstimated: true,
+    })
+  })
+
   it("keeps finished generation stats identical when a later message arrives", () => {
     const cache = createMessageProjectionCache()
     const first = cache.generationStats([

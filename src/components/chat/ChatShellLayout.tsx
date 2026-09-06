@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react"
 
 import { api } from "../../../convex/_generated/api"
 import { ChatShellComposer } from "@/components/chat/ChatShellComposer"
+import { bindShellToast } from "@/components/chat/shell/shell-toast"
 import {
   ChatHeaderActions,
   ChatShell,
@@ -68,6 +69,7 @@ export function ChatShellLayout() {
     (state) => state.isLoading || state.activeTurn
   )
   const toasts = useAnimatedToastStack({ limit: 1 })
+  bindShellToast(toasts.showToast)
   const [convertOpen, setConvertOpen] = useState(false)
   const [convertPending, setConvertPending] = useState(false)
   const [convertThreadId, setConvertThreadId] = useState<string | null>(null)
@@ -449,7 +451,7 @@ export function ChatShellLayout() {
           onToggleTemporaryChat={handleToggleTemporaryChat}
         />
         <ChatShell>
-          <SidebarInset className="relative h-full min-h-0 overflow-hidden bg-background">
+          <SidebarInset className="chat-pane relative h-full min-h-0 overflow-hidden bg-background">
             <Outlet />
             <ChatShellComposer
               threadStateKey={threadStateKey}
@@ -462,10 +464,7 @@ export function ChatShellLayout() {
               onDraftSubmit={activateDraftWithMessage}
               onRequireAuthentication={requireAuthentication}
             />
-            <TemporaryChatToast
-              toasts={toasts.toasts}
-              onDismiss={toasts.dismissToast}
-            />
+            <TemporaryChatToast toasts={toasts.toasts} />
           </SidebarInset>
         </ChatShell>
         <ConvertTemporaryChatDialog

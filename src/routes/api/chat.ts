@@ -11,6 +11,7 @@ import {
   resolveChatModel,
 } from "@/lib/chat-models"
 import { isJsonString, type JsonValue } from "@/lib/json-value"
+import { contextAttachmentRejection } from "@/lib/attachment-context"
 import {
   contextRequiresPdf,
   contextRequiresVision,
@@ -197,7 +198,9 @@ export const Route = createFileRoute("/api/chat")({
                     mimeType: minted.mimeType,
                     filename: minted.filename,
                     sizeBytes: minted.sizeBytes,
-                    url: minted.url,
+                    url: minted.url || undefined,
+                    extractedText: minted.extractedText,
+                    extractedTokenEstimate: minted.extractedTokenEstimate,
                   },
                 ]
               })
@@ -212,6 +215,12 @@ export const Route = createFileRoute("/api/chat")({
               })),
               contextAttachments
             )
+            const contextError = contextAttachmentRejection(context, {
+              name: catalogModel?.name ?? model.id,
+              contextTokens: catalogModel?.contextTokens ?? null,
+              outputTokens: catalogModel?.outputTokens ?? null,
+            })
+            if (contextError) return errorResponse(contextError, 400)
             assertModelSupportsAttachments(context, capabilities)
 
             const startedAt = Date.now()
@@ -254,6 +263,50 @@ export const Route = createFileRoute("/api/chat")({
         let runAccepted = false
 
         try {
+          const existingContext = await convex.query(api.messages.getContext, {
+            threadId,
+          })
+          const currentPublicAttachments =
+            attachmentIds.length > 0
+              ? await convex.query(api.attachments.listByIds, {
+                  attachmentIds,
+                })
+              : []
+          const preflightContext: ChatContextMessage[] = [
+            ...existingContext.map((message: (typeof existingContext)[number]) => ({
+              role: message.role,
+              content: message.content,
+              thinking: message.thinking,
+              promptTokens: message.promptTokens,
+              attachments: message.attachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                kind: attachment.kind,
+                mimeType: attachment.mimeType,
+                filename: attachment.filename,
+                sizeBytes: attachment.sizeBytes,
+                extractedTokenEstimate: attachment.extractedTokenEstimate,
+              })),
+            })),
+            {
+              role: "user",
+              content: userMessage.content,
+              attachments: currentPublicAttachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                kind: attachment.kind,
+                mimeType: attachment.mimeType,
+                filename: attachment.filename,
+                sizeBytes: attachment.sizeBytes,
+                extractedTokenEstimate: attachment.extractedTokenEstimate,
+              })),
+            },
+          ]
+          const preflightError = contextAttachmentRejection(preflightContext, {
+            name: catalogModel?.name ?? model.id,
+            contextTokens: catalogModel?.contextTokens ?? null,
+            outputTokens: catalogModel?.outputTokens ?? null,
+          })
+          if (preflightError) return errorResponse(preflightError, 400)
+
           const run = await convex.mutation(api.chatRuns.start, {
             threadId,
             runId: params.runId,
@@ -277,21 +330,32 @@ export const Route = createFileRoute("/api/chat")({
               role: message.role,
               content: message.content,
               thinking: message.thinking,
+              promptTokens: message.promptTokens,
               attachments: message.attachments.map((attachment) => ({
                 attachmentId: attachment.attachmentId,
                 kind: attachment.kind,
                 mimeType: attachment.mimeType,
                 filename: attachment.filename,
                 sizeBytes: attachment.sizeBytes,
+                extractedText: attachment.extractedText,
+                extractedTokenEstimate: attachment.extractedTokenEstimate,
               })),
             })
           )
+          const contextError = contextAttachmentRejection(messagesWithUrls, {
+            name: catalogModel?.name ?? model.id,
+            contextTokens: catalogModel?.contextTokens ?? null,
+            outputTokens: catalogModel?.outputTokens ?? null,
+          })
+          if (contextError) return errorResponse(contextError, 400)
           assertModelSupportsAttachments(messagesWithUrls, capabilities)
 
           const contextAttachmentIds = [
             ...new Set(
               context.flatMap((message: (typeof context)[number]) =>
-                message.attachments.map((attachment) => attachment.attachmentId)
+                message.attachments
+                  .filter((attachment) => attachment.kind !== "docx")
+                  .map((attachment) => attachment.attachmentId)
               )
             ),
           ]

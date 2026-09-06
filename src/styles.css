@@ -370,6 +370,27 @@ html[data-theme-id="t3-chat"]
     padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);
   }
 
+  .chat-pane {
+    container-type: inline-size;
+    container-name: chat-pane;
+  }
+
+  .chat-shell-toast-anchor {
+    pointer-events: none;
+    position: absolute;
+    right: max(1rem, env(safe-area-inset-right));
+    z-index: 30;
+    display: flex;
+    justify-content: flex-end;
+    bottom: calc(var(--chat-composer-overlay-height, 148px) + 0.75rem);
+  }
+
+  @container chat-pane (min-width: 52rem) {
+    .chat-shell-toast-anchor {
+      bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+  }
+
   .sidebar-thread-title {
     max-width: 100%;
   }

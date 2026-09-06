@@ -5,23 +5,33 @@ import { internalMutation, internalQuery } from "./_generated/server"
 import {
   ATTACHMENT_GC_BATCH_SIZE,
   ATTACHMENT_UNBOUND_TTL_MS,
+  ATTACHMENT_UNSUPPORTED_ERROR,
+  LEGACY_DOC_ERROR,
   MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_FILENAME_LENGTH,
   MAX_ATTACHMENT_ID_LENGTH,
   MIME_TO_KIND,
   isAllowedAttachmentMimeType,
+  isLegacyWordFilename,
+  maxBytesForAttachmentKind,
 } from "./attachmentConstants"
+import { MAX_THREAD_MESSAGES } from "./constants"
+import { cloneReadyAttachmentsByIds } from "./helpers/cloneAttachment"
 import { authedMutation, authedQuery } from "./helpers/functions"
+import { attachmentKindValidator } from "./schema"
+import { shouldDeleteSharedObject } from "../src/lib/attachment-object-refs"
 import type { Doc, Id } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
+
+const ATTACHMENT_OBJECT_KEY_SIBLING_LIMIT = 32
 
 const attachmentPublicValidator = v.object({
   attachmentId: v.string(),
   filename: v.string(),
   mimeType: v.string(),
   sizeBytes: v.number(),
-  kind: v.union(v.literal("image"), v.literal("pdf")),
+  kind: attachmentKindValidator,
+  extractedTokenEstimate: v.optional(v.number()),
   status: v.union(
     v.literal("pending_upload"),
     v.literal("uploaded"),
@@ -69,6 +79,7 @@ function toPublicAttachment(doc: Doc<"attachments">) {
     mimeType: doc.mimeType,
     sizeBytes: doc.sizeBytes,
     kind: doc.kind,
+    extractedTokenEstimate: doc.extractedTokenEstimate,
     status: doc.status,
     bindingStatus: doc.bindingStatus,
     threadId: doc.threadId,
@@ -104,13 +115,13 @@ async function scheduleDurableDelete(
 ) {
   if (docs.length === 0) return
 
-  const deletingIds: Array<Id<"attachments">> = []
-  const objectKeys: Array<string> = []
+  const batchDocIds = new Set(docs.map((doc) => doc._id as string))
+  const deleteKeyByObject = new Map<string, boolean>()
+  const r2ObjectKeys: Array<string> = []
+  const r2DocIds: Array<Id<"attachments">> = []
+  const localDocIds: Array<Id<"attachments">> = []
 
   for (const doc of docs) {
-    // Capture keys before clearing linkage. Docs stay until R2 delete succeeds.
-    deletingIds.push(doc._id)
-    objectKeys.push(doc.objectKey)
     await ctx.db.patch("attachments", doc._id, {
       status: "deleting",
       bindingStatus: "unbound",
@@ -120,9 +131,43 @@ async function scheduleDurableDelete(
     })
   }
 
+  for (const doc of docs) {
+    let deleteObject = deleteKeyByObject.get(doc.objectKey)
+    if (deleteObject === undefined) {
+      const siblings = await ctx.db
+        .query("attachments")
+        .withIndex("by_objectKey", (query) =>
+          query.eq("objectKey", doc.objectKey)
+        )
+        .take(ATTACHMENT_OBJECT_KEY_SIBLING_LIMIT)
+      deleteObject =
+        siblings.length < ATTACHMENT_OBJECT_KEY_SIBLING_LIMIT &&
+        shouldDeleteSharedObject({
+          batchDocIds,
+          siblings,
+        })
+      deleteKeyByObject.set(doc.objectKey, deleteObject)
+    }
+
+    if (deleteObject) {
+      r2ObjectKeys.push(doc.objectKey)
+      r2DocIds.push(doc._id)
+    } else {
+      localDocIds.push(doc._id)
+    }
+  }
+
+  for (const attachmentDocId of localDocIds) {
+    const doc = await ctx.db.get("attachments", attachmentDocId)
+    if (!doc || doc.status !== "deleting") continue
+    await ctx.db.delete("attachments", attachmentDocId)
+  }
+
+  if (r2ObjectKeys.length === 0) return
+
   await ctx.scheduler.runAfter(0, internal.r2.deleteObjects, {
-    objectKeys,
-    attachmentDocIds: deletingIds,
+    objectKeys: r2ObjectKeys,
+    attachmentDocIds: r2DocIds,
   })
 }
 
@@ -140,7 +185,7 @@ export const authorizeForOwner = internalQuery({
       filename: v.string(),
       mimeType: v.string(),
       sizeBytes: v.number(),
-      kind: v.union(v.literal("image"), v.literal("pdf")),
+      kind: attachmentKindValidator,
       status: v.union(
         v.literal("pending_upload"),
         v.literal("uploaded"),
@@ -154,6 +199,8 @@ export const authorizeForOwner = internalQuery({
       messageId: v.optional(v.string()),
       modelDownloadUrl: v.optional(v.string()),
       modelDownloadUrlExpiresAt: v.optional(v.number()),
+      extractedText: v.optional(v.string()),
+      extractedTokenEstimate: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -180,6 +227,8 @@ export const authorizeForOwner = internalQuery({
       messageId: attachment.messageId,
       modelDownloadUrl: attachment.modelDownloadUrl,
       modelDownloadUrlExpiresAt: attachment.modelDownloadUrlExpiresAt,
+      extractedText: attachment.extractedText,
+      extractedTokenEstimate: attachment.extractedTokenEstimate,
     }
   },
 })
@@ -196,7 +245,9 @@ export const authorizeManyForOwner = internalQuery({
       objectKey: v.string(),
       filename: v.string(),
       mimeType: v.string(),
-      kind: v.union(v.literal("image"), v.literal("pdf")),
+      kind: attachmentKindValidator,
+      extractedText: v.optional(v.string()),
+      extractedTokenEstimate: v.optional(v.number()),
       status: v.union(
         v.literal("pending_upload"),
         v.literal("uploaded"),
@@ -231,6 +282,8 @@ export const authorizeManyForOwner = internalQuery({
         filename: attachment.filename,
         mimeType: attachment.mimeType,
         kind: attachment.kind,
+        extractedText: attachment.extractedText,
+        extractedTokenEstimate: attachment.extractedTokenEstimate,
         status: attachment.status,
         modelDownloadUrl: attachment.modelDownloadUrl,
         modelDownloadUrlExpiresAt: attachment.modelDownloadUrlExpiresAt,
@@ -249,18 +302,24 @@ export const createUploadIntent = authedMutation({
   returns: v.object({
     attachmentId: v.string(),
     mimeType: v.string(),
-    kind: v.union(v.literal("image"), v.literal("pdf")),
+    kind: attachmentKindValidator,
   }),
   handler: async (ctx, args) => {
-    if (!isAllowedAttachmentMimeType(args.mimeType)) {
-      throw new ConvexError(
-        "Only JPEG, PNG, GIF, WebP, and PDF files are supported"
-      )
+    if (
+      isLegacyWordFilename(args.filename) ||
+      args.mimeType === "application/msword"
+    ) {
+      throw new ConvexError(LEGACY_DOC_ERROR)
     }
+    if (!isAllowedAttachmentMimeType(args.mimeType)) {
+      throw new ConvexError(ATTACHMENT_UNSUPPORTED_ERROR)
+    }
+    const kind = MIME_TO_KIND[args.mimeType]
+    const maxBytes = maxBytesForAttachmentKind(kind)
     if (
       !Number.isFinite(args.sizeBytes) ||
       args.sizeBytes <= 0 ||
-      args.sizeBytes > MAX_ATTACHMENT_BYTES
+      args.sizeBytes > maxBytes
     ) {
       throw new ConvexError("Invalid attachment size")
     }
@@ -278,7 +337,7 @@ export const createUploadIntent = authedMutation({
       filename,
       mimeType: args.mimeType,
       sizeBytes: args.sizeBytes,
-      kind: MIME_TO_KIND[args.mimeType],
+      kind,
       status: "pending_upload",
       bindingStatus: "unbound",
       createdAt: now,
@@ -288,7 +347,7 @@ export const createUploadIntent = authedMutation({
     return {
       attachmentId,
       mimeType: args.mimeType,
-      kind: MIME_TO_KIND[args.mimeType],
+      kind,
     }
   },
 })
@@ -317,6 +376,22 @@ export const confirmUpload = authedMutation({
       ...attachment,
       status: "uploaded",
     })
+  },
+})
+
+export const cloneForBranch = authedMutation({
+  args: {
+    attachmentIds: v.array(v.string()),
+  },
+  returns: v.record(v.string(), v.string()),
+  handler: async (ctx, args) => {
+    if (
+      args.attachmentIds.length >
+      MAX_ATTACHMENTS_PER_MESSAGE * MAX_THREAD_MESSAGES
+    ) {
+      throw new ConvexError("Too many attachments")
+    }
+    return await cloneReadyAttachmentsByIds(ctx, args.attachmentIds)
   },
 })
 
@@ -452,6 +527,8 @@ export const markReady = internalMutation({
   args: {
     ownerId: v.string(),
     attachmentId: v.string(),
+    extractedText: v.optional(v.string()),
+    extractedTokenEstimate: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -471,6 +548,8 @@ export const markReady = internalMutation({
     await ctx.db.patch("attachments", attachment._id, {
       status: "ready",
       errorMessage: undefined,
+      extractedText: args.extractedText,
+      extractedTokenEstimate: args.extractedTokenEstimate,
     })
     return null
   },

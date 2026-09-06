@@ -100,6 +100,31 @@ export const CODE_BLOCK = {
   copy: "Copy code",
 } as const
 
+export const MESSAGE_COPY = {
+  copied: "Copied to clipboard",
+  toastDurationMs: 2000,
+} as const
+
+export const MESSAGE_CHROME = {
+  iconButtonClassName:
+    "size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
+} as const
+
+export const MESSAGE_BRANCH = {
+  label: "Branch chat",
+  branchOff: "Branch off",
+  orSwitchModel: "or switch model",
+  favorites: "Favorites",
+  branched: "Branched to new chat",
+  emptyFavorites: "Star a model to keep it here",
+  emptyProvider: "No models available",
+  toastDurationMs: 2000,
+  openDelayMs: 80,
+  closeDelayMs: 160,
+  providerButtonClassName:
+    "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-active:bg-accent data-active:text-foreground",
+} as const
+
 /** Streamdown's default intercepts clicks with a confirm modal that is not portaled. */
 export const STREAMDOWN_LINK_SAFETY = {
   enabled: false,

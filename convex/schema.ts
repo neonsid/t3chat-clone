@@ -26,7 +26,21 @@ export const generationValidator = v.object({
   outputTokens: v.number(),
   durationMs: v.number(),
   timeToFirstTokenMs: v.number(),
+  promptTokens: v.optional(v.number()),
+  cachedTokens: v.optional(v.number()),
+  cacheWriteTokens: v.optional(v.number()),
+  inputCostPerMillion: v.optional(v.number()),
+  outputCostPerMillion: v.optional(v.number()),
+  cacheReadCostPerMillion: v.optional(v.number()),
+  cacheReadEstimated: v.optional(v.boolean()),
+  promptTokensEstimated: v.optional(v.boolean()),
 })
+
+export const attachmentKindValidator = v.union(
+  v.literal("image"),
+  v.literal("pdf"),
+  v.literal("docx")
+)
 
 export const messageSourceValidator = v.object({
   title: v.string(),
@@ -54,6 +68,8 @@ export default defineSchema({
     hasMessages: v.boolean(),
     messageCount: v.number(),
     nextSequence: v.number(),
+    branchedFromThreadId: v.optional(v.id("threads")),
+    branchedFromMessageId: v.optional(v.string()),
   })
     .index("by_ownerId_and_state_and_updatedAt", [
       "ownerId",
@@ -139,7 +155,9 @@ export default defineSchema({
     filename: v.string(),
     mimeType: v.string(),
     sizeBytes: v.number(),
-    kind: v.union(v.literal("image"), v.literal("pdf")),
+    kind: attachmentKindValidator,
+    extractedText: v.optional(v.string()),
+    extractedTokenEstimate: v.optional(v.number()),
     status: v.union(
       v.literal("pending_upload"),
       v.literal("uploaded"),
@@ -161,5 +179,6 @@ export default defineSchema({
     .index("by_threadId_and_messageId", ["threadId", "messageId"])
     .index("by_ownerId_and_status", ["ownerId", "status"])
     .index("by_bindingStatus_and_expiresAt", ["bindingStatus", "expiresAt"])
-    .index("by_threadId_and_status", ["threadId", "status"]),
+    .index("by_threadId_and_status", ["threadId", "status"])
+    .index("by_objectKey", ["objectKey"]),
 })

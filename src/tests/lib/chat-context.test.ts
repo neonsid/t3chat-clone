@@ -158,6 +158,74 @@ describe("contextToModelMessages", () => {
     expect(imageSourceUrl(second)).toBe(imageSourceUrl(first))
   })
 
+  it("injects Word extracts as text and leaves PDFs as document URLs", () => {
+    expect(
+      contextToModelMessages([
+        {
+          role: "user",
+          content: "Read these",
+          attachments: [
+            {
+              attachmentId: "d1",
+              kind: "docx",
+              mimeType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              filename: "notes.docx",
+              sizeBytes: 12,
+              extractedText: "notes.docx\n\nHello from Word",
+            },
+            {
+              attachmentId: "p1",
+              kind: "pdf",
+              mimeType: "application/pdf",
+              filename: "doc.pdf",
+              sizeBytes: 20,
+              url: "https://example.com/doc.pdf",
+            },
+          ],
+        },
+      ])
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", content: "Read these" },
+          { type: "text", content: "notes.docx\n\nHello from Word" },
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: "https://example.com/doc.pdf",
+              mimeType: "application/pdf",
+            },
+          },
+        ],
+      },
+    ])
+  })
+
+  it("does not treat Word-only context as a PDF requirement", () => {
+    const messages = [
+      {
+        role: "user" as const,
+        content: "hi",
+        attachments: [
+          {
+            attachmentId: "d1",
+            kind: "docx" as const,
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename: "notes.docx",
+            sizeBytes: 1,
+            extractedText: "notes.docx\n\nHi",
+          },
+        ],
+      },
+    ]
+    expect(contextRequiresPdf(messages)).toBe(false)
+    expect(contextRequiresVision(messages)).toBe(false)
+  })
+
   it("detects vision and pdf requirements across context", () => {
     const messages = [
       {

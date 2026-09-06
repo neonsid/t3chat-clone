@@ -1,28 +1,28 @@
 import type { AssistantGenerationStats, ChatThread } from "@/lib/threads"
+import { estimateTextTokens } from "@/lib/token-estimate"
 import type { WebSearchSource } from "@/lib/web-search"
 
 export const TEMP_THREAD_PREFIX = "tmp-"
 export const TEMPORARY_SIDEBAR_TITLE = "New Chat"
 
-/** Providers stream roughly a token per four characters of text + thinking. */
-const EPHEMERAL_CHARS_PER_TOKEN = 4
-
 export function estimateTemporaryGenerationStats({
   text,
   thinking,
+  modelId,
   modelName,
   mode,
 }: {
   text: string
   thinking: string
+  modelId?: string
   modelName: string
   mode: string
 }): AssistantGenerationStats {
-  const chars = text.length + thinking.length
   return {
+    modelId,
     modelName,
     mode,
-    outputTokens: Math.max(1, Math.ceil(chars / EPHEMERAL_CHARS_PER_TOKEN)),
+    outputTokens: Math.max(1, estimateTextTokens(text + thinking)),
     tokensPerSecond: 0,
     timeToFirstTokenSeconds: 0,
   }
@@ -81,6 +81,7 @@ export type StoredTemporaryThread = {
   messages: PersistableTemporaryMessage[]
   generationStats: Record<string, AssistantGenerationStats>
   stoppedMessageIds: string[]
+  branchedFromThreadId?: string
 }
 
 export function webSearchSourcesFromPersistable(
@@ -158,6 +159,7 @@ export function storedTemporaryThreadToChatThread(
     thinkingSearchSplitAt: thinkingSearchSplitAtFromPersistable(thread.messages),
     pinnedAt: thread.pinnedAt,
     isTemporary: true,
+    branchedFromThreadId: thread.branchedFromThreadId,
   }
 }
 

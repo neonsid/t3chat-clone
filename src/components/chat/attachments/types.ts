@@ -2,6 +2,6 @@ export type ThreadMessageAttachment = {
   attachmentId: string
   messageId: string
   filename: string
-  kind: "image" | "pdf"
+  kind: "image" | "pdf" | "docx"
   src?: string
 }

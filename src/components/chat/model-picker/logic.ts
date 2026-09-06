@@ -4,7 +4,9 @@ import type {
   ModelCatalogEntry,
   ModelProviderId,
 } from "@t3chat/model-catalog"
-import { CHAT_MODEL_CATALOG } from "@/lib/chat-models"
+import { MODEL_PICKER_RAIL_PROVIDERS } from "@/components/chat/model-picker/constants"
+import { CHAT_MODEL_CATALOG, getChatModelById } from "@/lib/chat-models"
+import type { ModelRailTab } from "@/stores/model-picker-store"
 
 export type ModelQuery = {
   readonly search: string
@@ -82,6 +84,32 @@ export function filterModels(
   }
 
   return favorites.concat(others)
+}
+
+export function railTabForModelId(modelId: string): ModelRailTab {
+  const model = getChatModelById(modelId)
+  if (!model) return "favorites"
+  return MODEL_PICKER_RAIL_PROVIDERS.some(
+    (provider) => provider.id === model.providerId
+  )
+    ? model.providerId
+    : "favorites"
+}
+
+export function modelsForRailTab(
+  railTab: ModelRailTab,
+  favoriteIds: ReadonlySet<string>
+): ReadonlyArray<ModelCatalogEntry> {
+  return filterModels(
+    {
+      search: "",
+      capabilities: [],
+      providerId: railTab === "favorites" ? null : railTab,
+      favoritesOnly: railTab === "favorites",
+      combineResults: false,
+    },
+    favoriteIds
+  )
 }
 
 export function formatCost(costPerMillion: number): string {

@@ -6,6 +6,8 @@ export const SIDEBAR_RENAME_INPUT_CLASS =
   "h-9 w-full min-w-0 rounded-md bg-sidebar-foreground/10 px-3 text-xs text-sidebar-foreground outline-none";
 export const SIDEBAR_THREAD_BUTTON_CLASS =
   "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground";
+export const SIDEBAR_THREAD_LEADING_ICON_CLASS =
+  "size-4 shrink-0 text-sidebar-foreground/80";
 export const SIDEBAR_THREAD_HOVER_ACTION_CLASS =
   "flex size-7 cursor-pointer items-center justify-center rounded-md bg-transparent text-sidebar-muted-foreground transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";
 export const SIDEBAR_THREAD_ROW_TOOLTIP_DELAY_MS = 450;

@@ -3,18 +3,22 @@ import type {
   DocumentPart,
   ImagePart,
   ModelMessage,
+  TextPart,
 } from "@tanstack/ai"
 
 import { MAX_MODEL_CONTEXT_CHARACTERS } from "@/lib/chat-models"
 
 export type ChatContextAttachment = {
   attachmentId: string
-  kind: "image" | "pdf"
+  kind: "image" | "pdf" | "docx"
   mimeType: string
   filename: string
   sizeBytes: number
   /** Present when the API has minted a signed GET for model providers. */
   url?: string
+  /** Extracted Word text. Never sent as a file URL. */
+  extractedText?: string
+  extractedTokenEstimate?: number
 }
 
 export type ChatContextMessage = {
@@ -22,14 +26,24 @@ export type ChatContextMessage = {
   content: string
   thinking?: string
   attachments?: Array<ChatContextAttachment>
+  promptTokens?: number
 }
 
 export function buildAttachmentParts(
   attachments: Array<ChatContextAttachment>
-): Array<ImagePart | DocumentPart> {
-  const parts: Array<ImagePart | DocumentPart> = []
+): Array<ImagePart | DocumentPart | TextPart> {
+  const parts: Array<ImagePart | DocumentPart | TextPart> = []
 
   for (const attachment of attachments) {
+    if (attachment.kind === "docx") {
+      if (!attachment.extractedText) continue
+      parts.push({
+        type: "text",
+        content: attachment.extractedText,
+      })
+      continue
+    }
+
     if (!attachment.url) continue
     if (attachment.kind === "image") {
       parts.push({
@@ -74,10 +88,12 @@ export function contextToModelMessages(
     const characterCost =
       content.length +
       thinking.length +
-      attachments.reduce(
-        (sum, attachment) => sum + attachment.filename.length + 32,
-        0
-      )
+      attachments.reduce((sum, attachment) => {
+        if (attachment.kind === "docx") {
+          return sum + (attachment.extractedText?.length ?? 0)
+        }
+        return sum + attachment.filename.length + 32
+      }, 0)
     if (
       selected.length > 0 &&
       characterCount + characterCost > MAX_MODEL_CONTEXT_CHARACTERS
