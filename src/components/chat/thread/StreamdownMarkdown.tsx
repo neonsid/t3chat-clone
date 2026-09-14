@@ -112,7 +112,7 @@ function MarkdownTable({
 }: ComponentProps<"table"> & { node?: unknown }) {
   return (
     <div
-      className="my-4 w-max max-w-full rounded-md border border-border bg-card"
+      className="my-4 w-full min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-card"
       data-streamdown="table-wrapper"
     >
       <div
@@ -124,7 +124,7 @@ function MarkdownTable({
       </div>
       <div className="overflow-x-auto">
         <table
-          className={cn(className, "w-max max-w-full divide-y divide-border")}
+          className={cn(className, "w-max min-w-full divide-y divide-border")}
           data-streamdown="table"
           {...rest}
         >
@@ -263,7 +263,7 @@ export const StreamdownMarkdown = memo(function StreamdownMarkdown({
     >
       <div
         className={cn(
-          "text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0",
+          "min-w-0 max-w-full text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0",
           className
         )}
       >

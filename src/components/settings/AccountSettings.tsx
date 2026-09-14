@@ -33,10 +33,7 @@ export function AccountSettings() {
       <DangerZone
         onError={(title) => toasts.showToast({ title, status: "error" })}
       />
-      <AnimatedToastStack
-        toasts={toasts.toasts}
-        onDismiss={toasts.dismissToast}
-      />
+      <AnimatedToastStack toasts={toasts.toasts} />
     </div>
   )
 }

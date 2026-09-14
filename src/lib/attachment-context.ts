@@ -1,4 +1,5 @@
 import { MAX_MODEL_OUTPUT_TOKENS } from "@/lib/chat-models"
+import { isExtractedTextKind } from "@/lib/attachment-limits"
 import { estimateTextTokens } from "@/lib/token-estimate"
 
 export const ATTACHMENT_CONTEXT_WARN_RATIO = 0.5
@@ -122,7 +123,7 @@ export function applyComposerContextGate<T extends ComposerGateAttachment>(
   }
 ): T[] {
   const composerDocxTokens = attachments.reduce((sum, attachment) => {
-    if (attachment.kind !== "docx") return sum
+    if (!isExtractedTextKind(attachment.kind)) return sum
     if (attachment.status !== "ready" && attachment.status !== "failed") {
       return sum
     }
@@ -131,7 +132,7 @@ export function applyComposerContextGate<T extends ComposerGateAttachment>(
 
   return attachments.map((attachment) => {
     if (
-      attachment.kind !== "docx" ||
+      !isExtractedTextKind(attachment.kind) ||
       attachment.extractedTokenEstimate == null ||
       (attachment.status !== "ready" && attachment.status !== "failed")
     ) {
@@ -213,7 +214,7 @@ export function contextAttachmentRejection(
     .reverse()
     .find((message) => message.role === "user")
   const currentFileTokens = (lastUser?.attachments ?? [])
-    .filter((attachment) => attachment.kind === "docx")
+    .filter((attachment) => isExtractedTextKind(attachment.kind))
     .map((attachment) => attachment.extractedTokenEstimate ?? 0)
   if (currentFileTokens.length === 0) return null
 
@@ -224,7 +225,7 @@ export function contextAttachmentRejection(
     .filter((message) => message !== lastUser)
     .flatMap((message) =>
       (message.attachments ?? [])
-        .filter((attachment) => attachment.kind === "docx")
+        .filter((attachment) => isExtractedTextKind(attachment.kind))
         .map((attachment) => attachment.extractedTokenEstimate ?? 0)
     )
 

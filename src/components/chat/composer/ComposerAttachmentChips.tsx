@@ -1,6 +1,7 @@
 import { useState } from "react"
 
 import { AttachmentFileChip } from "@/components/chat/attachments/AttachmentFileChip"
+import { attachmentFileBadge } from "@/components/chat/attachments/constants"
 import { AttachmentLightbox } from "@/components/chat/attachments/AttachmentLightbox"
 import { AttachmentThumbnail } from "@/components/chat/attachments/AttachmentThumbnail"
 import type { ComposerAttachment } from "@/stores/types"
@@ -36,7 +37,7 @@ export function ComposerAttachmentChips({
 
   return (
     <>
-      <ul className="mb-2 flex w-fit max-w-full flex-wrap gap-2 overflow-visible">
+      <ul className="mb-2 flex max-w-full flex-wrap gap-1.5 overflow-visible">
         {attachments.map((attachment) => {
           const previewUrl = attachment.localPreviewUrl
           const canOpen = attachment.kind === "image" && Boolean(previewUrl)
@@ -55,28 +56,21 @@ export function ComposerAttachmentChips({
             if (viewer?.localId === attachment.localId) setViewer(null)
             onRemove(attachment.localId)
           }
+          const fileStatus = composerStatusLabel(attachment)
 
           return (
             <li key={attachment.localId} className="max-w-full min-w-0">
               {attachment.kind !== "image" ? (
                 <AttachmentFileChip
                   filename={attachment.filename}
-                  badge={attachment.kind === "docx" ? "DOC" : "PDF"}
-                  statusLabel={composerStatusLabel(attachment)}
-                  failed={attachment.status === "failed"}
-                  warning={Boolean(attachment.contextWarning)}
-                  progress={progress}
-                  indeterminate={indeterminate}
-                  onOpen={
-                    previewUrl
-                      ? () =>
-                          window.open(
-                            previewUrl,
-                            "_blank",
-                            "noopener,noreferrer"
-                          )
+                  badge={attachmentFileBadge(attachment.kind)}
+                  statusLabel={
+                    attachment.status === "failed" || attachment.contextWarning
+                      ? fileStatus
                       : undefined
                   }
+                  failed={attachment.status === "failed"}
+                  warning={Boolean(attachment.contextWarning)}
                   onRemove={onRemoveChip}
                   removeDisabled={disabled}
                 />

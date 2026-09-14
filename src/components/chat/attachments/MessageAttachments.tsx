@@ -3,6 +3,7 @@ import { useAction } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
 import { AttachmentFileChip } from "@/components/chat/attachments/AttachmentFileChip"
+import { attachmentFileBadge } from "@/components/chat/attachments/constants"
 import { AttachmentLightbox } from "@/components/chat/attachments/AttachmentLightbox"
 import { AttachmentThumbnail } from "@/components/chat/attachments/AttachmentThumbnail"
 import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
@@ -32,6 +33,7 @@ function RemoteAttachmentThumb({
       rememberAttachmentPreview(attachment.attachmentId, cachedUrl)
       return
     }
+    if (attachment.hideDownload) return
     let cancelled = false
     void getDownloadUrl({
       attachmentId: attachment.attachmentId,
@@ -52,7 +54,7 @@ function RemoteAttachmentThumb({
     return (
       <AttachmentFileChip
         filename={attachment.filename}
-        badge={attachment.kind === "docx" ? "DOC" : "PDF"}
+        badge={attachmentFileBadge(attachment.kind)}
         onOpen={
           url
             ? () => window.open(url, "_blank", "noopener,noreferrer")

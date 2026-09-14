@@ -65,6 +65,7 @@ type AppSidebarProps = {
     rename: (threadId: string, title: string) => void;
     regenerateTitle: (threadId: string) => void;
     convert: (threadId: string) => void;
+    share: (threadId: string) => void;
   };
 };
 

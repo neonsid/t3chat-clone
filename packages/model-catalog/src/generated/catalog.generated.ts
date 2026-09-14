@@ -55,12 +55,12 @@ export const MODEL_PROVIDERS: ReadonlyArray<ModelProvider> = [
 
 export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
   {
-    modelId: "gpt-5.6",
-    id: "openai/gpt-5.6",
+    modelId: "gpt-6-astra",
+    id: "openai/gpt-6-astra",
     providerId: "openai",
-    name: "GPT-5.6",
+    name: "GPT-6 Astra",
     description:
-      "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+      "Most capable GPT for complex reasoning, coding, computer use, research, and document creation",
     capabilities: [
       "vision",
       "reasoning",
@@ -70,8 +70,32 @@ export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
     ],
     contextTokens: 1050000,
     outputTokens: 128000,
-    inputCostPerMillion: 5,
-    outputCostPerMillion: 30,
+    inputCostPerMillion: 10,
+    outputCostPerMillion: 50,
+    knowledgeCutoff: "2026-04-30",
+    releaseDate: "2026-09-03",
+    lastUpdated: "2026-09-03",
+    openWeights: false,
+    experimental: false,
+  },
+  {
+    modelId: "gpt-5.6",
+    id: "openai/gpt-5.6",
+    providerId: "openai",
+    name: "GPT-5.6",
+    description:
+      "Flagship GPT-5.6 model for complex professional work, coding, and agentic workflows",
+    capabilities: [
+      "vision",
+      "reasoning",
+      "effort-control",
+      "tool-calling",
+      "pdf",
+    ],
+    contextTokens: 1050000,
+    outputTokens: 128000,
+    inputCostPerMillion: 4,
+    outputCostPerMillion: 20,
     knowledgeCutoff: "2026-02-16",
     releaseDate: "2026-07-09",
     lastUpdated: "2026-07-09",
@@ -107,7 +131,7 @@ export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
     providerId: "openai",
     name: "GPT-5.6 Sol",
     description:
-      "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+      "Flagship GPT-5.6 model for complex professional work, coding, and agentic workflows",
     capabilities: [
       "vision",
       "reasoning",
@@ -117,8 +141,8 @@ export const MODEL_CATALOG: ReadonlyArray<ModelCatalogEntry> = [
     ],
     contextTokens: 1050000,
     outputTokens: 128000,
-    inputCostPerMillion: 5,
-    outputCostPerMillion: 30,
+    inputCostPerMillion: 4,
+    outputCostPerMillion: 20,
     knowledgeCutoff: "2026-02-16",
     releaseDate: "2026-07-09",
     lastUpdated: "2026-07-09",

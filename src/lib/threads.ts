@@ -116,8 +116,8 @@ export function chatMessageThinking(message: UIMessage) {
   return parts.join("\n").trim()
 }
 
-function toAssistantGenerationStats(
-  message: Doc<"messages">
+export function toAssistantGenerationStats(
+  message: Pick<Doc<"messages">, "generation">
 ): AssistantGenerationStats | null {
   const generation = message.generation
   if (!generation) return null

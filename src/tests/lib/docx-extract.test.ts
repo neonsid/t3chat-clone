@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   MAX_DOCX_EXTRACTED_CHARS,
   prepareExtractedDocxText,
+  prepareExtractedPlainText,
 } from "@/lib/docx-extract"
 import { estimateTextTokens } from "@/lib/token-estimate"
 
@@ -40,5 +41,14 @@ describe("prepareExtractedDocxText", () => {
     expect(result.extractedText.length).toBeLessThan(
       MAX_DOCX_EXTRACTED_CHARS + 80
     )
+  })
+})
+
+describe("prepareExtractedPlainText", () => {
+  it("fails on empty extract", () => {
+    expect(prepareExtractedPlainText("   \n", "Pasted Text 1")).toEqual({
+      ok: false,
+      error: "Couldn't read any text from this file",
+    })
   })
 })

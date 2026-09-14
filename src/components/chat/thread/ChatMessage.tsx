@@ -74,6 +74,14 @@ function MessageCopyControl({
           try {
             const links: Array<{ filename: string; url: string }> = []
             for (const attachment of attachments) {
+              if (attachment.src) {
+                links.push({
+                  filename: attachment.filename,
+                  url: attachment.src,
+                })
+                continue
+              }
+              if (attachment.hideDownload) continue
               try {
                 const result = await getDownloadUrl({
                   attachmentId: attachment.attachmentId,
@@ -118,6 +126,7 @@ type ChatMessageProps = {
   onBranch?: () => void | Promise<void>
   canRetry?: boolean
   onRetry?: (action?: MessageModelAction) => void | Promise<void>
+  readOnly?: boolean
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -135,6 +144,7 @@ export const ChatMessage = memo(function ChatMessage({
   onBranch,
   canRetry = false,
   onRetry,
+  readOnly = false,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = chatMessageText(message)
@@ -148,14 +158,18 @@ export const ChatMessage = memo(function ChatMessage({
   if (isUser) {
     if (!text && attachments.length === 0) return null
     return (
-      <div className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 text-[var(--message-foreground,var(--foreground))]">
+      <div className="group flex w-full min-w-0 flex-col items-end gap-1">
+        <div className="relative min-w-0 max-w-[80%] overflow-x-auto rounded-md border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 text-[var(--message-foreground,var(--foreground))]">
           {attachments.length > 0 ? (
             <div className={text ? "mb-2" : undefined}>
               <MessageAttachments attachments={attachments} />
             </div>
           ) : null}
-          {text ? <div className="whitespace-pre-wrap">{text}</div> : null}
+          {text ? (
+            <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {text}
+            </div>
+          ) : null}
         </div>
         <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100">
           <div className="flex shrink-0 items-center gap-2">
@@ -165,20 +179,24 @@ export const ChatMessage = memo(function ChatMessage({
               </p>
             ) : null}
             <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="ghost"
-                className={MESSAGE_CHROME.iconButtonClassName}
-                aria-label="Reply"
-                disabled
-              >
-                <Undo2Icon className="size-3.5" />
-              </Button>
+              {readOnly ? null : (
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  className={MESSAGE_CHROME.iconButtonClassName}
+                  aria-label="Reply"
+                  disabled
+                >
+                  <Undo2Icon className="size-3.5" />
+                </Button>
+              )}
               {text || attachments.length > 0 ? (
                 <MessageCopyControl text={text} attachments={attachments} />
               ) : null}
-              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+              {readOnly ? null : (
+                <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+              )}
             </div>
           </div>
         </div>
@@ -263,8 +281,12 @@ export const ChatMessage = memo(function ChatMessage({
                   }
                 />
               ) : null}
-              <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
-              <MessageRetryPicker disabled={!canRetry} onRetry={onRetry} />
+              {readOnly ? null : (
+                <>
+                  <MessageBranchPicker disabled={!canBranch} onBranch={onBranch} />
+                  <MessageRetryPicker disabled={!canRetry} onRetry={onRetry} />
+                </>
+              )}
             </div>
             {generationStats ? (
               <div

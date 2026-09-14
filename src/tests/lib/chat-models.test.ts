@@ -17,6 +17,16 @@ describe("chat model reasoning profiles", () => {
     expect(resolveChatModel("openai/gpt-5.5-pro", "instant")).toBeNull()
   })
 
+  it("does not map GPT-6 Astra Instant to none", () => {
+    const astra = CHAT_MODEL_CONFIG["openai/gpt-6-astra"]
+    expect(astra.supportedReasoningEfforts).toEqual(["low", "medium", "high"])
+    expect(astra.defaultReasoningEffort).toBe("low")
+    expect(resolveChatModel("openai/gpt-6-astra", "instant")).toBeNull()
+    expect(
+      resolveChatModel("openai/gpt-6-astra", "low")?.providerReasoningEffort
+    ).toBe("low")
+  })
+
   // The view reads this to decide whether a silent gap before the first token
   // is reasoning or just latency, so instant meaning different things per
   // provider is load-bearing rather than trivia.

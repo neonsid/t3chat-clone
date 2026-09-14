@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat-models"
 import { isJsonString, type JsonValue } from "@/lib/json-value"
 import { contextAttachmentRejection } from "@/lib/attachment-context"
+import { isExtractedTextKind } from "@/lib/attachment-limits"
 import {
   contextRequiresPdf,
   contextRequiresVision,
@@ -354,7 +355,7 @@ export const Route = createFileRoute("/api/chat")({
             ...new Set(
               context.flatMap((message: (typeof context)[number]) =>
                 message.attachments
-                  .filter((attachment) => attachment.kind !== "docx")
+                  .filter((attachment) => !isExtractedTextKind(attachment.kind))
                   .map((attachment) => attachment.attachmentId)
               )
             ),

@@ -16,6 +16,7 @@ import {
   THREAD_DELETE_BATCH_SIZE,
 } from "./constants"
 import { branchThreadFromMessage } from "./helpers/branchThread"
+import { deleteSharesForThread } from "./helpers/threadShares"
 import { truncateThreadFromMessage } from "./helpers/truncateThread"
 import { authedMutation, authedQuery } from "./helpers/functions"
 import { getOwnedThread } from "./helpers/threads"
@@ -501,6 +502,8 @@ export const deleteBatch = internalMutation({
       await ctx.scheduler.runAfter(0, internal.threads.deleteBatch, args)
       return null
     }
+
+    await deleteSharesForThread(ctx, args.threadId)
 
     const thread = await ctx.db.get("threads", args.threadId)
     if (thread?.state === "deleting") {

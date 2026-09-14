@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import type { FormEvent, KeyboardEvent, ReactNode } from "react"
+import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react"
 import {
   ArrowUpIcon,
   CheckIcon,
@@ -13,7 +13,6 @@ import {
 import { ModelPicker } from "@/components/chat/model-picker/ModelPicker"
 import {
   ATTACHMENT_UPLOAD_TOAST,
-  ATTACHMENT_UPLOAD_TOAST_GAP_FROM_ATTACH,
   ATTACHMENT_UPLOAD_TOAST_ID,
 } from "@/components/chat/attachments/constants"
 import { ComposerAttachmentChips } from "@/components/chat/composer/ComposerAttachmentChips"
@@ -25,10 +24,7 @@ import {
 } from "@/components/chat/composer/constants"
 import type { ComposerUsageStripData } from "@/hooks/useComposerUsage"
 import { webSearchTooltip } from "@/components/chat/composer/logic"
-import {
-  AnimatedToastStack,
-  useAnimatedToastStack,
-} from "@/components/shared/motion/animated-toast-stack"
+import { showShellToast } from "@/components/chat/shell/shell-toast"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useComposerAttachments } from "@/hooks/useComposerAttachments"
 import { useModelPreferences } from "@/hooks/useModelPreferences"
@@ -40,8 +36,14 @@ import {
 import {
   ATTACHMENT_ACCEPT,
   DOCX_MIME_TYPE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  TXT_MIME_TYPE,
   normalizeAttachmentMimeType,
 } from "@/lib/attachment-limits"
+import {
+  createPastedTextFile,
+  shouldAttachPastedText,
+} from "@/lib/pasted-text-attachment"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { CHAT_MODEL_CONFIG, isChatModelId } from "@/lib/chat-models"
 import type { ReasoningEffort } from "@/lib/chat-models"
@@ -93,7 +95,6 @@ export const ChatComposer = memo(function ChatComposer({
 
   const { attachments, addFiles, removeAttachment } =
     useComposerAttachments(threadStateKey, contextGate)
-  const toasts = useAnimatedToastStack({ limit: 1 })
   const uploadToastActive = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -102,28 +103,31 @@ export const ChatComposer = memo(function ChatComposer({
     submit()
   }
 
-  async function handleFilesSelected(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return
+  async function handleFilesSelected(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return
 
-    const fileCount = Array.from(fileList).filter((file) => {
+    const fileCount = Array.from(files).filter((file) => {
       const mime = normalizeAttachmentMimeType(file)
-      return mime === "application/pdf" || mime === DOCX_MIME_TYPE
+      return (
+        mime === "application/pdf" ||
+        mime === DOCX_MIME_TYPE ||
+        mime === TXT_MIME_TYPE
+      )
     }).length
 
-    await addFiles(fileList, {
+    await addFiles(files, {
       onBatchStart: () => {
         if (fileCount === 0) return
         uploadToastActive.current = true
-        toasts.showToast({
+        showShellToast({
           id: ATTACHMENT_UPLOAD_TOAST_ID,
           title: ATTACHMENT_UPLOAD_TOAST.uploading(fileCount),
           status: "loading",
           duration: 0,
-          dismissible: false,
         })
       },
       onRejected: (message) => {
-        toasts.showToast({
+        showShellToast({
           id: ATTACHMENT_UPLOAD_TOAST_ID,
           title: message,
           status: "error",
@@ -131,6 +135,22 @@ export const ChatComposer = memo(function ChatComposer({
         })
       },
     })
+  }
+
+  function handleDraftPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (disabled || isLoading) return
+    const clipboard = event.clipboardData
+    if (!clipboard || clipboard.files.length > 0) return
+    const pasted = clipboard.getData("text/plain")
+    if (!shouldAttachPastedText(pasted)) return
+    if (attachments.length >= MAX_ATTACHMENTS_PER_MESSAGE) return
+    event.preventDefault()
+    void handleFilesSelected([
+      createPastedTextFile(
+        pasted,
+        attachments.map((attachment) => attachment.filename)
+      ),
+    ])
   }
 
   const busyUploading = attachments.some(
@@ -146,13 +166,15 @@ export const ChatComposer = memo(function ChatComposer({
         attachment.status === "ready" || attachment.status === "failed"
     )
 
+  // Page toast is outside this tree, so settlement has to be pushed into it.
   useEffect(() => {
     if (!uploadToastActive.current || busyUploading || !allSettled) return
     uploadToastActive.current = false
     const failedCount = attachments.filter(
       (attachment) => attachment.status === "failed"
     ).length
-    toasts.updateToast(ATTACHMENT_UPLOAD_TOAST_ID, {
+    showShellToast({
+      id: ATTACHMENT_UPLOAD_TOAST_ID,
       title:
         failedCount === 0
           ? ATTACHMENT_UPLOAD_TOAST.ready
@@ -161,9 +183,8 @@ export const ChatComposer = memo(function ChatComposer({
             : ATTACHMENT_UPLOAD_TOAST.someFailed,
       status: failedCount > 0 ? "error" : "success",
       duration: 2800,
-      dismissible: true,
     })
-  }, [allSettled, attachments, busyUploading, toasts])
+  }, [allSettled, attachments, busyUploading])
 
   return (
     <div
@@ -188,7 +209,7 @@ export const ChatComposer = memo(function ChatComposer({
                 )
                 void removeAttachment(localId)
                 if (removed?.status === "ready") {
-                  toasts.showToast({
+                  showShellToast({
                     id: ATTACHMENT_UPLOAD_TOAST_ID,
                     title: ATTACHMENT_UPLOAD_TOAST.deleted,
                     status: "success",
@@ -202,6 +223,7 @@ export const ChatComposer = memo(function ChatComposer({
               disabled={disabled || isLoading}
               placeholder={placeholder}
               onSubmit={submit}
+              onPaste={handleDraftPaste}
               canSubmit={!isLoading && !disabled}
             />
           </div>
@@ -216,12 +238,6 @@ export const ChatComposer = memo(function ChatComposer({
             onStop={onStop}
             onAttachClick={() => fileInputRef.current?.click()}
             attachDisabled={disabled || isLoading}
-            toast={
-              <AnimatedToastStack
-                toasts={toasts.toasts}
-                onDismiss={toasts.dismissToast}
-              />
-            }
           />
           <input
             ref={fileInputRef}
@@ -245,12 +261,14 @@ function ComposerDraftField({
   disabled,
   placeholder,
   onSubmit,
+  onPaste,
   canSubmit,
 }: {
   threadStateKey: string
   disabled: boolean
   placeholder: string
   onSubmit: () => void
+  onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void
   canSubmit: boolean
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -278,6 +296,7 @@ function ComposerDraftField({
       disabled={disabled}
       onChange={(event) => setDraft(threadStateKey, event.target.value)}
       onKeyDown={handleKeyDown}
+      onPaste={onPaste}
       placeholder={placeholder}
       rows={1}
       value={draft}
@@ -295,7 +314,6 @@ const ComposerToolbar = memo(function ComposerToolbar({
   onStop,
   onAttachClick,
   attachDisabled,
-  toast,
 }: {
   threadStateKey: string
   effectiveReasoningEffort: ReasoningEffort
@@ -306,7 +324,6 @@ const ComposerToolbar = memo(function ComposerToolbar({
   onStop?: () => void
   onAttachClick: () => void
   attachDisabled: boolean
-  toast: ReactNode
 }) {
   const composer = useThreadComposerToolbarControls(threadStateKey)
   const { isLoading: modelPreferencesLoading, selectedModelId } =
@@ -375,21 +392,13 @@ const ComposerToolbar = memo(function ComposerToolbar({
         </div>
       </div>
 
-      <div
-        className={cn(
-          "relative min-w-0 flex-1 self-stretch overflow-visible",
-          ATTACHMENT_UPLOAD_TOAST_GAP_FROM_ATTACH
-        )}
-      >
-        {toast}
-        <div className="flex h-full items-center justify-end">
-          <ComposerSendButton
-            threadStateKey={threadStateKey}
-            isLoading={isLoading}
-            disabled={disabled}
-            onStop={onStop}
-          />
-        </div>
+      <div className="ml-auto flex items-center">
+        <ComposerSendButton
+          threadStateKey={threadStateKey}
+          isLoading={isLoading}
+          disabled={disabled}
+          onStop={onStop}
+        />
       </div>
     </div>
   )

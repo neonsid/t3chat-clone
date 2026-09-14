@@ -14,14 +14,15 @@ function estimateTextTokens(text: string) {
   return Math.ceil(text.length / CHARS_PER_TOKEN)
 }
 
-function prefixDocxExtract(filename: string, text: string) {
-  const name = filename.trim() || "document.docx"
+function prefixExtractedText(filename: string, text: string) {
+  const name = filename.trim() || "document"
   return `${name}\n\n${text}`
 }
 
-export function prepareExtractedDocxText(
+function prepareExtractedText(
   rawText: string,
-  filename: string
+  filename: string,
+  emptyError: string
 ):
   | {
       ok: true
@@ -32,14 +33,14 @@ export function prepareExtractedDocxText(
   | { ok: false; error: string } {
   const trimmed = rawText.replace(/^\uFEFF/, "").trim()
   if (!trimmed) {
-    return { ok: false, error: "Couldn't read any text from this Word file" }
+    return { ok: false, error: emptyError }
   }
 
   const truncated = trimmed.length > MAX_DOCX_EXTRACTED_CHARS
   const body = truncated
     ? `${TRUNCATION_NOTE}${trimmed.slice(0, MAX_DOCX_EXTRACTED_CHARS)}`
     : trimmed
-  const extractedText = prefixDocxExtract(filename, body)
+  const extractedText = prefixExtractedText(filename, body)
 
   return {
     ok: true,
@@ -47,4 +48,20 @@ export function prepareExtractedDocxText(
     extractedTokenEstimate: estimateTextTokens(extractedText),
     truncated,
   }
+}
+
+export function prepareExtractedDocxText(rawText: string, filename: string) {
+  return prepareExtractedText(
+    rawText,
+    filename,
+    "Couldn't read any text from this Word file"
+  )
+}
+
+export function prepareExtractedPlainText(rawText: string, filename: string) {
+  return prepareExtractedText(
+    rawText,
+    filename,
+    "Couldn't read any text from this file"
+  )
 }

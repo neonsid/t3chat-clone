@@ -72,7 +72,13 @@ export const STOPPED_RESPONSE = {
   label: "Stopped by user",
 } as const
 
-/** Post-layout retries after opening a thread (no continuous ResizeObserver). */
+/**
+ * Post-layout retries after opening a thread or sending in one. A few delayed
+ * scrollToEnd calls catch markdown/images that grow after the first paint.
+ * Do not use library scrollAnchor for this: toggling it on an already-mounted
+ * user row makes the scroller pin that row to align:"start" when pending
+ * dots swap for the first token.
+ */
 export const MESSAGE_SCROLLER_ENSURE_END = {
   delaysMs: [0, 50, 150, 400] as const,
 } as const

@@ -33,6 +33,7 @@ type ThreadContextMenuActions = {
   rename: (threadId: string, title: string) => void
   regenerateTitle: (threadId: string) => void
   convert: (threadId: string) => void
+  share: (threadId: string) => void
 }
 
 type ThreadContextMenuProps = {
@@ -80,16 +81,6 @@ async function exportThread(
   }.md`
   link.click()
   URL.revokeObjectURL(url)
-}
-
-async function shareThread(thread: ChatThread) {
-  const url = new URL(`/chat/${thread.id}`, window.location.origin).toString()
-  const share = navigator.share
-  if (share instanceof Function) {
-    await share.call(navigator, { title: thread.title, url })
-    return
-  }
-  await navigator.clipboard.writeText(url)
 }
 
 function createTemporaryThreadContextMenuItems(
@@ -144,7 +135,7 @@ function createThreadContextMenuItems(
       id: "share",
       label: "Share",
       icon: <Share2Icon className="size-4" />,
-      onSelect: () => void shareThread(thread).catch(() => undefined),
+      onSelect: () => actions.share(thread.id),
     },
     {
       id: "open-new-tab",

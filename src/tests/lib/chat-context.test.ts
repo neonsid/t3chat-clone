@@ -226,6 +226,35 @@ describe("contextToModelMessages", () => {
     expect(contextRequiresVision(messages)).toBe(false)
   })
 
+  it("injects pasted text extracts as text parts", () => {
+    expect(
+      contextToModelMessages([
+        {
+          role: "user",
+          content: "Summarize",
+          attachments: [
+            {
+              attachmentId: "t1",
+              kind: "txt",
+              mimeType: "text/plain",
+              filename: "Pasted Text 1",
+              sizeBytes: 12,
+              extractedText: "Pasted Text 1\n\nLots of pasted words",
+            },
+          ],
+        },
+      ])
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", content: "Summarize" },
+          { type: "text", content: "Pasted Text 1\n\nLots of pasted words" },
+        ],
+      },
+    ])
+  })
+
   it("detects vision and pdf requirements across context", () => {
     const messages = [
       {

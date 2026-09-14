@@ -21,6 +21,7 @@ import type * as helpers_cloneAttachment from "../helpers/cloneAttachment.js";
 import type * as helpers_functions from "../helpers/functions.js";
 import type * as helpers_generateThreadTitle from "../helpers/generateThreadTitle.js";
 import type * as helpers_messages from "../helpers/messages.js";
+import type * as helpers_threadShares from "../helpers/threadShares.js";
 import type * as helpers_threads from "../helpers/threads.js";
 import type * as helpers_truncateThread from "../helpers/truncateThread.js";
 import type * as http from "../http.js";
@@ -28,6 +29,7 @@ import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as preferences from "../preferences.js";
 import type * as r2 from "../r2.js";
+import type * as threadShares from "../threadShares.js";
 import type * as threadTitles from "../threadTitles.js";
 import type * as threads from "../threads.js";
 
@@ -51,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "helpers/functions": typeof helpers_functions;
   "helpers/generateThreadTitle": typeof helpers_generateThreadTitle;
   "helpers/messages": typeof helpers_messages;
+  "helpers/threadShares": typeof helpers_threadShares;
   "helpers/threads": typeof helpers_threads;
   "helpers/truncateThread": typeof helpers_truncateThread;
   http: typeof http;
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   preferences: typeof preferences;
   r2: typeof r2;
+  threadShares: typeof threadShares;
   threadTitles: typeof threadTitles;
   threads: typeof threads;
 }>;

@@ -38,6 +38,20 @@ export const deleteOwnerBatch = internalMutation({
   args: { ownerId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const shares = await ctx.db
+      .query("threadShares")
+      .withIndex("by_ownerId_and_createdAt", (query) =>
+        query.eq("ownerId", args.ownerId)
+      )
+      .take(THREAD_DELETE_BATCH_SIZE)
+    if (shares.length > 0) {
+      for (const share of shares) {
+        await ctx.db.delete("threadShares", share._id)
+      }
+      await ctx.scheduler.runAfter(0, internal.accounts.deleteOwnerBatch, args)
+      return null
+    }
+
     const threads = await takeOwnerThreads(ctx, args.ownerId)
     if (threads.length > 0) {
       for (const thread of threads) {

@@ -1,6 +1,12 @@
 import type { ReactNode } from "react"
 import { memo } from "react"
-import { CheckIcon, ClockIcon, PlusIcon, SearchIcon } from "lucide-react"
+import {
+  CheckIcon,
+  ClockIcon,
+  PlusIcon,
+  SearchIcon,
+  Share2Icon,
+} from "lucide-react"
 import * as m from "motion/react-m"
 
 import {
@@ -10,6 +16,7 @@ import {
   CHAT_HEADER_NOTCH_STROKE,
   CHAT_NOTCH_BUTTON_CLASS,
 } from "@/components/chat/shell/constants"
+import { THREAD_SHARE } from "@/components/chat/share/constants"
 import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
 import { SettingsMenu } from "@/components/settings/SettingsMenu"
 import { Tooltip } from "@/components/shared/motion/tooltip"
@@ -142,10 +149,14 @@ function ChatShellEdge() {
 export function ChatHeaderActions({
   isTemporaryChat,
   disabled,
+  showShare,
+  onShare,
   onToggleTemporaryChat,
 }: {
   isTemporaryChat: boolean
   disabled: boolean
+  showShare: boolean
+  onShare: () => void
   onToggleTemporaryChat: () => void
 }) {
   const isMobile = useIsMobile()
@@ -185,6 +196,26 @@ export function ChatHeaderActions({
           animate={{ x: onNotch ? 4 : 0, y: onNotch ? -4 : 0 }}
           transition={{ duration: 0.2, ease: "linear" }}
         >
+          {showShare ? (
+            <Tooltip
+              content={THREAD_SHARE.label}
+              side="bottom"
+              align="end"
+              delay={250}
+              wrapperClassName="pointer-events-auto"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={THREAD_SHARE.label}
+                className={CHAT_NOTCH_BUTTON_CLASS}
+                onClick={onShare}
+              >
+                <Share2Icon />
+              </Button>
+            </Tooltip>
+          ) : null}
           <Tooltip
             content={tooltip}
             side="bottom"
