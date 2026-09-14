@@ -8,15 +8,20 @@ import type {
 
 import { MAX_MODEL_CONTEXT_CHARACTERS } from "@/lib/chat-models"
 
+import {
+  isExtractedTextKind,
+  type AttachmentKind,
+} from "@/lib/attachment-limits"
+
 export type ChatContextAttachment = {
   attachmentId: string
-  kind: "image" | "pdf" | "docx"
+  kind: AttachmentKind
   mimeType: string
   filename: string
   sizeBytes: number
   /** Present when the API has minted a signed GET for model providers. */
   url?: string
-  /** Extracted Word text. Never sent as a file URL. */
+  /** Extracted Word or plain-text body. Never sent as a file URL. */
   extractedText?: string
   extractedTokenEstimate?: number
 }
@@ -35,7 +40,7 @@ export function buildAttachmentParts(
   const parts: Array<ImagePart | DocumentPart | TextPart> = []
 
   for (const attachment of attachments) {
-    if (attachment.kind === "docx") {
+    if (isExtractedTextKind(attachment.kind)) {
       if (!attachment.extractedText) continue
       parts.push({
         type: "text",
@@ -89,7 +94,7 @@ export function contextToModelMessages(
       content.length +
       thinking.length +
       attachments.reduce((sum, attachment) => {
-        if (attachment.kind === "docx") {
+        if (isExtractedTextKind(attachment.kind)) {
           return sum + (attachment.extractedText?.length ?? 0)
         }
         return sum + attachment.filename.length + 32

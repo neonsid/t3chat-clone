@@ -124,13 +124,15 @@ const TABLE = `| Promise | Effect |
 | \`async\` / \`await\` | \`pipe\` / \`flatMap\` |
 `
 
-test("markdown tables omit fullscreen and stay in a shrink-wrapped card", () => {
+test("markdown tables omit fullscreen and stay inside the message width", () => {
   const { container } = render(
     <StreamdownMarkdown text={TABLE} isStreaming={false} />
   )
   const wrapper = container.querySelector("[data-streamdown='table-wrapper']")
   const actions = container.querySelector("[data-streamdown='table-actions']")
   expect(wrapper).toBeTruthy()
+  expect(wrapper?.className).toContain("overflow-hidden")
+  expect(wrapper?.className).toContain("w-full")
   expect(actions).toBeTruthy()
   expect(container.querySelector("table")).toBeTruthy()
   expect(container.querySelector("[title='View fullscreen']")).toBeNull()

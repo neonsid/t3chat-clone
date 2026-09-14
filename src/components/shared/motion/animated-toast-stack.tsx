@@ -1,6 +1,6 @@
 "use client"
 
-import { CircleAlert, CircleCheck, LoaderCircle, X } from "lucide-react"
+import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react"
 import {
   AnimatePresence,
   motion,
@@ -30,7 +30,6 @@ export type ToastInput = Omit<AnimatedToast, "id" | "createdAt"> & {
 
 export interface AnimatedToastStackProps {
   toasts: AnimatedToast[]
-  onDismiss?: (id: string) => void
 }
 
 export interface UseAnimatedToastStackOptions {
@@ -64,7 +63,7 @@ function createToast(
 ): AnimatedToast {
   return {
     duration: defaultDuration,
-    dismissible: true,
+    dismissible: false,
     ...input,
     id: input.id ?? `toast-${Date.now()}-${idSeed++}`,
     createdAt: Date.now(),
@@ -203,7 +202,6 @@ export function useAnimatedToastStack({
 
 export function AnimatedToastStack({
   toasts,
-  onDismiss,
 }: AnimatedToastStackProps) {
   const visibleToast = toasts.at(-1)
 
@@ -211,15 +209,11 @@ export function AnimatedToastStack({
     <ol
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none absolute right-10 bottom-5 left-0 z-10 mb-0 w-auto translate-y-2 sm:right-[-2.5rem]"
+      className="pointer-events-none absolute right-4 bottom-4 z-10 mb-0 w-auto sm:right-6 sm:bottom-6"
     >
       <AnimatePresence initial={false}>
         {visibleToast ? (
-          <ToastItem
-            key={visibleToast.id}
-            toast={visibleToast}
-            onDismiss={onDismiss}
-          />
+          <ToastItem key={visibleToast.id} toast={visibleToast} />
         ) : null}
       </AnimatePresence>
     </ol>
@@ -228,14 +222,11 @@ export function AnimatedToastStack({
 
 const ToastItem = memo(function ToastItem({
   toast,
-  onDismiss,
 }: {
   toast: AnimatedToast
-  onDismiss?: (id: string) => void
 }) {
   const reduce = useReducedMotion()
   const status = toast.status ?? "neutral"
-  const canDismiss = toast.dismissible !== false && Boolean(onDismiss)
 
   return (
     <motion.li
@@ -251,11 +242,11 @@ const ToastItem = memo(function ToastItem({
             }
       }
       transition={STACK_SPRING}
-      className={cn("pointer-events-auto w-full", TOAST_HEIGHT_CLASS)}
+      className={cn("pointer-events-auto w-full min-w-64", TOAST_HEIGHT_CLASS)}
     >
       <div
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-[8px] border border-border bg-card px-4 shadow-lg",
+          "flex w-full items-center gap-2.5 rounded-md border border-border bg-card px-4 shadow-lg",
           TOAST_HEIGHT_CLASS
         )}
       >
@@ -267,16 +258,6 @@ const ToastItem = memo(function ToastItem({
         <p className="min-w-0 flex-1 truncate text-sm leading-none font-medium text-foreground">
           {toast.title}
         </p>
-        {canDismiss ? (
-          <button
-            type="button"
-            onClick={() => onDismiss?.(toast.id)}
-            aria-label="Dismiss toast"
-            className="inline-flex size-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        ) : null}
       </div>
     </motion.li>
   )

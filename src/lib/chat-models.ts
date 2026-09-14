@@ -50,8 +50,10 @@ const ALL_REASONING_EFFORTS = REASONING_EFFORTS
 const INSTANT_ONLY = ["instant"] as const
 
 const OPENAI_CHAT_MODEL_CONFIG = {
+  "openai/gpt-6-astra": openAIReasoningModel("gpt-6-astra"),
   "openai/gpt-5.6": openAIModel("gpt-5.6"),
   "openai/gpt-5.6-luna": openAIModel("gpt-5.6-luna"),
+  "openai/gpt-5.6-sol": openAIModel("gpt-5.6-sol"),
   "openai/gpt-5.6-terra": openAIModel("gpt-5.6-terra"),
   "openai/gpt-5.5": openAIModel("gpt-5.5"),
   "openai/gpt-5.5-pro": openAIProModel("gpt-5.5-pro", "high"),
@@ -196,6 +198,14 @@ function openAIModel(adapterModelId: string): ChatModelConfig {
     supportedReasoningEfforts: ALL_REASONING_EFFORTS,
     defaultReasoningEffort: "instant",
     instantReasoningEffort: "none",
+  }
+}
+
+function openAIReasoningModel(adapterModelId: string): ChatModelConfig {
+  return {
+    runtime: { kind: "openai", adapterModelId },
+    supportedReasoningEfforts: ["low", "medium", "high"],
+    defaultReasoningEffort: "low",
   }
 }
 

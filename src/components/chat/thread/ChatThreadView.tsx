@@ -104,18 +104,26 @@ import { CHAT_COMPOSER_OVERLAY_HEIGHT } from "@/components/chat/composer/constan
 /**
  * When autoScroll is off, the scroller's one-shot defaultScrollPosition="end"
  * can land short because deferred markdown grows later. A few delayed
- * corrections are enough — continuous ResizeObserver + scrollToEnd floods the
+ * corrections are enough. Continuous ResizeObserver + scrollToEnd floods the
  * scroller store.
  *
  * Must render after the viewport: scrollToEnd is a no-op until the viewport has
  * registered its scroll element.
+ *
+ * followToken retriggers after send/retry. Wait until that user row exists so
+ * an async sendMessage does not scroll to the old bottom and miss the new one.
+ * This is an external scroll, so a layout effect is the only way to time it.
  */
 function MessageScrollerEnsureEnd({
   threadId,
   hasMessages,
+  followToken,
+  followMessagePresent,
 }: {
   threadId: string
   hasMessages: boolean
+  followToken: number
+  followMessagePresent: boolean
 }) {
   const { scrollToEnd } = useMessageScroller()
   // Effect Event: timeouts scheduled below must call the latest scrollToEnd
@@ -126,6 +134,7 @@ function MessageScrollerEnsureEnd({
 
   useLayoutEffect(() => {
     if (!hasMessages) return
+    if (followToken > 0 && !followMessagePresent) return
 
     const timeouts: number[] = []
     for (const delayMs of MESSAGE_SCROLLER_ENSURE_END.delaysMs) {
@@ -135,7 +144,7 @@ function MessageScrollerEnsureEnd({
     return () => {
       for (const timeout of timeouts) window.clearTimeout(timeout)
     }
-  }, [threadId, hasMessages])
+  }, [threadId, hasMessages, followToken, followMessagePresent])
 
   return null
 }
@@ -180,7 +189,6 @@ const EMPTY_WEB_SEARCH_QUERIES: string[] = []
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
-  isScrollAnchor,
   isStopped,
   isTemporary,
   generationStats,
@@ -196,7 +204,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }: {
   message: UIMessage
   isStreaming: boolean
-  isScrollAnchor: boolean
   isStopped: boolean
   isTemporary: boolean
   generationStats: AssistantGenerationStats | undefined
@@ -211,7 +218,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onRetry?: (action?: MessageModelAction) => void | Promise<void>
 }) {
   return (
-    <MessageScrollerItem messageId={message.id} scrollAnchor={isScrollAnchor}>
+    <MessageScrollerItem messageId={message.id}>
       <ChatMessage
         message={message}
         isStreaming={isStreaming}
@@ -283,6 +290,15 @@ export function ChatThreadView({
   >(() => undefined)
   const streamingThinkingLengthRef = useRef(0)
   const [searchThisTurn, setSearchThisTurn] = useState(false)
+  const followTurnTokenRef = useRef(0)
+  const [followTurn, setFollowTurn] = useState<{
+    messageId: string
+    token: number
+  } | null>(null)
+  function requestFollowTurn(messageId: string) {
+    followTurnTokenRef.current += 1
+    setFollowTurn({ messageId, token: followTurnTokenRef.current })
+  }
   const isTemporary = isTemporaryThreadId(threadId)
   const { branchFromMessage } = useBranchChat({ threadId, isTemporary })
   const { truncateForRetry } = useRetryChat({ threadId, isTemporary })
@@ -559,7 +575,10 @@ export function ChatThreadView({
     : 0
 
   const latestUserMessageId = findLastUserMessageId(displayMessages)
-  const scrollAnchorId = isLoading ? latestUserMessageId : null
+  const followMessagePresent = Boolean(
+    followTurn &&
+      displayMessages.some((message) => message.id === followTurn.messageId)
+  )
 
   const retryFromMessage = useCallback(
     async (assistantMessageId: string, action?: MessageModelAction) => {
@@ -600,6 +619,7 @@ export function ChatThreadView({
       setTurnWebSearchQueries([])
       setTurnThinkingSearchSplitAt(undefined)
       setWorkStartedAt(Date.now())
+      requestFollowTurn(userMessage.id)
 
       try {
         const truncated = await truncateForRetry(assistantMessageId)
@@ -635,7 +655,6 @@ export function ChatThreadView({
           key={message.id}
           message={message}
           isStreaming={false}
-          isScrollAnchor={message.id === scrollAnchorId}
           isStopped={
             stoppedMessageIds.has(message.id) ||
             locallyStoppedMessageIds.has(message.id)
@@ -700,7 +719,6 @@ export function ChatThreadView({
       latestUserMessageId,
       locallyStoppedMessageIds,
       retryFromMessage,
-      scrollAnchorId,
       stoppedMessageIds,
       threadId,
       turnWebSearchQueries,
@@ -747,7 +765,6 @@ export function ChatThreadView({
             key={renderedStreamingMessage.id}
             message={renderedStreamingMessage}
             isStreaming
-            isScrollAnchor={false}
             isStopped={false}
             isTemporary={isTemporary}
             generationStats={undefined}
@@ -818,6 +835,7 @@ export function ChatThreadView({
     clearDraft(threadStateKey)
     clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
+    requestFollowTurn(messageId)
     void sendMessage({
       id: messageId,
       content: text
@@ -895,6 +913,7 @@ export function ChatThreadView({
     )
     clearAttachments(threadStateKey, { revoke: false })
     setWorkStartedAt(Date.now())
+    requestFollowTurn(pending.messageId)
     void sendMessage({
       id: pending.messageId,
       content: pending.content
@@ -1029,8 +1048,10 @@ export function ChatThreadView({
       <MessageScrollerProvider
         // Never enable library autoScroll while idle: following-bottom + content
         // resize calls scrollToEnd forever and floods the scroll store. Stick to
-        // the bottom via defaultScrollPosition + EnsureEnd; during a turn the
-        // user-message scrollAnchor keeps the viewport stable.
+        // the bottom via defaultScrollPosition + EnsureEnd. Sends retrigger
+        // EnsureEnd once the new user row exists. Do not use scrollAnchor for
+        // that: flipping it on a mounted row pins align:"start" when the first
+        // token replaces the pending dots.
         autoScroll={false}
         defaultScrollPosition="end"
       >
@@ -1061,7 +1082,9 @@ export function ChatThreadView({
               <MessageScrollerViewport>
                 <MessageScrollerContent
                   aria-busy={!isReady || isLoading}
-                  className={cn("mx-auto w-full max-w-3xl px-4 pt-20 pb-6")}
+                  className={cn(
+                    "mx-auto w-full min-w-0 max-w-3xl px-4 pt-20 pb-6"
+                  )}
                 >
                   {messageRows}
 
@@ -1076,6 +1099,8 @@ export function ChatThreadView({
               <MessageScrollerEnsureEnd
                 threadId={threadId}
                 hasMessages={!isEmptyThread}
+                followToken={followTurn?.token ?? 0}
+                followMessagePresent={followMessagePresent}
               />
             </MessageScroller>
           )}

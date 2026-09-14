@@ -39,7 +39,8 @@ export const generationValidator = v.object({
 export const attachmentKindValidator = v.union(
   v.literal("image"),
   v.literal("pdf"),
-  v.literal("docx")
+  v.literal("docx"),
+  v.literal("txt")
 )
 
 export const messageSourceValidator = v.object({

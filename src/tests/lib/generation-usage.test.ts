@@ -186,11 +186,13 @@ describe("usage formatters", () => {
     expect(contextTokensUsed(undefined, 5764)).toBeUndefined()
   })
 
-  it("flags a long chat at 32k tokens or 25% of the window", () => {
+  it("flags a long chat at 25% of the model window, not a 32k floor", () => {
     const limits = LONG_CHAT_DANGER
     expect(isLongChatDanger(8_000, 1_050_000, limits)).toBe(false)
-    expect(isLongChatDanger(32_000, 1_050_000, limits)).toBe(true)
+    expect(isLongChatDanger(32_000, 1_050_000, limits)).toBe(false)
+    expect(isLongChatDanger(262_500, 1_050_000, limits)).toBe(true)
     expect(isLongChatDanger(4_000, 8_000, limits)).toBe(true)
+    expect(isLongChatDanger(32_000, null, limits)).toBe(true)
     expect(isLongChatDanger(undefined, 1_050_000, limits)).toBe(false)
   })
 })

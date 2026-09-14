@@ -4,6 +4,7 @@ import {
   DOCX_MIME_TYPE,
   LEGACY_DOC_ERROR,
   MAX_WORD_ATTACHMENT_BYTES,
+  TXT_MIME_TYPE,
   normalizeAttachmentMimeType,
   validateAttachmentFile,
 } from "@/lib/attachment-limits"
@@ -19,6 +20,21 @@ describe("normalizeAttachmentMimeType", () => {
     expect(
       normalizeAttachmentMimeType({ name: "notes.docx", type: "" })
     ).toBe(DOCX_MIME_TYPE)
+  })
+
+  it("accepts a .txt filename when the browser leaves type empty", () => {
+    expect(
+      normalizeAttachmentMimeType({ name: "notes.txt", type: "" })
+    ).toBe(TXT_MIME_TYPE)
+  })
+
+  it("strips a charset suffix from text/plain", () => {
+    expect(
+      normalizeAttachmentMimeType({
+        name: "Pasted Text 1",
+        type: "text/plain;charset=utf-8",
+      })
+    ).toBe(TXT_MIME_TYPE)
   })
 
   it("does not treat legacy .doc as Word", () => {
@@ -61,5 +77,15 @@ describe("validateAttachmentFile", () => {
         fakeFile("doc.pdf", "application/pdf", 6 * 1024 * 1024)
       )
     ).toMatchObject({ ok: true, kind: "pdf" })
+  })
+
+  it("accepts a pasted text file under the 5MB cap", () => {
+    expect(
+      validateAttachmentFile(fakeFile("Pasted Text 1", TXT_MIME_TYPE, 1024))
+    ).toEqual({
+      ok: true,
+      mimeType: TXT_MIME_TYPE,
+      kind: "txt",
+    })
   })
 })

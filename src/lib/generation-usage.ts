@@ -217,9 +217,10 @@ export function isLongChatDanger(
   limits: { tokens: number; ratio: number }
 ) {
   if (used == null || used <= 0) return false
-  if (used >= limits.tokens) return true
-  if (window == null || window <= 0) return false
-  return used / window >= limits.ratio
+  if (window != null && window > 0) {
+    return used / window >= limits.ratio
+  }
+  return used >= limits.tokens
 }
 
 function trimFloat(value: number) {

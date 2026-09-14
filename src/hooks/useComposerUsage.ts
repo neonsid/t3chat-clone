@@ -10,6 +10,7 @@ import {
   estimateThreadInputTokens,
   modelInputBudget,
 } from "@/lib/attachment-context"
+import { isExtractedTextKind } from "@/lib/attachment-limits"
 import { asThreadId } from "@/lib/convex-ids"
 import {
   contextFillRatio,
@@ -109,7 +110,7 @@ export function useComposerUsage(threadStateKey: string) {
       ? contextTokensUsed(lastTurn.promptTokens, lastTurn.outputTokens)
       : lastPromptTokens
   const historicalDocxEstimates = (threadAttachmentDocs ?? [])
-    .filter((attachment) => attachment.kind === "docx")
+    .filter((attachment) => isExtractedTextKind(attachment.kind))
     .map((attachment) => attachment.extractedTokenEstimate ?? 0)
 
   const threadTokensWithoutComposerDocx = estimateThreadInputTokens({

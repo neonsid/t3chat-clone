@@ -379,16 +379,10 @@ html[data-theme-id="t3-chat"]
     pointer-events: none;
     position: absolute;
     right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
     z-index: 30;
     display: flex;
     justify-content: flex-end;
-    bottom: calc(var(--chat-composer-overlay-height, 148px) + 0.75rem);
-  }
-
-  @container chat-pane (min-width: 52rem) {
-    .chat-shell-toast-anchor {
-      bottom: max(1rem, env(safe-area-inset-bottom));
-    }
   }
 
   .sidebar-thread-title {

@@ -6,6 +6,8 @@
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
+export const TXT_MIME_TYPE = "text/plain"
+
 export const LEGACY_DOC_MIME_TYPE = "application/msword"
 
 export const ALLOWED_ATTACHMENT_MIME_TYPES = [
@@ -15,6 +17,7 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
   "image/webp",
   "application/pdf",
   DOCX_MIME_TYPE,
+  TXT_MIME_TYPE,
 ] as const
 
 export type AllowedAttachmentMimeType =
@@ -28,12 +31,15 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS = [
   ".webp",
   ".pdf",
   ".docx",
+  ".txt",
 ] as const
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 export const MAX_WORD_ATTACHMENT_BYTES = 5 * 1024 * 1024
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5
 export const MAX_ATTACHMENT_FILENAME_LENGTH = 200
+export const PASTED_TEXT_WORD_LIMIT = 400
+export const PASTED_TEXT_FILENAME_PREFIX = "Pasted Text"
 
 export const ATTACHMENT_ACCEPT = [
   "image/jpeg",
@@ -42,6 +48,7 @@ export const ATTACHMENT_ACCEPT = [
   "image/webp",
   "application/pdf",
   DOCX_MIME_TYPE,
+  TXT_MIME_TYPE,
   ".jpg",
   ".jpeg",
   ".png",
@@ -49,14 +56,15 @@ export const ATTACHMENT_ACCEPT = [
   ".webp",
   ".pdf",
   ".docx",
+  ".txt",
 ].join(",")
 
 export const ATTACHMENT_UNSUPPORTED_ERROR =
-  "Only JPEG, PNG, GIF, WebP, PDF, and Word (.docx) files are supported"
+  "Only JPEG, PNG, GIF, WebP, PDF, Word (.docx), and text (.txt) files are supported"
 
 export const LEGACY_DOC_ERROR = "Save as .docx and try again"
 
-export type AttachmentKind = "image" | "pdf" | "docx"
+export type AttachmentKind = "image" | "pdf" | "docx" | "txt"
 
 export const MIME_TO_KIND = {
   "image/jpeg": "image",
@@ -65,6 +73,7 @@ export const MIME_TO_KIND = {
   "image/webp": "image",
   "application/pdf": "pdf",
   [DOCX_MIME_TYPE]: "docx",
+  [TXT_MIME_TYPE]: "txt",
 } as const satisfies Record<AllowedAttachmentMimeType, AttachmentKind>
 
 export function isAllowedAttachmentMimeType(
@@ -78,14 +87,21 @@ export function isLegacyWordFilename(filename: string) {
   return lower.endsWith(".doc") && !lower.endsWith(".docx")
 }
 
+export function isExtractedTextKind(kind: string): kind is "docx" | "txt" {
+  return kind === "docx" || kind === "txt"
+}
+
 export function maxBytesForAttachmentKind(kind: AttachmentKind) {
-  return kind === "docx" ? MAX_WORD_ATTACHMENT_BYTES : MAX_ATTACHMENT_BYTES
+  return isExtractedTextKind(kind)
+    ? MAX_WORD_ATTACHMENT_BYTES
+    : MAX_ATTACHMENT_BYTES
 }
 
 export function normalizeAttachmentMimeType(
   file: Pick<File, "type" | "name">
 ): AllowedAttachmentMimeType | null {
-  if (isAllowedAttachmentMimeType(file.type)) return file.type
+  const declared = file.type.split(";")[0]?.trim().toLowerCase() ?? ""
+  if (isAllowedAttachmentMimeType(declared)) return declared
 
   const lower = file.name.toLowerCase()
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg"
@@ -94,6 +110,7 @@ export function normalizeAttachmentMimeType(
   if (lower.endsWith(".webp")) return "image/webp"
   if (lower.endsWith(".pdf")) return "application/pdf"
   if (lower.endsWith(".docx")) return DOCX_MIME_TYPE
+  if (lower.endsWith(".txt")) return TXT_MIME_TYPE
   return null
 }
 

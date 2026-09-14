@@ -158,14 +158,18 @@ export const ChatMessage = memo(function ChatMessage({
   if (isUser) {
     if (!text && attachments.length === 0) return null
     return (
-      <div className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[80%] rounded-2xl border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 text-[var(--message-foreground,var(--foreground))]">
+      <div className="group flex w-full min-w-0 flex-col items-end gap-1">
+        <div className="relative min-w-0 max-w-[80%] overflow-x-auto rounded-md border border-border/70 bg-[var(--message-surface,var(--accent))] p-3 text-[15px] leading-6 text-[var(--message-foreground,var(--foreground))]">
           {attachments.length > 0 ? (
             <div className={text ? "mb-2" : undefined}>
               <MessageAttachments attachments={attachments} />
             </div>
           ) : null}
-          {text ? <div className="whitespace-pre-wrap">{text}</div> : null}
+          {text ? (
+            <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {text}
+            </div>
+          ) : null}
         </div>
         <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100">
           <div className="flex shrink-0 items-center gap-2">

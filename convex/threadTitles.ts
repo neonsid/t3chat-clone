@@ -60,6 +60,9 @@ export const getTitleContext = internalQuery({
     const allDocx = attachments.every(
       (attachment) => attachment.kind === "docx"
     )
+    const allTxt = attachments.every(
+      (attachment) => attachment.kind === "txt"
+    )
     const titleSeed =
       filenames.length === 1
         ? filenames[0]!
@@ -69,7 +72,9 @@ export const getTitleContext = internalQuery({
             ? "PDFs"
             : allDocx
               ? "Word files"
-              : filenames.slice(0, 2).join(", ")
+              : allTxt
+                ? "Text files"
+                : filenames.slice(0, 2).join(", ")
 
     return {
       threadId: thread._id,

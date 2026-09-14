@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck } from "lucide-react"
+import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react"
 import {
   AnimatePresence,
   motion,
@@ -65,7 +65,9 @@ function TemporaryChatToastItem({ toast }: { toast: AnimatedToast }) {
       transition={TOAST_SPRING}
     >
       <div className={TEMPORARY_CHAT_TOAST_ITEM_CLASS}>
-        {status === "error" ? (
+        {status === "loading" ? (
+          <LoaderCircle className="size-4 shrink-0 animate-spin text-foreground" />
+        ) : status === "error" ? (
           <CircleAlert className="size-4 shrink-0 text-foreground" />
         ) : (
           <CircleCheck className="size-4 shrink-0 text-foreground" />

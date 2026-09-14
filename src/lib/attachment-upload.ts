@@ -45,7 +45,9 @@ export function createPreparingAttachment(file: File):
     status: "preparing",
     progress: 0,
     localPreviewUrl:
-      validated.kind === "image" ? URL.createObjectURL(file) : undefined,
+      validated.kind === "image" || validated.kind === "txt"
+        ? URL.createObjectURL(file)
+        : undefined,
   }
 }
 

@@ -206,8 +206,8 @@ function SharePageFrame({
           </Button>
         ) : null}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="mx-auto w-full max-w-3xl">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto w-full min-w-0 max-w-3xl">
           {title ? (
             <h1 className="mb-8 text-2xl font-semibold tracking-tight">
               {title}

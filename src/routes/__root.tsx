@@ -1,11 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query"
-import { TanStackDevtools } from "@tanstack/react-devtools"
 import {
   HeadContent,
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 import type { ConvexReactClient } from "convex/react"
 
 import appCss from "../styles.css?url"
@@ -54,17 +52,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="overflow-hidden bg-background text-foreground">
         {children}
-        <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
         <Scripts />
       </body>
     </html>
