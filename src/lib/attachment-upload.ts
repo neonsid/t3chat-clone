@@ -66,6 +66,7 @@ function putFileToSignedUrl(options: {
 
     xhr.open("PUT", options.putUrl)
     xhr.setRequestHeader("Content-Type", options.mimeType)
+    options.onProgress?.(0)
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || event.total <= 0) return
       options.onProgress?.(Math.min(1, event.loaded / event.total))
@@ -73,6 +74,7 @@ function putFileToSignedUrl(options: {
     xhr.onload = () => {
       options.signal?.removeEventListener("abort", onAbort)
       if (xhr.status >= 200 && xhr.status < 300) {
+        options.onProgress?.(1)
         resolve()
         return
       }
@@ -95,7 +97,22 @@ function putFileToSignedUrl(options: {
       options.signal.addEventListener("abort", onAbort)
     }
 
-    xhr.send(options.file)
+    const send = () => {
+      if (options.signal?.aborted) {
+        reject(new DOMException("Aborted", "AbortError"))
+        return
+      }
+      xhr.send(options.file)
+    }
+
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(send)
+      })
+      return
+    }
+
+    send()
   })
 }
 

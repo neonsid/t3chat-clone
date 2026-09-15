@@ -41,66 +41,66 @@ export function ComposerAttachmentChips({
         {attachments.map((attachment) => {
           const previewUrl = attachment.localPreviewUrl
           const canOpen = attachment.kind === "image" && Boolean(previewUrl)
-
-          const progress =
-            attachment.status === "processing"
-              ? 1
-              : attachment.status === "preparing" ||
-                  attachment.status === "uploading"
-                ? attachment.progress
-                : undefined
-          const indeterminate =
+          const isUploading =
             attachment.status === "preparing" ||
-            (attachment.status === "uploading" && attachment.progress <= 0)
+            attachment.status === "uploading" ||
+            attachment.status === "processing"
+          const progress =
+            attachment.status === "processing" ? 1 : attachment.progress
           const onRemoveChip = () => {
             if (viewer?.localId === attachment.localId) setViewer(null)
             onRemove(attachment.localId)
           }
           const fileStatus = composerStatusLabel(attachment)
 
+          let preview
+          if (attachment.kind === "image") {
+            preview = (
+              <AttachmentThumbnail
+                filename={attachment.filename}
+                kind={attachment.kind}
+                src={previewUrl}
+                statusLabel={composerStatusLabel(attachment)}
+                failed={attachment.status === "failed"}
+                showPercent={isUploading}
+                progress={progress}
+                onOpen={
+                  canOpen && previewUrl
+                    ? () =>
+                        setViewer({
+                          localId: attachment.localId,
+                          filename: attachment.filename,
+                          url: previewUrl,
+                        })
+                    : undefined
+                }
+                onRemove={onRemoveChip}
+                removeDisabled={disabled}
+              />
+            )
+          } else {
+            preview = (
+              <AttachmentFileChip
+                filename={attachment.filename}
+                badge={attachmentFileBadge(attachment.kind)}
+                statusLabel={
+                  attachment.status === "failed" || attachment.contextWarning
+                    ? fileStatus
+                    : undefined
+                }
+                failed={attachment.status === "failed"}
+                warning={Boolean(attachment.contextWarning)}
+                uploading={isUploading}
+                progress={progress}
+                onRemove={onRemoveChip}
+                removeDisabled={disabled}
+              />
+            )
+          }
+
           return (
             <li key={attachment.localId} className="max-w-full min-w-0">
-              {attachment.kind !== "image" ? (
-                <AttachmentFileChip
-                  filename={attachment.filename}
-                  badge={attachmentFileBadge(attachment.kind)}
-                  statusLabel={
-                    attachment.status === "failed" || attachment.contextWarning
-                      ? fileStatus
-                      : undefined
-                  }
-                  failed={attachment.status === "failed"}
-                  warning={Boolean(attachment.contextWarning)}
-                  onRemove={onRemoveChip}
-                  removeDisabled={disabled}
-                />
-              ) : (
-                <AttachmentThumbnail
-                  filename={attachment.filename}
-                  kind={attachment.kind}
-                  src={previewUrl}
-                  statusLabel={composerStatusLabel(attachment)}
-                  failed={attachment.status === "failed"}
-                  showPercent={
-                    attachment.status !== "ready" &&
-                    attachment.status !== "failed"
-                  }
-                  progress={progress}
-                  indeterminate={indeterminate}
-                  onOpen={
-                    canOpen && previewUrl
-                      ? () =>
-                          setViewer({
-                            localId: attachment.localId,
-                            filename: attachment.filename,
-                            url: previewUrl,
-                          })
-                      : undefined
-                  }
-                  onRemove={onRemoveChip}
-                  removeDisabled={disabled}
-                />
-              )}
+              {preview}
             </li>
           )
         })}

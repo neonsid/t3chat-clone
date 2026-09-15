@@ -1,17 +1,16 @@
 import { BanIcon, FileTextIcon, XIcon } from "lucide-react"
 
+import { AttachmentShell } from "@/components/chat/attachments/AttachmentShell"
 import {
+  ATTACHMENT_FILE_CHIP,
   ATTACHMENT_THUMBNAIL_ACTION,
   ATTACHMENT_THUMBNAIL_CLASS,
   ATTACHMENT_THUMBNAIL_FRAME_CLASS,
   ATTACHMENT_UPLOAD_PROGRESS,
+  attachmentUploadPercent,
 } from "@/components/chat/attachments/constants"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { cn } from "@/lib/utils"
-
-function uploadPercent(progress: number | undefined) {
-  return Math.round(Math.min(1, Math.max(0, progress ?? 0)) * 100)
-}
 
 export function AttachmentThumbnail({
   filename,
@@ -20,7 +19,6 @@ export function AttachmentThumbnail({
   statusLabel,
   failed,
   progress,
-  indeterminate,
   showPercent,
   onOpen,
   onRemove,
@@ -32,15 +30,14 @@ export function AttachmentThumbnail({
   statusLabel?: string
   failed?: boolean
   progress?: number
-  indeterminate?: boolean
   showPercent?: boolean
   onOpen?: () => void
   onRemove?: () => void
   removeDisabled?: boolean
 }) {
-  const percent = uploadPercent(progress)
+  const percent = attachmentUploadPercent(progress)
   const isUploading = Boolean(
-    showPercent || indeterminate || (progress !== undefined && progress < 1)
+    showPercent || (progress !== undefined && progress < 1)
   )
   const preview =
     kind === "image" && src ? (
@@ -60,69 +57,58 @@ export function AttachmentThumbnail({
     )
 
   const body = (
-    <div className={cn("relative", ATTACHMENT_THUMBNAIL_CLASS)}>
-      <div
-        className={cn(
-          ATTACHMENT_THUMBNAIL_FRAME_CLASS,
-          failed ? "border-destructive/40" : "border-border/70"
-        )}
-      >
-        {onOpen && !isUploading ? (
-          <button
-            type="button"
-            className="size-full cursor-zoom-in"
-            aria-label={`View ${filename}`}
-            onClick={onOpen}
-          >
-            {preview}
-          </button>
-        ) : (
-          preview
-        )}
-        {statusLabel ? (
-          <p
-            className={cn(
-              "pointer-events-none absolute inset-x-0 bottom-0 truncate px-1 py-0.5 text-center text-[10px] leading-4",
-              failed
-                ? "bg-destructive/80 text-destructive-foreground"
-                : "bg-background/80 text-muted-foreground"
-            )}
-          >
-            {statusLabel}
-          </p>
-        ) : null}
-        {showPercent ? (
-          <>
-            <div className={ATTACHMENT_UPLOAD_PROGRESS.overlayClass}>
-              <span className={ATTACHMENT_UPLOAD_PROGRESS.percentClass}>
-                {indeterminate ? "0%" : `${percent}%`}
-              </span>
-            </div>
-            <div className={ATTACHMENT_UPLOAD_PROGRESS.trackClass}>
+    <AttachmentShell className="group/upload relative" failed={failed}>
+      <div className={ATTACHMENT_THUMBNAIL_CLASS}>
+        <div className={ATTACHMENT_THUMBNAIL_FRAME_CLASS}>
+          {onOpen && !isUploading ? (
+            <button
+              type="button"
+              className="block h-8 w-auto max-w-full cursor-zoom-in"
+              aria-label={`View ${filename}`}
+              onClick={onOpen}
+            >
+              {preview}
+            </button>
+          ) : (
+            preview
+          )}
+          {statusLabel ? (
+            <p
+              className={cn(
+                "pointer-events-none absolute inset-x-0 bottom-0 truncate px-1 py-0.5 text-center text-[10px] leading-4",
+                failed
+                  ? "bg-destructive/80 text-destructive-foreground"
+                  : "bg-background/80 text-muted-foreground"
+              )}
+            >
+              {statusLabel}
+            </p>
+          ) : null}
+          {showPercent ? (
+            <>
               <div
                 className={cn(
-                  ATTACHMENT_UPLOAD_PROGRESS.fillClass,
-                  indeterminate && "w-1/3 animate-pulse"
+                  ATTACHMENT_UPLOAD_PROGRESS.overlayClass,
+                  ATTACHMENT_UPLOAD_PROGRESS.imageWashClass
                 )}
-                style={indeterminate ? undefined : { width: `${percent}%` }}
-              />
-            </div>
-          </>
-        ) : indeterminate || (progress !== undefined && progress < 1) ? (
-          <div className={ATTACHMENT_UPLOAD_PROGRESS.trackClass}>
-            <div
-              className={cn(
-                ATTACHMENT_UPLOAD_PROGRESS.fillClass,
-                indeterminate && "w-1/3 animate-pulse"
-              )}
-              style={indeterminate ? undefined : { width: `${percent}%` }}
-            />
-          </div>
-        ) : null}
+              >
+                <span className={ATTACHMENT_UPLOAD_PROGRESS.percentClass}>
+                  {`${percent}%`}
+                </span>
+              </div>
+              <div className={ATTACHMENT_UPLOAD_PROGRESS.trackClass}>
+                <div
+                  className={ATTACHMENT_UPLOAD_PROGRESS.fillClass}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
       {onRemove ? (
         <Tooltip
-          wrapperClassName={ATTACHMENT_THUMBNAIL_ACTION.wrap}
+          wrapperClassName={ATTACHMENT_FILE_CHIP.actionWrap}
           content={
             isUploading
               ? ATTACHMENT_THUMBNAIL_ACTION.cancelLabel
@@ -134,7 +120,7 @@ export function AttachmentThumbnail({
             aria-label={
               isUploading
                 ? ATTACHMENT_THUMBNAIL_ACTION.cancelLabel
-                : `Remove ${filename}`
+                : ATTACHMENT_THUMBNAIL_ACTION.removeLabel
             }
             disabled={removeDisabled}
             onClick={onRemove}
@@ -148,7 +134,7 @@ export function AttachmentThumbnail({
           </button>
         </Tooltip>
       ) : null}
-    </div>
+    </AttachmentShell>
   )
 
   if (failed && statusLabel) {
