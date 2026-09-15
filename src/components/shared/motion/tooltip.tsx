@@ -46,6 +46,8 @@ export interface TooltipProps {
   className?: string
   /** Classes for the outer wrapper span. Use to fix baseline / fill parent. */
   wrapperClassName?: string
+  /** Portal target. Dialogs in the top layer need this so the tooltip stays visible. */
+  portalContainer?: HTMLElement | null
 }
 
 function buildVariants(side: MotionSide): Variants {
@@ -100,6 +102,7 @@ export function Tooltip({
   delay = 120,
   className,
   wrapperClassName,
+  portalContainer,
 }: TooltipProps) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
@@ -111,13 +114,15 @@ export function Tooltip({
   const reduce = useReducedMotion()
   const canHover = useHoverCapable()
 
-  // Anchor point in viewport coords, on the edge of the trigger facing `side`.
-  // Position:fixed means these viewport coords place the tooltip directly, so
-  // it escapes every ancestor's stacking context and overflow.
+  // Anchor point in viewport coords. If we portal into a transformed dialog,
+  // `fixed` is relative to that box, so subtract the container origin.
   const place = useCallback(() => {
     const el = anchorRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
+    const origin = portalContainer?.getBoundingClientRect()
+    const ox = origin?.left ?? 0
+    const oy = origin?.top ?? 0
     const cx = r.left + r.width / 2
     const cy = r.top + r.height / 2
     const alignedLeft = {
@@ -126,13 +131,13 @@ export function Tooltip({
       end: r.right,
     }[align]
     const point = {
-      top: { top: r.top - TOOLTIP_GAP_PX, left: alignedLeft },
-      bottom: { top: r.bottom + TOOLTIP_GAP_PX, left: alignedLeft },
-      left: { top: cy, left: r.left - TOOLTIP_GAP_PX },
-      right: { top: cy, left: r.right + TOOLTIP_GAP_PX },
+      top: { top: r.top - TOOLTIP_GAP_PX - oy, left: alignedLeft - ox },
+      bottom: { top: r.bottom + TOOLTIP_GAP_PX - oy, left: alignedLeft - ox },
+      left: { top: cy - oy, left: r.left - TOOLTIP_GAP_PX - ox },
+      right: { top: cy - oy, left: r.right + TOOLTIP_GAP_PX - ox },
     } satisfies Record<MotionSide, { top: number; left: number }>
     setCoords(point[side])
-  }, [align, side])
+  }, [align, portalContainer, side])
 
   const show = useCallback(() => {
     if (!canHover) return
@@ -191,7 +196,8 @@ export function Tooltip({
           animate="animate"
           exit="exit"
           className={cn(
-            "pointer-events-none fixed z-[9999] block rounded-lg border border-border bg-popover/95 px-2.5 py-2 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
+            "pointer-events-none block rounded-lg border border-border bg-popover/95 px-2.5 py-2 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
+            portalContainer ? "absolute z-[9999]" : "fixed z-[9999]",
             className
           )}
           style={{
@@ -221,7 +227,9 @@ export function Tooltip({
       >
         {trigger}
       </span>
-      {hasDocument() ? createPortal(tooltip, document.body) : null}
+      {hasDocument()
+        ? createPortal(tooltip, portalContainer ?? document.body)
+        : null}
     </>
   )
 }

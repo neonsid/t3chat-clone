@@ -73,4 +73,17 @@ export const ATTACHMENT_VIEWER = {
   downloadLabel: "Download",
   openLabel: "Open original",
   closeLabel: "Close",
+  backdrop: "fixed inset-0 z-[300] bg-background/80",
+  popup:
+    "fixed inset-0 z-[300] flex items-center justify-center outline-none pointer-events-none",
+  frame:
+    "pointer-events-auto flex max-h-[calc(100vh-3rem)] w-max max-w-[min(56rem,calc(100vw-3rem))] flex-col overflow-hidden rounded-md border border-border bg-card shadow-[0_16px_48px_rgb(0_0_0/0.4)]",
+  header: "flex w-full shrink-0 items-center justify-between gap-4 px-5 py-3",
+  title: "min-w-0 flex-1 truncate text-sm text-foreground",
+  actions: "flex shrink-0 items-center gap-2",
+  iconButton:
+    "inline-flex size-8 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+  imageWrap: "flex min-h-0 items-center justify-center overflow-hidden px-5 pb-5",
+  image:
+    "h-auto w-auto max-h-[calc(100vh-9rem)] max-w-[min(56rem,calc(100vw-5.5rem))] object-contain",
 } as const;

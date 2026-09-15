@@ -2,10 +2,9 @@ import { useState } from "react"
 import { Dialog } from "@base-ui/react/dialog"
 import { DownloadIcon, ExternalLinkIcon, XIcon } from "lucide-react"
 
-import { Button } from "@/components/shared/ui/button"
+import { ATTACHMENT_VIEWER } from "@/components/chat/attachments/constants"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { hasDocument } from "@/lib/runtime-env"
-import { ATTACHMENT_VIEWER } from "@/components/chat/attachments/constants"
 
 async function downloadNamedFile(url: string, filename: string) {
   try {
@@ -37,71 +36,81 @@ export function AttachmentLightbox({
   const [container] = useState<HTMLElement | null>(() =>
     hasDocument() ? document.body : null
   )
+  const [popupEl, setPopupEl] = useState<HTMLDivElement | null>(null)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal container={container}>
         <Dialog.Backdrop
           data-attachment-lightbox=""
-          className="fixed inset-0 z-[300] bg-background/90"
+          className={ATTACHMENT_VIEWER.backdrop}
         />
         <Dialog.Popup
+          ref={setPopupEl}
           data-attachment-lightbox=""
-          className="fixed inset-0 z-[300] flex flex-col outline-none"
+          className={ATTACHMENT_VIEWER.popup}
         >
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Dialog.Title className="min-w-0 flex-1 truncate text-sm text-foreground">
-              {filename}
-            </Dialog.Title>
-            <div className="flex shrink-0 items-center gap-1">
-              <Tooltip content={ATTACHMENT_VIEWER.downloadLabel} side="bottom">
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={ATTACHMENT_VIEWER.downloadLabel}
-                  onClick={() => {
-                    void downloadNamedFile(url, filename)
-                  }}
+          <div className={ATTACHMENT_VIEWER.frame}>
+            <div className={ATTACHMENT_VIEWER.header}>
+              <Dialog.Title className={ATTACHMENT_VIEWER.title}>
+                {filename}
+              </Dialog.Title>
+              <div className={ATTACHMENT_VIEWER.actions}>
+                <Tooltip
+                  content={ATTACHMENT_VIEWER.downloadLabel}
+                  portalContainer={popupEl}
                 >
-                  <DownloadIcon />
-                </Button>
-              </Tooltip>
-              <Tooltip content={ATTACHMENT_VIEWER.openLabel} side="bottom">
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={ATTACHMENT_VIEWER.openLabel}
-                  onClick={() => {
-                    window.open(url, "_blank", "noopener,noreferrer")
-                  }}
+                  <button
+                    type="button"
+                    aria-label={ATTACHMENT_VIEWER.downloadLabel}
+                    className={ATTACHMENT_VIEWER.iconButton}
+                    onClick={() => {
+                      void downloadNamedFile(url, filename)
+                    }}
+                  >
+                    <DownloadIcon className="size-4" />
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  content={ATTACHMENT_VIEWER.openLabel}
+                  portalContainer={popupEl}
                 >
-                  <ExternalLinkIcon />
-                </Button>
-              </Tooltip>
-              <Tooltip content={ATTACHMENT_VIEWER.closeLabel} side="bottom">
-                <Dialog.Close
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={ATTACHMENT_VIEWER.closeLabel}
-                    />
-                  }
+                  <button
+                    type="button"
+                    aria-label={ATTACHMENT_VIEWER.openLabel}
+                    className={ATTACHMENT_VIEWER.iconButton}
+                    onClick={() => {
+                      window.open(url, "_blank", "noopener,noreferrer")
+                    }}
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  content={ATTACHMENT_VIEWER.closeLabel}
+                  portalContainer={popupEl}
                 >
-                  <XIcon />
-                </Dialog.Close>
-              </Tooltip>
+                  <Dialog.Close
+                    render={
+                      <button
+                        type="button"
+                        aria-label={ATTACHMENT_VIEWER.closeLabel}
+                        className={ATTACHMENT_VIEWER.iconButton}
+                      />
+                    }
+                  >
+                    <XIcon className="size-4" />
+                  </Dialog.Close>
+                </Tooltip>
+              </div>
             </div>
-          </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center p-4">
-            <img
-              src={url}
-              alt={filename}
-              className="max-h-full max-w-full object-contain"
-            />
+            <div className={ATTACHMENT_VIEWER.imageWrap}>
+              <img
+                src={url}
+                alt={filename}
+                className={ATTACHMENT_VIEWER.image}
+              />
+            </div>
           </div>
         </Dialog.Popup>
       </Dialog.Portal>
