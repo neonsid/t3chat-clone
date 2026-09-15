@@ -40,6 +40,7 @@ import {
   TXT_MIME_TYPE,
   normalizeAttachmentMimeType,
 } from "@/lib/attachment-limits"
+import { filesFromClipboard } from "@/lib/clipboard-files"
 import {
   createPastedTextFile,
   shouldAttachPastedText,
@@ -140,7 +141,15 @@ export const ChatComposer = memo(function ChatComposer({
   function handleDraftPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     if (disabled || isLoading) return
     const clipboard = event.clipboardData
-    if (!clipboard || clipboard.files.length > 0) return
+    if (!clipboard) return
+
+    const files = filesFromClipboard(clipboard)
+    if (files.length > 0) {
+      event.preventDefault()
+      void handleFilesSelected(files)
+      return
+    }
+
     const pasted = clipboard.getData("text/plain")
     if (!shouldAttachPastedText(pasted)) return
     if (attachments.length >= MAX_ATTACHMENTS_PER_MESSAGE) return
