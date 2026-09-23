@@ -1,13 +1,9 @@
 import { StarIcon } from "lucide-react"
-import type { ModelCapability, ModelCatalogEntry } from "@t3chat/model-catalog"
+import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 
 import { MODELS_PAGE } from "@/components/settings/constants"
 import { modelVersionSubtitle } from "@/components/settings/logic"
-import {
-  MAX_VISIBLE_MODEL_CAPABILITIES,
-  MODEL_CAPABILITY_LABELS,
-  MODEL_CAPABILITY_VISUALS,
-} from "@/components/chat/model-picker/constants"
+import { ModelCapabilityBadges } from "@/components/chat/model-picker/ModelCapabilityBadges"
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
 import { Tooltip } from "@/components/shared/motion/tooltip"
@@ -63,7 +59,7 @@ export function ModelsGrid({
                   onToggleFavorite(model.id)
                 }}
                 className={cn(
-                  "inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:text-amber-400 focus-visible:outline-none group-hover:opacity-100",
+                  "inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-amber-400 focus-visible:outline-none",
                   favorite && "text-amber-400 opacity-100"
                 )}
               >
@@ -76,23 +72,15 @@ export function ModelsGrid({
               </button>
             </Tooltip>
             {isNew ? (
-              <span className="absolute top-2 right-2 rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-primary ring-1 ring-inset ring-primary/25">
+              <span className="absolute top-2 right-2 rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-primary ring-1 ring-primary/25 ring-inset">
                 {MODELS_PAGE.newBadge}
               </span>
             ) : null}
 
-            <span
-              className={cn(
-                "flex size-12 items-center justify-center rounded-md  text-foreground/90 transition-colors group-hover:text-foreground",
-                
-              )}
-            >
-              <ProviderLogo
-                providerId={model.providerId}
-                className="size-10"
-              />
+            <span className="flex size-12 items-center justify-center rounded-md text-foreground/90 transition-colors group-hover:text-foreground">
+              <ProviderLogo providerId={model.providerId} className="size-10" />
             </span>
-            <p className="mt-3 w-full truncate px-1 text-sm font-medium leading-5 text-foreground">
+            <p className="mt-3 w-full truncate px-1 text-sm leading-5 font-medium text-foreground">
               {model.name}
             </p>
             <p className="mt-0.5 h-4 w-full truncate px-1 text-[11px] leading-4 text-muted-foreground">
@@ -104,54 +92,19 @@ export function ModelsGrid({
                 outputCostPerMillion={model.outputCostPerMillion}
                 className="h-4 min-w-[2.75rem] justify-center"
               />
-              <ModelCardCapabilities
+              <ModelCapabilityBadges
                 capabilities={model.capabilities}
-                selected={selected}
+                iconClassName="size-3.5"
+                empty={<span className="h-7" />}
+                className={cn(
+                  "mt-0 inline-flex h-7 min-w-16 items-center justify-center gap-1.5 rounded-md border-0 bg-foreground/5 p-0 px-2 shadow-none",
+                  selected && "bg-primary/10"
+                )}
               />
             </div>
           </div>
         )
       })}
     </div>
-  )
-}
-
-function ModelCardCapabilities({
-  capabilities,
-  selected,
-}: {
-  capabilities: ReadonlyArray<ModelCapability>
-  selected: boolean
-}) {
-  const visible = capabilities.slice(0, MAX_VISIBLE_MODEL_CAPABILITIES)
-  if (visible.length === 0) return <span className="h-7" />
-
-  return (
-    <span
-      className={cn(
-        "inline-flex h-7 min-w-16 items-center justify-center gap-1.5 rounded-md bg-foreground/5 px-2 transition-colors",
-        selected && "bg-primary/10"
-      )}
-    >
-      {visible.map((capability) => {
-        const visual = MODEL_CAPABILITY_VISUALS[capability]
-        const label = MODEL_CAPABILITY_LABELS.get(capability) ?? capability
-        const Icon = visual.icon
-
-        return (
-          <Tooltip key={capability} content={label}>
-            <span
-              aria-label={label}
-              className={cn(
-                visual.className,
-                "inline-flex size-3.5 items-center justify-center bg-transparent"
-              )}
-            >
-              <Icon className="size-3.5" />
-            </span>
-          </Tooltip>
-        )
-      })}
-    </span>
   )
 }

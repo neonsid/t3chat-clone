@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, waitFor } from "@testing-library/react"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 
+import { bindShellToast } from "@/components/chat/shell/shell-toast"
 import { StreamdownMarkdown } from "@/components/chat/thread/StreamdownMarkdown"
+import { MESSAGE_COPY } from "@/components/chat/thread/constants"
 
+// SAFETY: jsdom has no matchMedia; tests only read matches and the listener API.
 window.matchMedia = ((query: string) => ({
   matches: query.includes("hover"),
   media: query,
@@ -110,12 +113,53 @@ test("code block copy uses the app tooltip instead of a native title", async () 
   )
   expect(copy).toBeTruthy()
   expect(copy?.getAttribute("title")).toBeNull()
-  fireEvent.mouseEnter(copy as HTMLElement)
-  await waitFor(() => {
-    expect(document.querySelector("[role='tooltip']")?.textContent).toBe(
-      "Copy code"
-    )
+  expect(copy?.getAttribute("aria-label")).toBe("Copy code")
+  expect(copy?.closest("[data-base-ui-tooltip-trigger]")).toBeTruthy()
+})
+
+test("code block copy writes only the fence, not the rest of the reply", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  const showToast = vi.fn()
+  bindShellToast(showToast)
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
   })
+
+  const prose =
+    "Do not keep retrying if the error is clearly permission-related."
+  const fence = "fig16-flowlogs.png"
+  const { container } = render(
+    <StreamdownMarkdown
+      text={`${prose}\n\n\`\`\`text\n${fence}\n\`\`\``}
+      isStreaming={false}
+    />
+  )
+
+  const block = container.querySelector("[data-streamdown='code-block']")
+  expect(block).toBeInstanceOf(HTMLElement)
+  if (!(block instanceof HTMLElement)) return
+  expect(block.style.contentVisibility).toBe("visible")
+
+  const copy = container.querySelector(
+    "[data-streamdown='code-block-copy-button']"
+  )
+  expect(copy).toBeInstanceOf(HTMLElement)
+  if (!(copy instanceof HTMLElement)) return
+  fireEvent.click(copy)
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalled()
+  })
+  const written = String(writeText.mock.calls[0]?.[0] ?? "")
+  expect(written.trim()).toBe(fence)
+  expect(written).not.toContain(prose)
+  expect(showToast).toHaveBeenCalledWith({
+    title: MESSAGE_COPY.copied,
+    status: "success",
+    duration: MESSAGE_COPY.toastDurationMs,
+  })
+  bindShellToast(() => {})
 })
 
 const TABLE = `| Promise | Effect |

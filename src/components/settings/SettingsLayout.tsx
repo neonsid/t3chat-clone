@@ -9,17 +9,10 @@ import { ArrowLeftIcon, MoonIcon, SunIcon } from "lucide-react"
 import { LazyMotion, domAnimation } from "motion/react"
 
 import { SettingsRail } from "@/components/settings/SettingsRail"
-import {
-  CUSTOMIZATION_PATH,
-  HISTORY_PATH,
-  MODELS_PATH,
-  SETTINGS_HIDE_SCROLLBAR_CLASS,
-  SETTINGS_PATH,
-  SETTINGS_TABS,
-} from "@/components/settings/constants"
+import { SETTINGS_TABS } from "@/components/settings/constants"
 import {
   getActiveSettingsTabId,
-  isSettingsPlaceholderSection,
+  getSettingsTabNavigation,
 } from "@/components/settings/logic"
 import { Tabs, TabsList, TabsTrigger } from "@/components/shared/motion/tabs"
 import { Button } from "@/components/shared/ui/button"
@@ -28,6 +21,9 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { DEFAULT_AUTH_REDIRECT } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import { usePreferencesStore } from "@/stores/AppStateProvider"
+
+const hideScrollbarClassName =
+  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 
 export function SettingsLayout() {
   const { isLoaded } = useUser()
@@ -90,10 +86,7 @@ function SettingsHeader() {
 function SettingsBody() {
   return (
     <div
-      className={cn(
-        "min-h-0 flex-1 overflow-y-auto",
-        SETTINGS_HIDE_SCROLLBAR_CLASS
-      )}
+      className={cn("min-h-0 flex-1 overflow-y-auto", hideScrollbarClassName)}
     >
       <div className="lg:flex lg:items-start">
         <aside className="w-full shrink-0 px-5 py-8 lg:w-80 xl:w-96">
@@ -120,27 +113,16 @@ function SettingsTabs() {
   const activeTab = getActiveSettingsTabId(pathname)
 
   function handleTabChange(nextTab: string) {
-    if (nextTab === "account") {
-      void navigate({ to: SETTINGS_PATH })
+    const destination = getSettingsTabNavigation(nextTab)
+    if (!destination) return
+    if ("params" in destination) {
+      void navigate({
+        to: destination.to,
+        params: destination.params,
+      })
       return
     }
-    if (nextTab === "customization") {
-      void navigate({ to: CUSTOMIZATION_PATH })
-      return
-    }
-    if (nextTab === "history") {
-      void navigate({ to: HISTORY_PATH })
-      return
-    }
-    if (nextTab === "models") {
-      void navigate({ to: MODELS_PATH })
-      return
-    }
-    if (!isSettingsPlaceholderSection(nextTab)) return
-    void navigate({
-      to: "/settings/$section",
-      params: { section: nextTab },
-    })
+    void navigate({ to: destination.to })
   }
 
   return (
@@ -154,7 +136,7 @@ function SettingsTabs() {
         aria-label="Settings"
         className={cn(
           "h-auto w-max max-w-full gap-0 overflow-x-auto rounded-md bg-accent p-1 [&>div]:shrink-0",
-          SETTINGS_HIDE_SCROLLBAR_CLASS
+          hideScrollbarClassName
         )}
       >
         {SETTINGS_TABS.map((tab) => (
@@ -175,10 +157,7 @@ function SettingsTabs() {
 function SettingsBodySkeleton() {
   return (
     <div
-      className={cn(
-        "min-h-0 flex-1 overflow-y-auto",
-        SETTINGS_HIDE_SCROLLBAR_CLASS
-      )}
+      className={cn("min-h-0 flex-1 overflow-y-auto", hideScrollbarClassName)}
     >
       <div className="lg:flex lg:items-start">
         <aside className="flex w-full flex-col items-center px-5 py-8 lg:w-80 xl:w-96">

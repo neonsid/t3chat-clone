@@ -1,4 +1,3 @@
-import { MODEL_PROVIDERS } from "@t3chat/model-catalog"
 import type {
   ModelCapability,
   ModelCatalogEntry,
@@ -6,6 +5,11 @@ import type {
 } from "@t3chat/model-catalog"
 import { MODEL_PICKER_RAIL_PROVIDERS } from "@/components/chat/model-picker/constants"
 import { CHAT_MODEL_CATALOG, getChatModelById } from "@/lib/chat-models"
+import {
+  modelMatchesCapabilities,
+  modelSearchHaystack,
+  normalizeModelText,
+} from "@/lib/model-catalog-query"
 import type { ModelRailTab } from "@/stores/model-picker-store"
 
 export type ModelQuery = {
@@ -16,23 +20,8 @@ export type ModelQuery = {
   readonly combineResults: boolean
 }
 
-const providerNames = new Map(
-  MODEL_PROVIDERS.map((provider) => [provider.id, provider.name])
-)
-
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/[\s._-]+/g, "")
-}
-
 const searchableTextById = new Map(
-  CHAT_MODEL_CATALOG.map((model) => [
-    model.id,
-    normalize(
-      `${model.name} ${model.modelId} ${
-        providerNames.get(model.providerId) ?? model.providerId
-      } ${model.description ?? ""}`
-    ),
-  ])
+  CHAT_MODEL_CATALOG.map((model) => [model.id, modelSearchHaystack(model)])
 )
 
 const capabilitiesByModelId = new Map(
@@ -58,7 +47,7 @@ export function filterModels(
   query: ModelQuery,
   favoriteIds: ReadonlySet<string>
 ): ReadonlyArray<ModelCatalogEntry> {
-  const needle = normalize(query.search)
+  const needle = normalizeModelText(query.search)
   const unscoped = ignoresRailScope(query)
   const providerId = unscoped ? null : query.providerId
   const favoritesOnly = unscoped ? false : query.favoritesOnly
@@ -71,8 +60,9 @@ export function filterModels(
     if (providerId && model.providerId !== providerId) continue
     const modelCapabilities = capabilitiesByModelId.get(model.id)
     if (
-      query.capabilities.some(
-        (capability) => !modelCapabilities?.has(capability)
+      !modelMatchesCapabilities(
+        modelCapabilities ?? new Set(),
+        query.capabilities
       )
     ) {
       continue

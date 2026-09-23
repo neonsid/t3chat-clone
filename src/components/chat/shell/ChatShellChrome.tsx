@@ -10,11 +10,9 @@ import {
 import * as m from "motion/react-m"
 
 import {
-  CHAT_CONTROL_BUTTON_CLASS,
   CHAT_HEADER_NOTCH_FILL,
   CHAT_HEADER_NOTCH_RIGHT,
   CHAT_HEADER_NOTCH_STROKE,
-  CHAT_NOTCH_BUTTON_CLASS,
 } from "@/components/chat/shell/constants"
 import { THREAD_SHARE } from "@/components/chat/share/constants"
 import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants"
@@ -25,6 +23,11 @@ import { SidebarTrigger } from "@/components/shared/ui/sidebar"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { useSidebarUiStore } from "@/stores/AppStateProvider"
+
+const controlButtonClassName =
+  "pointer-events-auto rounded-md bg-chrome-surface text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+const notchButtonClassName =
+  "pointer-events-auto rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
 
 /**
  * Chrome buttons hover against either the chrome-surface chip or the near-black
@@ -66,7 +69,7 @@ export const SidebarControl = memo(function SidebarControl({
             variant="ghost"
             size="icon-sm"
             aria-label="Search"
-            className={cn(CHAT_CONTROL_BUTTON_CLASS, highlightedIconClass)}
+            className={cn(controlButtonClassName, highlightedIconClass)}
           >
             <SearchIcon />
           </Button>
@@ -80,10 +83,7 @@ export const SidebarControl = memo(function SidebarControl({
               variant="ghost"
               size="icon-sm"
               aria-label="New chat"
-              className={cn(
-                CHAT_CONTROL_BUTTON_CLASS,
-                highlightedPlusIconClass
-              )}
+              className={cn(controlButtonClassName, highlightedPlusIconClass)}
               onClick={onCreateThread}
             >
               <PlusIcon />
@@ -209,7 +209,7 @@ export function ChatHeaderActions({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={THREAD_SHARE.label}
-                className={CHAT_NOTCH_BUTTON_CLASS}
+                className={notchButtonClassName}
                 onClick={onShare}
               >
                 <Share2Icon />
@@ -232,7 +232,7 @@ export function ChatHeaderActions({
               aria-pressed={isTemporaryChat}
               disabled={disabled}
               className={cn(
-                CHAT_NOTCH_BUTTON_CLASS,
+                notchButtonClassName,
                 isTemporaryChat && "text-primary hover:text-primary"
               )}
               onClick={onToggleTemporaryChat}
@@ -248,7 +248,7 @@ export function ChatHeaderActions({
               </span>
             </Button>
           </Tooltip>
-          <SettingsMenu triggerClassName={CHAT_NOTCH_BUTTON_CLASS} />
+          <SettingsMenu triggerClassName={notchButtonClassName} />
         </m.div>
       </m.div>
     </div>

@@ -7,6 +7,7 @@ import {
   SETTINGS_SHORTCUTS,
   SETTINGS_USAGE,
 } from "@/components/settings/constants"
+import { SettingsIconButton } from "@/components/settings/SettingsMenuItem"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useIsApplePlatform } from "@/hooks/useIsApplePlatform"
 import { getUserProfileInfo } from "@/lib/user-profile"
@@ -60,13 +61,9 @@ function UsageLimitsCard() {
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Usage Limits</h3>
         <Tooltip content={SETTINGS_USAGE.info} side="top">
-          <button
-            type="button"
-            aria-label="About usage limits"
-            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
-          >
+          <SettingsIconButton label="About usage limits" className="size-6">
             <InfoIcon className="size-3.5" />
-          </button>
+          </SettingsIconButton>
         </Tooltip>
       </div>
 

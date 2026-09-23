@@ -18,15 +18,10 @@ import { SidebarAccount } from "@/components/sidebar/SidebarAccount";
 import { TEMPORARY_CHAT } from "@/components/chat/temporary-chat/constants";
 import {
   SIDEBAR_LOAD_MORE_THRESHOLD_PX,
-  SIDEBAR_RENAME_INPUT_CLASS,
   SIDEBAR_SEARCH_FOCUS_DELAY_MS,
   SIDEBAR_SEARCH_SHORTCUT,
   SIDEBAR_THREAD_ACTION_TOOLTIP_DELAY_MS,
-  SIDEBAR_THREAD_BUTTON_CLASS,
-  SIDEBAR_THREAD_LEADING_ICON_CLASS,
-  SIDEBAR_THREAD_HOVER_ACTION_CLASS,
   SIDEBAR_THREAD_ROW_TOOLTIP_DELAY_MS,
-  SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS,
 } from "@/components/sidebar/constants";
 import { groupSidebarThreads } from "@/components/sidebar/logic";
 import { Tooltip } from "@/components/shared/motion/tooltip";
@@ -87,7 +82,13 @@ function ThreadHoverAction({
       <button
         type="button"
         aria-label={label}
-        className={cn(SIDEBAR_THREAD_HOVER_ACTION_CLASS, destructive && "hover:text-destructive")}
+        className={cn(
+          "flex size-7 cursor-pointer items-center justify-center rounded-sm bg-transparent",
+          "text-sidebar-muted-foreground transition-colors",
+          "hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
+          "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none",
+          destructive && "hover:text-destructive",
+        )}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
@@ -99,7 +100,15 @@ function ThreadHoverAction({
   );
 }
 
-function ThreadRowButton({
+export function SidebarEmptyState({ searching }: { searching: boolean }) {
+  return (
+    <p className="px-4 py-2 text-xs text-sidebar-muted-foreground">
+      {searching ? "No matching chats" : "No chats yet"}
+    </p>
+  );
+}
+
+export function ThreadRowButton({
   isRenaming,
   isTemporary,
   isBranched,
@@ -132,7 +141,10 @@ function ThreadRowButton({
         <input
           aria-label="Rename chat"
           autoFocus
-          className={SIDEBAR_RENAME_INPUT_CLASS}
+          className={cn(
+            "h-9 w-full min-w-0 rounded-md bg-sidebar-foreground/10 px-3 text-xs",
+            "text-sidebar-foreground outline-none",
+          )}
           maxLength={MAX_THREAD_TITLE_LENGTH}
           value={renameDraft}
           onBlur={onCommitRename}
@@ -154,15 +166,13 @@ function ThreadRowButton({
     );
   }
 
+  let tooltipContent = displayTitle;
+  if (isTemporary) tooltipContent = TEMPORARY_CHAT.label;
+  else if (isTitlePending) tooltipContent = "Generating title…";
+
   return (
     <Tooltip
-      content={
-        isTemporary
-          ? TEMPORARY_CHAT.label
-          : isTitlePending
-            ? "Generating title…"
-            : displayTitle
-      }
+      content={tooltipContent}
       side="right"
       delay={SIDEBAR_THREAD_ROW_TOOLTIP_DELAY_MS}
       wrapperClassName="w-full"
@@ -171,21 +181,24 @@ function ThreadRowButton({
         isActive={isActive}
         size="sm"
         aria-label={isTemporary ? TEMPORARY_CHAT.label : undefined}
-        className={cn(SIDEBAR_THREAD_BUTTON_CLASS, isBusy && "pe-9")}
+        className={cn(
+          "h-9 cursor-pointer rounded-md px-2 text-sidebar-foreground/80",
+          "transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+          "data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground",
+          isBusy && "pe-9",
+        )}
         onClick={onSelect}
       >
         {isBranched ? (
-          <GitForkIcon aria-hidden="true" className={SIDEBAR_THREAD_LEADING_ICON_CLASS} />
-        ) : isTemporary ? (
-          <ClockIcon aria-hidden="true" className={SIDEBAR_THREAD_LEADING_ICON_CLASS} />
+          <GitForkIcon aria-hidden="true" className="size-4 shrink-0 text-sidebar-foreground/80" />
+        ) : null}
+        {!isBranched && isTemporary ? (
+          <ClockIcon aria-hidden="true" className="size-4 shrink-0 text-sidebar-foreground/80" />
         ) : null}
         {isTitlePending ? (
           <span
             aria-label="Generating title"
-            className={cn(
-              "sidebar-thread-title-shimmer min-w-0 flex-1",
-              SIDEBAR_TITLE_SHIMMER_WIDTH_CLASS,
-            )}
+            className="sidebar-thread-title-shimmer w-[70%] min-w-0 flex-1"
           />
         ) : (
           <span className="sidebar-thread-title min-w-0 flex-1 truncate">{displayTitle}</span>
@@ -265,6 +278,89 @@ function ThreadRowActions({
   );
 }
 
+function SidebarThreadRow({
+  thread,
+  rowState,
+  renameDraft,
+  threadActions,
+  onRenameDraftChange,
+  onCommitRename,
+  onCancelRename,
+  onSelect,
+  onBeginRename,
+  onDelete,
+  onTogglePinned,
+  onArchive,
+}: {
+  thread: ChatThread;
+  rowState: {
+    isActive: boolean;
+    isRenaming: boolean;
+    displayTitle: string;
+  };
+  renameDraft: string;
+  threadActions: AppSidebarProps["actions"];
+  onRenameDraftChange: (value: string) => void;
+  onCommitRename: () => void;
+  onCancelRename: () => void;
+  onSelect: () => void;
+  onBeginRename: () => void;
+  onDelete: () => void;
+  onTogglePinned: () => void;
+  onArchive: () => void;
+}) {
+  const isTitlePending = thread.titleSource === "pending";
+  const isTemporary = Boolean(thread.isTemporary);
+  const isBranched = Boolean(thread.branchedFromThreadId);
+  const isBusy = isTitlePending || thread.isStreaming;
+  const rowButton = (
+    <ThreadRowButton
+      isRenaming={rowState.isRenaming}
+      isTemporary={isTemporary}
+      isBranched={isBranched}
+      isActive={rowState.isActive}
+      isBusy={isBusy}
+      isTitlePending={isTitlePending}
+      displayTitle={rowState.displayTitle}
+      renameDraft={renameDraft}
+      onRenameDraftChange={onRenameDraftChange}
+      onCommitRename={onCommitRename}
+      onCancelRename={onCancelRename}
+      onSelect={onSelect}
+    />
+  );
+
+  return (
+    <SidebarMenuItem className="sidebar-thread-row" data-thread-busy={isBusy ? "true" : undefined}>
+      {rowState.isRenaming ? (
+        rowButton
+      ) : (
+        <ThreadContextMenu
+          thread={thread}
+          actions={{
+            ...threadActions,
+            beginRename: onBeginRename,
+          }}
+        >
+          <div className="w-full">{rowButton}</div>
+        </ThreadContextMenu>
+      )}
+
+      <ThreadRowActions
+        isBusy={isBusy}
+        isRenaming={rowState.isRenaming}
+        isTemporary={isTemporary}
+        isPinned={Boolean(thread.pinnedAt)}
+        isTitlePending={isTitlePending}
+        displayTitle={rowState.displayTitle}
+        onDelete={onDelete}
+        onTogglePinned={onTogglePinned}
+        onArchive={onArchive}
+      />
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar({
   threads,
   activeThreadId,
@@ -315,9 +411,7 @@ export function AppSidebar({
     ],
     [threads],
   );
-  const pinnedThreads = orderedThreads
-    .filter((thread) => thread.pinnedAt)
-    .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0));
+  const pinnedThreads = orderedThreads.filter((thread) => thread.pinnedAt);
   const regularSections = groupSidebarThreads(orderedThreads.filter((thread) => !thread.pinnedAt));
   const hasMoreThreads = paginationStatus === "CanLoadMore";
   const isLoadingMore =
@@ -347,15 +441,6 @@ export function AppSidebar({
     actions.rename(threadId, title);
   }
 
-  if (
-    committedTitle !== null &&
-    threads.some(
-      (thread) => thread.id === committedTitle.threadId && thread.title === committedTitle.title,
-    )
-  ) {
-    setCommittedTitle(null);
-  }
-
   function handleSelect(threadId: string) {
     actions.select(threadId);
     if (isMobile) setOpenMobile(false);
@@ -376,77 +461,100 @@ export function AppSidebar({
     }
   }
 
-  function renderThread(thread: ChatThread) {
-    const isActive = thread.id === activeThreadId;
-    const isPinned = Boolean(thread.pinnedAt);
-    const isTitlePending = thread.titleSource === "pending";
-    const isTemporary = Boolean(thread.isTemporary);
-    const isBranched = Boolean(thread.branchedFromThreadId);
-    const isBusy = isTitlePending || thread.isStreaming;
-    const isRenaming = renamingThreadId === thread.id;
-    const displayTitle =
-      thread.id === committedTitle?.threadId ? committedTitle.title : thread.title;
+  function threadDisplayTitle(thread: ChatThread) {
+    if (committedTitle?.threadId === thread.id && thread.title !== committedTitle.title) {
+      return committedTitle.title;
+    }
+    return thread.title;
+  }
 
+  function threadRow(thread: ChatThread) {
     return (
-      <SidebarMenuItem
+      <SidebarThreadRow
         key={thread.id}
-        className="sidebar-thread-row"
-        data-thread-busy={isBusy ? "true" : undefined}
-      >
-        {isRenaming ? (
-          <ThreadRowButton
-            isRenaming={isRenaming}
-            isTemporary={isTemporary}
-            isBranched={isBranched}
-            isActive={isActive}
-            isBusy={isBusy}
-            isTitlePending={isTitlePending}
-            displayTitle={displayTitle}
-            renameDraft={renameDraft}
-            onRenameDraftChange={setRenameDraft}
-            onCommitRename={commitRename}
-            onCancelRename={cancelRename}
-            onSelect={() => handleSelect(thread.id)}
-          />
-        ) : (
-          <ThreadContextMenu
-            thread={thread}
-            actions={{
-              ...actions,
-              beginRename: () => beginRename(thread),
-            }}
-          >
-            <div className="w-full">
-              <ThreadRowButton
-                isRenaming={isRenaming}
-                isTemporary={isTemporary}
-                isBranched={isBranched}
-                isActive={isActive}
-                isBusy={isBusy}
-                isTitlePending={isTitlePending}
-                displayTitle={displayTitle}
-                renameDraft={renameDraft}
-                onRenameDraftChange={setRenameDraft}
-                onCommitRename={commitRename}
-                onCancelRename={cancelRename}
-                onSelect={() => handleSelect(thread.id)}
-              />
-            </div>
-          </ThreadContextMenu>
-        )}
+        thread={thread}
+        rowState={{
+          isActive: thread.id === activeThreadId,
+          isRenaming: renamingThreadId === thread.id,
+          displayTitle: threadDisplayTitle(thread),
+        }}
+        renameDraft={renameDraft}
+        threadActions={actions}
+        onRenameDraftChange={setRenameDraft}
+        onCommitRename={commitRename}
+        onCancelRename={cancelRename}
+        onSelect={() => handleSelect(thread.id)}
+        onBeginRename={() => beginRename(thread)}
+        onDelete={() => actions.delete(thread.id)}
+        onTogglePinned={() => actions.togglePinned(thread.id)}
+        onArchive={() => actions.archive(thread.id)}
+      />
+    );
+  }
 
-        <ThreadRowActions
-          isBusy={isBusy}
-          isRenaming={isRenaming}
-          isTemporary={isTemporary}
-          isPinned={isPinned}
-          isTitlePending={isTitlePending}
-          displayTitle={displayTitle}
-          onDelete={() => actions.delete(thread.id)}
-          onTogglePinned={() => actions.togglePinned(thread.id)}
-          onArchive={() => actions.archive(thread.id)}
-        />
-      </SidebarMenuItem>
+  let threadList = null;
+  if (isDataReady && threads.length === 0) {
+    threadList = <SidebarEmptyState searching={sidebar.searchQuery.trim().length > 0} />;
+  } else if (isDataReady) {
+    threadList = (
+      <>
+        {pinnedThreads.length > 0 ? (
+          <SidebarGroup className="px-2 pb-1">
+            <button
+              type="button"
+              aria-expanded={sidebar.pinnedExpanded}
+              className="flex w-full cursor-pointer items-center gap-1.5 px-2 pb-1.5 text-xs font-semibold text-sidebar-foreground/70 transition-colors outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              onClick={() => sidebar.setPinnedExpanded(!sidebar.pinnedExpanded)}
+            >
+              <PinIcon className="size-3.5" aria-hidden="true" />
+              Pinned
+              <ChevronUpIcon
+                aria-hidden="true"
+                className={cn(
+                  "ml-auto size-3.5 transition-transform duration-200",
+                  !sidebar.pinnedExpanded && "rotate-180",
+                )}
+              />
+            </button>
+            {sidebar.pinnedExpanded ? (
+              <SidebarGroupContent>
+                <SidebarMenu>{pinnedThreads.map(threadRow)}</SidebarMenu>
+              </SidebarGroupContent>
+            ) : null}
+          </SidebarGroup>
+        ) : null}
+
+        {regularSections.map((section) => (
+          <SidebarGroup key={section.id} className="px-2 pb-1">
+            <div className="px-2 pb-1.5 text-sm font-semibold text-sidebar-foreground/60">
+              {section.label}
+            </div>
+            <SidebarGroupContent>
+              <SidebarMenu>{section.threads.map(threadRow)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+
+        {hasMoreThreads || isLoadingMore ? (
+          <button
+            type="button"
+            data-sidebar-pagination-loader="true"
+            aria-live="polite"
+            aria-label="Load more chats"
+            disabled={isLoadingMore}
+            onClick={loadMoreThreads}
+            className="flex h-10 w-full cursor-pointer items-center justify-center text-sidebar-muted-foreground transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none disabled:cursor-wait"
+          >
+            <LoaderCircleIcon
+              aria-hidden="true"
+              className={cn("size-4", isLoadingMore && "animate-spin text-sidebar-foreground")}
+            />
+            <span className="sr-only">
+              {isLoadingMore ? "Loading more chats" : "More chats load when you scroll"}
+            </span>
+          </button>
+        ) : null}
+      </>
     );
   }
 
@@ -502,70 +610,7 @@ export function AppSidebar({
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <SidebarContent aria-busy={!isDataReady} className="gap-0" onScroll={handleListScroll}>
-          {!isDataReady ? null : threads.length === 0 ? (
-            <p className="px-4 py-2 text-xs text-sidebar-muted-foreground">
-              {sidebar.searchQuery.trim() ? "No matching chats" : "No chats yet"}
-            </p>
-          ) : (
-            <>
-              {pinnedThreads.length > 0 ? (
-                <SidebarGroup className="px-2 pb-1">
-                  <button
-                    type="button"
-                    aria-expanded={sidebar.pinnedExpanded}
-                    className="flex w-full cursor-pointer items-center gap-1.5 px-2 pb-1.5 text-xs font-semibold text-sidebar-foreground/70 transition-colors outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                    onClick={() => sidebar.setPinnedExpanded(!sidebar.pinnedExpanded)}
-                  >
-                    <PinIcon className="size-3.5" aria-hidden="true" />
-                    Pinned
-                    <ChevronUpIcon
-                      aria-hidden="true"
-                      className={cn(
-                        "ml-auto size-3.5 transition-transform duration-200",
-                        !sidebar.pinnedExpanded && "rotate-180",
-                      )}
-                    />
-                  </button>
-                  {sidebar.pinnedExpanded ? (
-                    <SidebarGroupContent>
-                      <SidebarMenu>{pinnedThreads.map(renderThread)}</SidebarMenu>
-                    </SidebarGroupContent>
-                  ) : null}
-                </SidebarGroup>
-              ) : null}
-
-              {regularSections.map((section) => (
-                <SidebarGroup key={section.id} className="px-2 pb-1">
-                  <div className="px-2 pb-1.5 text-sm font-semibold text-sidebar-foreground/60">
-                    {section.label}
-                  </div>
-                  <SidebarGroupContent>
-                    <SidebarMenu>{section.threads.map(renderThread)}</SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              ))}
-
-              {hasMoreThreads || isLoadingMore ? (
-                <button
-                  type="button"
-                  data-sidebar-pagination-loader="true"
-                  aria-live="polite"
-                  aria-label="Load more chats"
-                  disabled={isLoadingMore}
-                  onClick={loadMoreThreads}
-                  className="flex h-10 w-full cursor-pointer items-center justify-center text-sidebar-muted-foreground transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none disabled:cursor-wait"
-                >
-                  <LoaderCircleIcon
-                    aria-hidden="true"
-                    className={cn("size-4", isLoadingMore && "animate-spin text-sidebar-foreground")}
-                  />
-                  <span className="sr-only">
-                    {isLoadingMore ? "Loading more chats" : "More chats load when you scroll"}
-                  </span>
-                </button>
-              ) : null}
-            </>
-          )}
+          {threadList}
         </SidebarContent>
       </div>
       <SidebarFooter className="shrink-0 border-sidebar-border p-1">

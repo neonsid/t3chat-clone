@@ -1,38 +1,16 @@
 "use client"
-// beui.dev/components/motion/tooltip
 
-import { AnimatePresence, useReducedMotion } from "motion/react"
-import type { Variants } from "motion/react"
-import * as m from "motion/react-m"
-import {
-  cloneElement,
-  isValidElement,
-  useCallback,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import type { ReactElement, ReactNode } from "react"
-import { createPortal } from "react-dom"
-import { EASE_OUT } from "@/lib/ease"
+
 import {
-  TOOLTIP_ALIGN_TRANSLATE_X,
-  TOOLTIP_ANCHOR_TRANSLATE,
   TOOLTIP_GAP_PX,
-  TOOLTIP_OFFSET_FROM,
-  TOOLTIP_REDUCED_VARIANTS,
-  TOOLTIP_TRANSFORM_ORIGIN,
   TOOLTIP_WARM_WINDOW_MS,
 } from "@/components/shared/motion/constants"
 import type {
   MotionSide,
   TooltipAlign,
-  TooltipOffset,
 } from "@/components/shared/motion/constants"
-import { useHoverCapable } from "@/hooks/useHoverCapable"
-import { useWindowEvent } from "@/hooks/useWindowEvent"
-import { hasDocument } from "@/lib/runtime-env"
 import { cn } from "@/lib/utils"
 
 export interface TooltipProps {
@@ -50,50 +28,6 @@ export interface TooltipProps {
   portalContainer?: HTMLElement | null
 }
 
-function buildVariants(side: MotionSide): Variants {
-  const o: TooltipOffset = TOOLTIP_OFFSET_FROM[side]
-  return {
-    initial: {
-      opacity: 0,
-      scale: 0.9,
-      filter: "blur(5px)",
-      x: o.x ?? 0,
-      y: o.y ?? 0,
-    },
-    animate: {
-      opacity: 1,
-      scale: 1,
-      filter: "blur(0px)",
-      x: 0,
-      y: 0,
-      transition: {
-        type: "spring",
-        stiffness: 380,
-        damping: 30,
-        mass: 0.7,
-        opacity: { duration: 0.14, ease: EASE_OUT },
-        filter: { duration: 0.18, ease: EASE_OUT },
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.94,
-      filter: "blur(3px)",
-      x: (o.x ?? 0) * 0.6,
-      y: (o.y ?? 0) * 0.6,
-      transition: { duration: 0.12, ease: EASE_OUT },
-    },
-  }
-}
-
-let lastHiddenAt = 0
-
-function TooltipPositionSync({ onMove }: { onMove: () => void }) {
-  useWindowEvent("scroll", onMove, true)
-  useWindowEvent("resize", onMove)
-  return null
-}
-
 export function Tooltip({
   content,
   children,
@@ -104,132 +38,33 @@ export function Tooltip({
   wrapperClassName,
   portalContainer,
 }: TooltipProps) {
-  const [open, setOpen] = useState(false)
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
-    null
-  )
-  const id = useId()
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const anchorRef = useRef<HTMLSpanElement>(null)
-  const reduce = useReducedMotion()
-  const canHover = useHoverCapable()
-
-  // Anchor point in viewport coords. If we portal into a transformed dialog,
-  // `fixed` is relative to that box, so subtract the container origin.
-  const place = useCallback(() => {
-    const el = anchorRef.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const origin = portalContainer?.getBoundingClientRect()
-    const ox = origin?.left ?? 0
-    const oy = origin?.top ?? 0
-    const cx = r.left + r.width / 2
-    const cy = r.top + r.height / 2
-    const alignedLeft = {
-      start: r.left,
-      center: cx,
-      end: r.right,
-    }[align]
-    const point = {
-      top: { top: r.top - TOOLTIP_GAP_PX - oy, left: alignedLeft - ox },
-      bottom: { top: r.bottom + TOOLTIP_GAP_PX - oy, left: alignedLeft - ox },
-      left: { top: cy - oy, left: r.left - TOOLTIP_GAP_PX - ox },
-      right: { top: cy - oy, left: r.right + TOOLTIP_GAP_PX - ox },
-    } satisfies Record<MotionSide, { top: number; left: number }>
-    setCoords(point[side])
-  }, [align, portalContainer, side])
-
-  const show = useCallback(() => {
-    if (!canHover) return
-    if (timer.current) clearTimeout(timer.current)
-    const warm = Date.now() - lastHiddenAt < TOOLTIP_WARM_WINDOW_MS
-    timer.current = setTimeout(
-      () => {
-        place()
-        setOpen(true)
-      },
-      warm ? 0 : delay
-    )
-  }, [canHover, delay, place])
-
-  const hide = useCallback(() => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
-    if (open) lastHiddenAt = Date.now()
-    setOpen(false)
-  }, [open])
-
-  const variants = useMemo(
-    () => (reduce ? TOOLTIP_REDUCED_VARIANTS : buildVariants(side)),
-    [reduce, side]
-  )
-
-  if (!isValidElement(children)) return children
-
-  type TooltipTriggerProps = {
-    onMouseEnter?: () => void
-    onMouseLeave?: () => void
-    onFocus?: () => void
-    onBlur?: () => void
-    "aria-describedby"?: string
-  }
-
-  // SAFETY: isValidElement already confirmed a single element; cloneElement needs the trigger prop bag.
-  const trigger = cloneElement(children as ReactElement<TooltipTriggerProps>, {
-    onMouseEnter: show,
-    onMouseLeave: hide,
-    onFocus: show,
-    onBlur: hide,
-    "aria-describedby": id,
-  })
-  const tooltip = (
-    <AnimatePresence>
-      {open && coords ? (
-        <m.span
-          key="tooltip"
-          id={id}
-          role="tooltip"
-          variants={variants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className={cn(
-            "pointer-events-none block rounded-lg border border-border bg-popover/95 px-2.5 py-2 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
-            portalContainer ? "absolute z-[9999]" : "fixed z-[9999]",
-            className
-          )}
-          style={{
-            top: coords.top,
-            left: coords.left,
-            translate:
-              side === "left" || side === "right"
-                ? TOOLTIP_ANCHOR_TRANSLATE[side]
-                : `${TOOLTIP_ALIGN_TRANSLATE_X[align]} ${
-                    side === "top" ? "-100%" : "0"
-                  }`,
-            transformOrigin: TOOLTIP_TRANSFORM_ORIGIN[side],
-          }}
-        >
-          <TooltipPositionSync onMove={place} />
-          {content}
-        </m.span>
-      ) : null}
-    </AnimatePresence>
-  )
-
   return (
-    <>
-      <span
-        ref={anchorRef}
-        className={cn("relative inline-flex align-middle", wrapperClassName)}
-      >
-        {trigger}
-      </span>
-      {hasDocument()
-        ? createPortal(tooltip, portalContainer ?? document.body)
-        : null}
-    </>
+    <TooltipPrimitive.Provider delay={delay} timeout={TOOLTIP_WARM_WINDOW_MS}>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger
+          delay={delay}
+          closeOnClick={false}
+          className={cn("relative inline-flex align-middle", wrapperClassName)}
+          render={children}
+        />
+        <TooltipPrimitive.Portal container={portalContainer ?? undefined}>
+          <TooltipPrimitive.Positioner
+            side={side}
+            align={align}
+            sideOffset={TOOLTIP_GAP_PX}
+            className="isolate z-[9999]"
+          >
+            <TooltipPrimitive.Popup
+              className={cn(
+                "pointer-events-none rounded-lg border border-border bg-popover/95 px-2.5 py-2 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_rgb(0_0_0/0.24)] backdrop-blur-md",
+                className
+              )}
+            >
+              {content}
+            </TooltipPrimitive.Popup>
+          </TooltipPrimitive.Positioner>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
   )
 }

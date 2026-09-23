@@ -11,11 +11,14 @@ import {
 } from "@/components/settings/SharedThreadsSection"
 import {
   HISTORY_DANGER_ZONE,
-  HISTORY_MOCK_THREADS,
   HISTORY_PAGE,
-  type HistoryMockThread,
 } from "@/components/settings/constants"
+import {
+  HISTORY_MOCK_THREADS,
+  type HistoryMockThread,
+} from "@/components/settings/history-fixtures"
 import { removeIds } from "@/components/settings/logic"
+import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem"
 import { Button } from "@/components/shared/ui/button"
 import {
   Popover,
@@ -59,9 +62,7 @@ export function HistorySettings() {
   }
 
   function handleRemoveShared(ids: ReadonlyArray<string>) {
-    void Promise.all(
-      ids.map((id) => removeShare({ shareId: asShareId(id) }))
-    )
+    void Promise.all(ids.map((id) => removeShare({ shareId: asShareId(id) })))
   }
 
   function handleDeleteAllHistory() {
@@ -195,13 +196,6 @@ function HistoryMenuItem({
   onSelect: () => void
 }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onSelect}
-      className="flex h-9 w-full cursor-pointer items-center rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {label}
-    </button>
+    <SettingsMenuItem label={label} disabled={disabled} onSelect={onSelect} />
   )
 }

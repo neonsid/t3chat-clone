@@ -1,16 +1,18 @@
-import { Component, isValidElement, memo } from "react"
+import { Children, Component, isValidElement, memo, useState } from "react"
 import type { ComponentProps, CSSProperties, ErrorInfo, ReactNode } from "react"
+import { CheckIcon, CopyIcon } from "lucide-react"
 import {
   CodeBlockContainer,
-  CodeBlockCopyButton,
   CodeBlockHeader,
   Streamdown,
   TableCopyDropdown,
   TableDownloadDropdown,
 } from "streamdown"
 
+import { showShellToast } from "@/components/chat/shell/shell-toast"
 import {
   CODE_BLOCK,
+  MESSAGE_COPY,
   STREAMDOWN_CODE_LANGUAGE_CLASS,
   STREAMDOWN_CONTROLS,
   STREAMDOWN_LINK_SAFETY,
@@ -19,6 +21,11 @@ import { Tooltip } from "@/components/shared/motion/tooltip"
 import { useHighlightedCode } from "@/hooks/useHighlightedCode"
 import type { HighlightedToken } from "@/lib/highlight-code"
 import { cn } from "@/lib/utils"
+
+const FENCE_CONTAINER_STYLE = {
+  contentVisibility: "visible",
+  containIntrinsicSize: "none",
+} as const satisfies CSSProperties
 
 const INCOMPLETE_STREAMDOWN_HREF = "streamdown:incomplete-link"
 
@@ -49,12 +56,14 @@ function MarkdownLink({
 }
 
 function fenceCodeFromChildren(children: ReactNode): string {
-  if (typeof children === "string") return children
-  if (isValidElement(children)) {
-    const nested = (children.props as { children?: ReactNode }).children
-    if (typeof nested === "string") return nested
-  }
-  return ""
+  return Children.toArray(children)
+    .map((child) => {
+      if (!isValidElement(child)) return String(child)
+      // SAFETY: react-markdown code nodes only nest more children on props.
+      const nested = (child.props as { children?: ReactNode }).children
+      return fenceCodeFromChildren(nested)
+    })
+    .join("")
 }
 
 function fenceTokenStyle(token: HighlightedToken): CSSProperties | undefined {
@@ -78,26 +87,31 @@ function FenceCodeBody({ code, language }: { code: string; language: string }) {
     <div className="overflow-x-auto" data-streamdown="code-block-body">
       <pre>
         <code>
-          {highlighted.tokens.map((line, lineIndex) => (
-            <span key={lineIndex}>
-              {line.length === 0 ||
+          {highlighted.tokens.map((line, lineIndex) => {
+            const isEmpty =
+              line.length === 0 ||
               (line.length === 1 && line[0]?.content === "")
-                ? "\n"
-                : line.map((token, tokenIndex) => (
-                    <span
-                      key={tokenIndex}
-                      className={cn(
-                        "text-[var(--sdm-c,inherit)]",
-                        token.bgColor && "bg-[var(--sdm-tbg)]",
-                        "dark:text-[var(--shiki-dark,var(--sdm-c,inherit))]"
-                      )}
-                      style={fenceTokenStyle(token)}
-                    >
-                      {token.content}
-                    </span>
-                  ))}
-            </span>
-          ))}
+            return (
+              <span key={lineIndex}>
+                {isEmpty
+                  ? null
+                  : line.map((token, tokenIndex) => (
+                      <span
+                        key={tokenIndex}
+                        className={cn(
+                          "text-[var(--sdm-c,inherit)]",
+                          token.bgColor && "bg-[var(--sdm-tbg)]",
+                          "dark:text-[var(--shiki-dark,var(--sdm-c,inherit))]"
+                        )}
+                        style={fenceTokenStyle(token)}
+                      >
+                        {token.content}
+                      </span>
+                    ))}
+                {lineIndex < highlighted.tokens.length - 1 ? "\n" : null}
+              </span>
+            )
+          })}
         </code>
       </pre>
     </div>
@@ -112,7 +126,7 @@ function MarkdownTable({
 }: ComponentProps<"table"> & { node?: unknown }) {
   return (
     <div
-      className="my-4 w-full min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-card"
+      className="my-4 w-full max-w-full min-w-0 overflow-hidden rounded-md border border-border bg-card"
       data-streamdown="table-wrapper"
     >
       <div
@@ -136,13 +150,42 @@ function MarkdownTable({
 }
 
 function FenceCopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+
   return (
     <Tooltip content={CODE_BLOCK.copy}>
-      <CodeBlockCopyButton
-        aria-label={CODE_BLOCK.copy}
-        code={code}
-        title={undefined}
-      />
+      <span className="inline-flex">
+        <button
+          type="button"
+          aria-label={CODE_BLOCK.copy}
+          className="cursor-pointer p-1 text-muted-foreground transition-all hover:text-foreground"
+          data-streamdown="code-block-copy-button"
+          onClick={() => {
+            if (!code || copied) return
+            void navigator.clipboard
+              .writeText(code)
+              .then(() => {
+                setCopied(true)
+                showShellToast({
+                  title: MESSAGE_COPY.copied,
+                  status: "success",
+                  duration: MESSAGE_COPY.toastDurationMs,
+                })
+                window.setTimeout(
+                  () => setCopied(false),
+                  CODE_BLOCK.copiedResetMs
+                )
+              })
+              .catch(() => {})
+          }}
+        >
+          {copied ? (
+            <CheckIcon className="size-3.5" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+        </button>
+      </span>
     </Tooltip>
   )
 }
@@ -178,6 +221,9 @@ function MarkdownCode({
     <CodeBlockContainer
       className={cn("relative", className)}
       language={language}
+      // Streamdown sets content-visibility: auto. Chrome then copies the
+      // whole assistant message instead of the selection or the fence.
+      style={FENCE_CONTAINER_STYLE}
     >
       <CodeBlockHeader language={language} />
       <div className="pointer-events-none sticky top-2 z-10 -mt-10 flex h-8 items-center justify-end">
@@ -263,7 +309,7 @@ export const StreamdownMarkdown = memo(function StreamdownMarkdown({
     >
       <div
         className={cn(
-          "min-w-0 max-w-full text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0",
+          "max-w-full min-w-0 text-[15px] leading-7 text-foreground/90 [&_[data-streamdown]]:min-w-0",
           className
         )}
       >

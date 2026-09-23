@@ -1,5 +1,3 @@
-import { ZapIcon } from "lucide-react"
-
 export const CHAT_COMPOSER_PLACEHOLDERS = {
   newThread: "Type your message here...",
   followUp: "Ask for follow-up changes...",
@@ -21,22 +19,22 @@ export const REASONING_EFFORTS = [
   {
     value: "instant",
     label: "Instant",
-    icon: { kind: "component", component: ZapIcon },
+    iconSrc: null,
   },
   {
     value: "low",
     label: "Low",
-    icon: { kind: "asset", src: "/BrainIconLow.svg" },
+    iconSrc: "/BrainIconLow.svg",
   },
   {
     value: "medium",
     label: "Medium",
-    icon: { kind: "asset", src: "/BrainIconMedium.svg" },
+    iconSrc: "/BrainIconMedium.svg",
   },
   {
     value: "high",
     label: "High",
-    icon: { kind: "asset", src: "/BrainIconHigh.svg" },
+    iconSrc: "/BrainIconHigh.svg",
   },
 ] as const
 
@@ -72,9 +70,4 @@ export const SEARCH_TOGGLE = {
   decreaseLimit: "Decrease search count",
   increaseLimit: "Increase search count",
   confirmLimit: "Done",
-  editorButtonClass:
-    "flex size-6 cursor-pointer items-center justify-center disabled:pointer-events-none disabled:opacity-40",
-  activeClass: "border-primary bg-primary text-primary-foreground",
-  idleClass:
-    "border-border/70 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
 } as const

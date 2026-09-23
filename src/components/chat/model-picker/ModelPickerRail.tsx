@@ -5,13 +5,15 @@ import type { ModelProviderId } from "@t3chat/model-catalog"
 import {
   INITIAL_MODEL_PICKER_RAIL_SCROLL_STATE,
   MODEL_PICKER_RAIL_END_CUE_FADE_DISTANCE,
-  MODEL_PICKER_RAIL_TAB_CLASS_NAME,
 } from "@/components/chat/model-picker/constants"
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { Separator } from "@/components/shared/ui/separator"
 import type { ModelRailTab } from "@/stores/model-picker-store"
 import { cn } from "@/lib/utils"
+
+const railTabClassName =
+  "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-foreground/70 transition-[color,background-color,transform] hover:scale-105 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none data-active:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] data-active:text-foreground"
 
 type ModelPickerRailProvider = {
   id: ModelProviderId
@@ -85,7 +87,7 @@ export function ModelPickerRail({
           aria-label="Favorites"
           aria-selected={activeTab === "favorites"}
           data-active={activeTab === "favorites" || undefined}
-          className={MODEL_PICKER_RAIL_TAB_CLASS_NAME}
+          className={railTabClassName}
           onClick={() => onSelectTab("favorites")}
         >
           <StarIcon
@@ -110,7 +112,7 @@ export function ModelPickerRail({
                 aria-label={provider.name}
                 aria-selected={activeTab === provider.id}
                 data-active={activeTab === provider.id || undefined}
-                className={MODEL_PICKER_RAIL_TAB_CLASS_NAME}
+                className={railTabClassName}
                 onClick={() => onSelectTab(provider.id)}
               >
                 <ProviderLogo providerId={provider.id} className="size-6" />

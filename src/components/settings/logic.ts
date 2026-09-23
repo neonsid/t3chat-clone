@@ -1,14 +1,11 @@
-import { MODEL_PROVIDERS } from "@t3chat/model-catalog"
-import type {
-  ModelCapability,
-  ModelCatalogEntry,
-} from "@t3chat/model-catalog"
+import type { ModelCapability, ModelCatalogEntry } from "@t3chat/model-catalog"
 import { ConvexError } from "convex/values"
 import { z } from "zod"
 
 import {
   PLAN_RANK,
   SETTINGS_PATH,
+  SETTINGS_SECTION_PATH,
   SETTINGS_TABS,
   SETTINGS_PLACEHOLDER_SECTION_IDS,
   COPY_FROM_SCRATCH_ID,
@@ -21,6 +18,11 @@ import type {
   SettingsPlaceholderSectionId,
   SettingsTabId,
 } from "@/components/settings/constants"
+import {
+  modelMatchesCapabilities,
+  modelSearchHaystack,
+  normalizeModelText,
+} from "@/lib/model-catalog-query"
 
 export function isSettingsPlaceholderSection(
   value: string
@@ -35,6 +37,18 @@ export function getSettingsTabLabel(section: SettingsPlaceholderSectionId) {
 
 export function isSettingsTabId(value: string): value is SettingsTabId {
   return SETTINGS_TABS.some((tab) => tab.id === value)
+}
+
+export function getSettingsTabNavigation(tabId: string) {
+  const tab = SETTINGS_TABS.find((item) => item.id === tabId)
+  if (!tab) return null
+  if (tab.to === SETTINGS_SECTION_PATH) {
+    return {
+      to: SETTINGS_SECTION_PATH,
+      params: { section: tab.id },
+    }
+  }
+  return { to: tab.to }
 }
 
 export function getActiveSettingsTabId(pathname: string): SettingsTabId {
@@ -160,14 +174,6 @@ export function historyActionLabel(action: string, count: number) {
   return `${action} (${count})`
 }
 
-const providerNames = new Map(
-  MODEL_PROVIDERS.map((provider) => [provider.id, provider.name])
-)
-
-function normalizeModelText(value: string) {
-  return value.toLowerCase().replace(/[\s._-]+/g, "")
-}
-
 export function filterSettingsModels(
   models: ReadonlyArray<ModelCatalogEntry>,
   query: {
@@ -187,20 +193,11 @@ export function filterSettingsModels(
     ) {
       return false
     }
-    if (
-      query.capabilities.some(
-        (capability) => !model.capabilities.includes(capability)
-      )
-    ) {
+    if (!modelMatchesCapabilities(model.capabilities, query.capabilities)) {
       return false
     }
     if (!needle) return true
-    const haystack = normalizeModelText(
-      `${model.name} ${model.modelId} ${
-        providerNames.get(model.providerId) ?? model.providerId
-      } ${model.description ?? ""}`
-    )
-    return haystack.includes(needle)
+    return modelSearchHaystack(model).includes(needle)
   })
 }
 
@@ -218,9 +215,7 @@ export function getNewestCatalogModels(
     .slice(0, limit)
 }
 
-export function formatNewModelsBanner(
-  models: ReadonlyArray<{ name: string }>
-) {
+export function formatNewModelsBanner(models: ReadonlyArray<{ name: string }>) {
   if (models.length === 0) return null
   return `${models.length} new — ${models.map((model) => model.name).join(", ")}`
 }

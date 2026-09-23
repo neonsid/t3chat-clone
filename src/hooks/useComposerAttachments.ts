@@ -26,7 +26,6 @@ export function useComposerAttachments(
     (state) => getThreadComposerState(state, threadStateKey).attachments
   )
   const abortControllers = useRef(new Map<string, AbortController>())
-  const fileByLocalId = useRef(new Map<string, File>())
 
   const processingIds = attachments
     .filter(
@@ -56,14 +55,21 @@ export function useComposerAttachments(
           stillUploading ||
           local.extractedTokenEstimate !== remote.extractedTokenEstimate
         ) {
-          chatUi.getState().updateAttachment(threadStateKey, local.localId, {
-            status: stillUploading ? "ready" : local.status,
-            progress: 1,
-            extractedTokenEstimate: remote.extractedTokenEstimate,
-            ...(stillUploading
-              ? { errorMessage: undefined, contextWarning: undefined }
-              : {}),
-          })
+          if (stillUploading) {
+            chatUi.getState().updateAttachment(threadStateKey, local.localId, {
+              status: "ready",
+              progress: 1,
+              extractedTokenEstimate: remote.extractedTokenEstimate,
+              errorMessage: undefined,
+              contextWarning: undefined,
+            })
+          } else {
+            chatUi.getState().updateAttachment(threadStateKey, local.localId, {
+              status: local.status,
+              progress: 1,
+              extractedTokenEstimate: remote.extractedTokenEstimate,
+            })
+          }
         }
       } else if (remote.status === "failed" && local.status !== "failed") {
         chatUi.getState().updateAttachment(threadStateKey, local.localId, {
@@ -111,15 +117,12 @@ export function useComposerAttachments(
   async function addFiles(
     files: FileList | File[],
     options?: {
-      onPreparing?: () => void
       onBatchStart?: (count: number) => void
       onRejected?: (message: string) => void
     }
   ) {
     const list = Array.from(files)
     if (list.length === 0) return []
-
-    options?.onPreparing?.()
     const capacityError = assertAttachmentCapacity(
       getThreadComposerState(chatUi.getState(), threadStateKey).attachments
         .length,
@@ -149,7 +152,6 @@ export function useComposerAttachments(
     options?.onBatchStart?.(prepared.length)
 
     for (const entry of prepared) {
-      fileByLocalId.current.set(entry.attachment.localId, entry.file)
       const controller = new AbortController()
       abortControllers.current.set(entry.attachment.localId, controller)
       void uploadComposerAttachment({
@@ -164,7 +166,6 @@ export function useComposerAttachments(
         },
       }).finally(() => {
         abortControllers.current.delete(entry.attachment.localId)
-        fileByLocalId.current.delete(entry.attachment.localId)
       })
     }
 
@@ -191,24 +192,10 @@ export function useComposerAttachments(
     }
   }
 
-  function clearReadyAttachments() {
-    const current = getThreadComposerState(
-      chatUi.getState(),
-      threadStateKey
-    ).attachments
-    for (const attachment of current) {
-      if (attachment.localPreviewUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(attachment.localPreviewUrl)
-      }
-    }
-    chatUi.getState().clearAttachments(threadStateKey)
-  }
-
   return {
     attachments,
     addFiles,
     removeAttachment,
-    clearReadyAttachments,
     abortAllUploads: abortAll,
   }
 }

@@ -69,3 +69,6 @@ The Models tab (`/settings/models`) lists `packages/model-catalog/src/generated`
 - [] Improve the UI of the overall /settings route
 - [] Add the /models/modelName route
 - [] Implement all the functionality in context menu
+
+Bug: 
+- [] Copying text or code blocks copy whole response

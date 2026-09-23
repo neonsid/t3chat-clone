@@ -25,6 +25,7 @@ import {
   getNewestCatalogModels,
   toggleIdInList,
 } from "@/components/settings/logic"
+import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem"
 import { Button } from "@/components/shared/ui/button"
 import { Input } from "@/components/shared/ui/input"
 import {
@@ -34,10 +35,7 @@ import {
 } from "@/components/shared/ui/popover"
 import { cn } from "@/lib/utils"
 
-const newestModels = getNewestCatalogModels(
-  MODEL_CATALOG,
-  MODELS_PAGE.newCount
-)
+const newestModels = getNewestCatalogModels(MODEL_CATALOG, MODELS_PAGE.newCount)
 const newestIds = new Set(newestModels.map((model) => model.id))
 const newBanner = formatNewModelsBanner(newestModels)
 
@@ -133,9 +131,8 @@ export function ModelsSettings() {
         </div>
       </div>
 
-      {visibleModels.length === 0 ? (
-        <ModelsListEmpty />
-      ) : view === "list" ? (
+      {visibleModels.length === 0 ? <ModelsListEmpty /> : null}
+      {visibleModels.length > 0 && view === "list" ? (
         <ModelsList
           models={visibleModels}
           selectedIds={selectedIdSet}
@@ -148,7 +145,8 @@ export function ModelsSettings() {
             setFavoriteIds(toggleIdInList(favoriteIds, id))
           }
         />
-      ) : (
+      ) : null}
+      {visibleModels.length > 0 && view === "grid" ? (
         <ModelsGrid
           models={visibleModels}
           selectedIds={selectedIdSet}
@@ -161,7 +159,7 @@ export function ModelsSettings() {
             setFavoriteIds(toggleIdInList(favoriteIds, id))
           }
         />
-      )}
+      ) : null}
     </div>
   )
 }
@@ -196,26 +194,21 @@ function ModelsActionsMenu({
         sideOffset={8}
         className="w-48 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md"
       >
-        <button
-          type="button"
-          onClick={() => {
+        <SettingsMenuItem
+          label={MODELS_PAGE.selectRecommended}
+          onSelect={() => {
             onSelectRecommended()
             setOpen(false)
           }}
-          className="flex h-9 w-full cursor-pointer items-center rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-        >
-          {MODELS_PAGE.selectRecommended}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
+        />
+        <SettingsMenuItem
+          label={MODELS_PAGE.unselectAll}
+          tone="destructive"
+          onSelect={() => {
             onUnselectAll()
             setOpen(false)
           }}
-          className="flex h-9 w-full cursor-pointer items-center rounded-md px-2.5 text-left text-sm font-medium text-destructive transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-        >
-          {MODELS_PAGE.unselectAll}
-        </button>
+        />
       </PopoverContent>
     </Popover>
   )

@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useEffectEvent,
   useLayoutEffect,
   useMemo,
@@ -9,8 +10,7 @@ import {
 } from "react"
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react"
 import type { UIMessage } from "@tanstack/ai-react"
-import type { StreamChunk } from "@tanstack/ai"
-import { useMutation, useQuery } from "convex/react"
+import { useMutation } from "convex/react"
 
 import { api } from "../../../../convex/_generated/api"
 import { asThreadId } from "@/lib/convex-ids"
@@ -25,6 +25,9 @@ import { ChatEmptyState } from "@/components/chat/thread/ChatEmptyState"
 import { ChatMessage } from "@/components/chat/thread/ChatMessage"
 import type { MessageModelAction } from "@/components/chat/thread/MessageModelActionPicker"
 import type { ThreadMessageAttachment } from "@/components/chat/attachments/types"
+import { useChatThreadRuntimeBinding } from "@/components/chat/thread/useChatThreadRuntime"
+import { useThreadAttachments } from "@/components/chat/thread/useThreadAttachments"
+import { useWebSearchTurn } from "@/components/chat/thread/useWebSearchTurn"
 import {
   deriveTimelineMinimapItems,
   findLastUserMessageId,
@@ -72,22 +75,15 @@ import {
   chatMessageThinking,
 } from "@/lib/threads"
 import type { AssistantGenerationStats } from "@/lib/threads"
-import type { JsonValue } from "@/lib/json-value"
 import {
   modelSupportsWebSearch,
-  parseWebSearchTurn,
   webSearchQueriesForPersist,
   webSearchSourcesForPersist,
-  WEB_SEARCH_SOURCES_EVENT,
   type WebSearchSource,
 } from "@/lib/web-search"
 import { cn } from "@/lib/utils"
-import {
-  chatRuntimeStore,
-  useChatRuntimeStore,
-} from "@/stores/chat-runtime-store"
+import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 import { useChatUiStore, useChatUiStoreApi } from "@/stores/AppStateProvider"
-import { temporaryThreadsStore } from "@/stores/temporary-threads-store"
 import {
   composerCanSend,
   getThreadComposerState,
@@ -188,52 +184,45 @@ const EMPTY_WEB_SEARCH_QUERIES: string[] = []
 
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
-  isStreaming,
-  isStopped,
-  isTemporary,
-  generationStats,
-  attachments,
-  sources,
-  queries,
-  thinkingSearchSplitAt,
-  isSearchingWeb,
-  canBranch,
-  onBranch,
-  canRetry,
-  onRetry,
+  messageState,
+  actions,
 }: {
   message: UIMessage
-  isStreaming: boolean
-  isStopped: boolean
-  isTemporary: boolean
-  generationStats: AssistantGenerationStats | undefined
-  attachments: Array<ThreadMessageAttachment>
-  sources: WebSearchSource[]
-  queries: string[]
-  thinkingSearchSplitAt?: number
-  isSearchingWeb: boolean
-  canBranch?: boolean
-  onBranch?: () => void | Promise<void>
-  canRetry?: boolean
-  onRetry?: (action?: MessageModelAction) => void | Promise<void>
+  messageState: {
+    isStreaming: boolean
+    isStopped: boolean
+    isTemporary: boolean
+    generationStats: AssistantGenerationStats | undefined
+    attachments: Array<ThreadMessageAttachment>
+    sources: WebSearchSource[]
+    queries: string[]
+    thinkingSearchSplitAt?: number
+    isSearchingWeb: boolean
+  }
+  actions: {
+    canBranch?: boolean
+    onBranch?: () => void | Promise<void>
+    canRetry?: boolean
+    onRetry?: (action?: MessageModelAction) => void | Promise<void>
+  }
 }) {
   return (
     <MessageScrollerItem messageId={message.id}>
       <ChatMessage
         message={message}
-        isStreaming={isStreaming}
-        isStopped={isStopped}
-        isTemporary={isTemporary}
-        generationStats={generationStats}
-        attachments={attachments}
-        sources={sources}
-        queries={queries}
-        thinkingSearchSplitAt={thinkingSearchSplitAt}
-        isSearchingWeb={isSearchingWeb}
-        canBranch={canBranch}
-        onBranch={onBranch}
-        canRetry={canRetry}
-        onRetry={onRetry}
+        isStreaming={messageState.isStreaming}
+        isStopped={messageState.isStopped}
+        isTemporary={messageState.isTemporary}
+        generationStats={messageState.generationStats}
+        attachments={messageState.attachments}
+        sources={messageState.sources}
+        queries={messageState.queries}
+        thinkingSearchSplitAt={messageState.thinkingSearchSplitAt}
+        isSearchingWeb={messageState.isSearchingWeb}
+        canBranch={actions.canBranch}
+        onBranch={actions.onBranch}
+        canRetry={actions.canRetry}
+        onRetry={actions.onRetry}
       />
     </MessageScrollerItem>
   )
@@ -279,60 +268,45 @@ export function ChatThreadView({
   const [ephemeralGenerationStats, setEphemeralGenerationStats] = useState<
     Record<string, AssistantGenerationStats>
   >(() => generationStats)
-  const [turnWebSearchSources, setTurnWebSearchSources] = useState<
-    WebSearchSource[]
-  >(() => [])
-  const [turnWebSearchQueries, setTurnWebSearchQueries] = useState<string[]>(
-    () => []
-  )
-  const [turnThinkingSearchSplitAt, setTurnThinkingSearchSplitAt] = useState<
-    number | undefined
-  >(() => undefined)
-  const streamingThinkingLengthRef = useRef(0)
-  const [searchThisTurn, setSearchThisTurn] = useState(false)
   const followTurnTokenRef = useRef(0)
   const [followTurn, setFollowTurn] = useState<{
     messageId: string
     token: number
   } | null>(null)
-  function requestFollowTurn(messageId: string) {
+  const requestFollowTurn = useCallback((messageId: string) => {
     followTurnTokenRef.current += 1
     setFollowTurn({ messageId, token: followTurnTokenRef.current })
-  }
+  }, [])
   const isTemporary = isTemporaryThreadId(threadId)
+  const {
+    turnWebSearchSources,
+    turnWebSearchQueries,
+    turnThinkingSearchSplitAt,
+    searchThisTurn,
+    streamingThinkingLengthRef,
+    resetTurnSearch,
+    onChunk,
+  } = useWebSearchTurn()
+  const beginTurn = useCallback(
+    (followMessageId: string, nextSearchEnabled: boolean) => {
+      resetTurnSearch(nextSearchEnabled)
+      setWorkStartedAt(Date.now())
+      requestFollowTurn(followMessageId)
+    },
+    [requestFollowTurn, resetTurnSearch]
+  )
   const { branchFromMessage } = useBranchChat({ threadId, isTemporary })
   const { truncateForRetry } = useRetryChat({ threadId, isTemporary })
   const stopStreamingMessage = useMutation(api.chatRuns.stopFromClient)
-  const threadAttachmentDocs = useQuery(
-    api.attachments.listForThreadMessages,
-    isAuthenticated && threadId !== "guest" && !isTemporary
-      ? { threadId: asThreadId(threadId) }
-      : "skip"
-  )
-  const [localAttachmentsByMessageId, setLocalAttachmentsByMessageId] =
-    useState<Map<string, Array<ThreadMessageAttachment>>>(() => new Map())
-  const attachmentIdsByMessageRef = useRef<Record<string, string[]>>({})
-  const attachmentsByMessageId = useMemo(() => {
-    const grouped = new Map<string, Array<ThreadMessageAttachment>>()
-    for (const attachment of threadAttachmentDocs ?? []) {
-      if (!attachment.messageId) continue
-      const existing = grouped.get(attachment.messageId)
-      const item = {
-        attachmentId: attachment.attachmentId,
-        messageId: attachment.messageId,
-        filename: attachment.filename,
-        kind: attachment.kind,
-      }
-      if (existing) existing.push(item)
-      else grouped.set(attachment.messageId, [item])
-    }
-    for (const [messageId, attachments] of localAttachmentsByMessageId) {
-      if (!grouped.has(messageId) && attachments.length > 0) {
-        grouped.set(messageId, attachments)
-      }
-    }
-    return grouped
-  }, [localAttachmentsByMessageId, threadAttachmentDocs])
+  const {
+    attachmentsByMessageId,
+    attachmentIdsByMessageRef,
+    recordMessageAttachments: rememberAttachments,
+  } = useThreadAttachments({
+    threadId,
+    isAuthenticated,
+    isTemporary,
+  })
   // Do not subscribe to draft here — every keystroke would re-render the scroller.
   const hasDraft = useThreadComposerHasDraft(threadStateKey)
   const hasComposerAttachments = useChatUiStore(
@@ -395,22 +369,6 @@ export function ChatThreadView({
   forwardedPropsRef.current.searchEnabled = searchEnabled
   forwardedPropsRef.current.searchLimit = searchLimit
 
-  const onChunk = useCallback((chunk: StreamChunk) => {
-    if (chunk.type !== "CUSTOM" || chunk.name !== WEB_SEARCH_SOURCES_EVENT) {
-      return
-    }
-    // SAFETY: CUSTOM value is JSON we emitted as web-search.sources.
-    const value: JsonValue = chunk.value as JsonValue
-    const turn = parseWebSearchTurn(value)
-    if (turn.sources.length > 0) setTurnWebSearchSources(turn.sources)
-    if (turn.queries.length > 0) setTurnWebSearchQueries(turn.queries)
-    if (turn.sources.length > 0 || turn.queries.length > 0) {
-      setTurnThinkingSearchSplitAt((current) =>
-        current === undefined ? streamingThinkingLengthRef.current : current
-      )
-    }
-  }, [])
-
   const { messages, sendMessage, setMessages, reload, stop, isLoading, error } =
     useChat({
       threadId,
@@ -472,27 +430,34 @@ export function ChatThreadView({
     })
   }
 
-  // Snapshot once the stream settles. Derived during render so a finished
-  // assistant row has stats on the next paint without an effect.
-  if (isTemporary && !isLoading) {
+  useEffect(() => {
+    if (!isTemporary || isLoading) return
     const modelName = getChatModelById(selectedModelId)?.name ?? selectedModelId
     const mode = `${effectiveReasoningEffort.charAt(0).toUpperCase()}${effectiveReasoningEffort.slice(1)}`
-    let nextStats: Record<string, AssistantGenerationStats> | null = null
-    for (const message of messages) {
-      if (message.role !== "assistant") continue
-      if (ephemeralGenerationStats[message.id]) continue
-      if (!chatMessageHasContent(message)) continue
-      nextStats ??= { ...ephemeralGenerationStats }
-      nextStats[message.id] = estimateTemporaryGenerationStats({
-        text: chatMessageText(message),
-        thinking: chatMessageThinking(message),
-        modelId: selectedModelId,
-        modelName,
-        mode,
-      })
-    }
-    if (nextStats) setEphemeralGenerationStats(nextStats)
-  }
+    setEphemeralGenerationStats((current) => {
+      let next: Record<string, AssistantGenerationStats> | null = null
+      for (const message of messages) {
+        if (message.role !== "assistant") continue
+        if (current[message.id]) continue
+        if (!chatMessageHasContent(message)) continue
+        next ??= { ...current }
+        next[message.id] = estimateTemporaryGenerationStats({
+          text: chatMessageText(message),
+          thinking: chatMessageThinking(message),
+          modelId: selectedModelId,
+          modelName,
+          mode,
+        })
+      }
+      return next ?? current
+    })
+  }, [
+    effectiveReasoningEffort,
+    isLoading,
+    isTemporary,
+    messages,
+    selectedModelId,
+  ])
 
   const resolvedGenerationStats = isTemporary
     ? ephemeralGenerationStats
@@ -577,7 +542,7 @@ export function ChatThreadView({
   const latestUserMessageId = findLastUserMessageId(displayMessages)
   const followMessagePresent = Boolean(
     followTurn &&
-      displayMessages.some((message) => message.id === followTurn.messageId)
+    displayMessages.some((message) => message.id === followTurn.messageId)
   )
 
   const retryFromMessage = useCallback(
@@ -612,14 +577,10 @@ export function ChatThreadView({
           (attachment) => attachment.attachmentId
         )
       forwardedPropsRef.current.attachmentIds = attachmentIds
-      setSearchThisTurn(
+      beginTurn(
+        userMessage.id,
         searchEnabled && modelSupportsWebSearch(nextModelId ?? selectedModelId)
       )
-      setTurnWebSearchSources([])
-      setTurnWebSearchQueries([])
-      setTurnThinkingSearchSplitAt(undefined)
-      setWorkStartedAt(Date.now())
-      requestFollowTurn(userMessage.id)
 
       try {
         const truncated = await truncateForRetry(assistantMessageId)
@@ -633,6 +594,7 @@ export function ChatThreadView({
     [
       activeTurn,
       attachmentsByMessageId,
+      beginTurn,
       chatUi,
       isAuthenticated,
       isLoading,
@@ -654,57 +616,57 @@ export function ChatThreadView({
         <ChatMessageRow
           key={message.id}
           message={message}
-          isStreaming={false}
-          isStopped={
-            stoppedMessageIds.has(message.id) ||
-            locallyStoppedMessageIds.has(message.id)
-          }
-          isTemporary={isTemporary}
-          generationStats={resolvedGenerationStats[message.id]}
-          attachments={sentAttachmentsForMessage(
-            message.id,
-            attachmentsByMessageId.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
-            latestUserMessageId
-          )}
-          sources={
-            resolveMessageWebSearchSources({
+          messageState={{
+            isStreaming: false,
+            isStopped:
+              stoppedMessageIds.has(message.id) ||
+              locallyStoppedMessageIds.has(message.id),
+            isTemporary,
+            generationStats: resolvedGenerationStats[message.id],
+            attachments: sentAttachmentsForMessage(
+              message.id,
+              attachmentsByMessageId.get(message.id) ??
+                EMPTY_MESSAGE_ATTACHMENTS,
+              latestUserMessageId
+            ),
+            sources:
+              resolveMessageWebSearchSources({
+                messageId: message.id,
+                isStreamingMessage: false,
+                persisted: webSearchSources,
+                turnSources: turnWebSearchSources,
+                lastAssistantMessageId,
+              }) ?? EMPTY_WEB_SEARCH_SOURCES,
+            queries:
+              resolveMessageWebSearchQueries({
+                messageId: message.id,
+                isStreamingMessage: false,
+                persisted: webSearchQueries,
+                turnQueries: turnWebSearchQueries,
+                lastAssistantMessageId,
+              }) ?? EMPTY_WEB_SEARCH_QUERIES,
+            thinkingSearchSplitAt: resolveMessageThinkingSearchSplitAt({
               messageId: message.id,
               isStreamingMessage: false,
-              persisted: webSearchSources,
-              turnSources: turnWebSearchSources,
+              persisted: thinkingSearchSplitAt,
+              turnSplitAt: turnThinkingSearchSplitAt,
               lastAssistantMessageId,
-            }) ?? EMPTY_WEB_SEARCH_SOURCES
-          }
-          queries={
-            resolveMessageWebSearchQueries({
-              messageId: message.id,
-              isStreamingMessage: false,
-              persisted: webSearchQueries,
-              turnQueries: turnWebSearchQueries,
-              lastAssistantMessageId,
-            }) ?? EMPTY_WEB_SEARCH_QUERIES
-          }
-          thinkingSearchSplitAt={resolveMessageThinkingSearchSplitAt({
-            messageId: message.id,
-            isStreamingMessage: false,
-            persisted: thinkingSearchSplitAt,
-            turnSplitAt: turnThinkingSearchSplitAt,
-            lastAssistantMessageId,
-          })}
-          isSearchingWeb={false}
-          canBranch={!isLoading && !activeTurn && threadId !== "guest"}
-          onBranch={() => branchFromMessage(message.id)}
-          canRetry={
-            message.role === "assistant" &&
-            !isLoading &&
-            !activeTurn &&
-            threadId !== "guest"
-          }
-          onRetry={
-            message.role === "assistant"
-              ? (action) => retryFromMessage(message.id, action)
-              : undefined
-          }
+            }),
+            isSearchingWeb: false,
+          }}
+          actions={{
+            canBranch: !isLoading && !activeTurn && threadId !== "guest",
+            onBranch: () => branchFromMessage(message.id),
+            canRetry:
+              message.role === "assistant" &&
+              !isLoading &&
+              !activeTurn &&
+              threadId !== "guest",
+            onRetry:
+              message.role === "assistant"
+                ? (action) => retryFromMessage(message.id, action)
+                : undefined,
+          }}
         />
       )),
     [
@@ -764,21 +726,23 @@ export function ChatThreadView({
           <ChatMessageRow
             key={renderedStreamingMessage.id}
             message={renderedStreamingMessage}
-            isStreaming
-            isStopped={false}
-            isTemporary={isTemporary}
-            generationStats={undefined}
-            attachments={
-              attachmentsByMessageId.get(renderedStreamingMessage.id) ??
-              EMPTY_MESSAGE_ATTACHMENTS
-            }
-            sources={sourcesForMessage(renderedStreamingMessage.id, true)}
-            queries={queriesForMessage(renderedStreamingMessage.id, true)}
-            thinkingSearchSplitAt={splitAtForMessage(
-              renderedStreamingMessage.id,
-              true
-            )}
-            isSearchingWeb={searchThisTurn}
+            messageState={{
+              isStreaming: true,
+              isStopped: false,
+              isTemporary,
+              generationStats: undefined,
+              attachments:
+                attachmentsByMessageId.get(renderedStreamingMessage.id) ??
+                EMPTY_MESSAGE_ATTACHMENTS,
+              sources: sourcesForMessage(renderedStreamingMessage.id, true),
+              queries: queriesForMessage(renderedStreamingMessage.id, true),
+              thinkingSearchSplitAt: splitAtForMessage(
+                renderedStreamingMessage.id,
+                true
+              ),
+              isSearchingWeb: searchThisTurn,
+            }}
+            actions={{}}
           />,
         ]
       : historyRows
@@ -790,27 +754,9 @@ export function ChatThreadView({
       typeof getThreadComposerState
     >["attachments"]
   ) {
-    if (attachmentIds.length === 0) return
-    attachmentIdsByMessageRef.current[messageId] = attachmentIds
+    rememberAttachments(messageId, attachmentIds, composerAttachments)
     forwardedPropsRef.current.attachmentsByMessageId =
       attachmentIdsByMessageRef.current
-    const items =
-      composerAttachments.length > 0
-        ? rememberComposerPreviews(composerAttachments).map((attachment) => ({
-            ...attachment,
-            messageId,
-          }))
-        : sentAttachmentsForMessage(
-            messageId,
-            EMPTY_MESSAGE_ATTACHMENTS,
-            messageId
-          )
-    if (items.length === 0) return
-    setLocalAttachmentsByMessageId((current) => {
-      const next = new Map(current)
-      next.set(messageId, items)
-      return next
-    })
   }
 
   function submitMessage(content?: string) {
@@ -825,17 +771,15 @@ export function ChatThreadView({
     }
 
     forwardedPropsRef.current.attachmentIds = attachmentIds
-    setSearchThisTurn(searchEnabled && modelSupportsWebSearch(selectedModelId))
-    setTurnWebSearchSources([])
-    setTurnWebSearchQueries([])
-    setTurnThinkingSearchSplitAt(undefined)
     const messageId = crypto.randomUUID()
+    beginTurn(
+      messageId,
+      searchEnabled && modelSupportsWebSearch(selectedModelId)
+    )
     recordMessageAttachments(messageId, attachmentIds, composer.attachments)
     rememberComposerPreviews(composer.attachments)
     clearDraft(threadStateKey)
     clearAttachments(threadStateKey, { revoke: false })
-    setWorkStartedAt(Date.now())
-    requestFollowTurn(messageId)
     void sendMessage({
       id: messageId,
       content: text
@@ -902,18 +846,16 @@ export function ChatThreadView({
     if (!pending) return
 
     forwardedPropsRef.current.attachmentIds = pending.attachmentIds
-    setSearchThisTurn(searchEnabled && modelSupportsWebSearch(selectedModelId))
-    setTurnWebSearchSources([])
-    setTurnWebSearchQueries([])
-    setTurnThinkingSearchSplitAt(undefined)
     recordMessageAttachments(
       pending.messageId,
       pending.attachmentIds,
       getThreadComposerState(chatUi.getState(), threadStateKey).attachments
     )
     clearAttachments(threadStateKey, { revoke: false })
-    setWorkStartedAt(Date.now())
-    requestFollowTurn(pending.messageId)
+    beginTurn(
+      pending.messageId,
+      searchEnabled && modelSupportsWebSearch(selectedModelId)
+    )
     void sendMessage({
       id: pending.messageId,
       content: pending.content
@@ -929,119 +871,57 @@ export function ChatThreadView({
     )
   }
 
-  useLayoutEffect(() => {
-    return chatRuntimeStore.getState().bindActions({
-      submit: () => submitMessageRef.current(),
-      stop: () => stopGenerationRef.current(),
-    })
-  }, [threadId])
-
-  const persistableMessagesRef = useRef(() =>
-    toPersistableTemporaryMessages([], {}, new Set())
-  )
-  persistableMessagesRef.current = () =>
-    toPersistableTemporaryMessages(
-      messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: chatMessageText(message),
-        thinking: chatMessageThinking(message),
-        createdAt:
-          "createdAt" in message && message.createdAt instanceof Date
-            ? message.createdAt.getTime()
-            : Date.now(),
-      })),
-      attachmentIdsByMessageRef.current,
-      new Set([...stoppedMessageIds, ...locallyStoppedMessageIds]),
-      webSearchSourcesForPersist(
-        webSearchSources,
-        lastAssistantMessageId,
-        turnWebSearchSources
-      ),
-      webSearchQueriesForPersist(
-        webSearchQueries,
-        lastAssistantMessageId,
-        turnWebSearchQueries
-      ),
-      thinkingSearchSplitAtForPersist(
-        thinkingSearchSplitAt,
-        lastAssistantMessageId,
-        turnThinkingSearchSplitAt
-      )
-    )
-
-  useLayoutEffect(() => {
-    return chatRuntimeStore
-      .getState()
-      .bindPersistableMessages(() => persistableMessagesRef.current())
-  }, [threadId])
-
-  // External localStorage snapshot. Cannot run during render: the sidebar
-  // subscribes to this store and would update while this view is rendering.
-  useLayoutEffect(() => {
-    if (!isTemporary || messages.length === 0) return
-    if (isLoading && lastMessage?.role !== "user") return
-    temporaryThreadsStore.getState().upsertLiveTranscript(threadId, {
-      messages: persistableMessagesRef.current(),
-      generationStats: resolvedGenerationStats,
-      stoppedMessageIds: [...stoppedMessageIds, ...locallyStoppedMessageIds],
-    })
-  }, [
-    isLoading,
-    isTemporary,
-    lastMessage?.role,
-    locallyStoppedMessageIds,
-    messages,
-    resolvedGenerationStats,
-    stoppedMessageIds,
+  useChatThreadRuntimeBinding({
     threadId,
-  ])
-
-  // Draft submit queues a pending message then navigates here and requests a
-  // flush. Registering the flusher (instead of sending on mount) keeps the
-  // handoff event-driven: only the surviving ready view sends, once.
-  useLayoutEffect(() => {
-    if (!isReady || !isAuthenticated) return
-    return chatRuntimeStore
-      .getState()
-      .registerPendingFlusher(threadId, () =>
-        flushPendingSubmissionRef.current()
-      )
-  }, [threadId, isReady, isAuthenticated])
-
-  useLayoutEffect(() => {
-    chatRuntimeStore.getState().setPanelState({
-      isLoading,
-      error: error ?? null,
-      isReady,
-      isEmptyThread,
-      effectiveReasoningEffort,
-      supportedReasoningEfforts: modelPreferences.isLoading
-        ? []
-        : modelConfig.supportedReasoningEfforts,
-      modelLoading: modelPreferences.isLoading,
-    })
-  }, [
-    effectiveReasoningEffort,
-    error,
-    isEmptyThread,
-    isLoading,
     isReady,
-    modelConfig.supportedReasoningEfforts,
-    modelPreferences.isLoading,
-  ])
-
-  useLayoutEffect(() => {
-    return () => {
-      chatRuntimeStore.getState().reset()
-    }
-  }, [threadId])
-
-  // Hand the "sending" state off to the real stream: once this thread's turn is
-  // actually underway (or has failed), activeTurn has done its bridging job.
-  useLayoutEffect(() => {
-    if (isLoading || error) chatRuntimeStore.getState().setActiveTurn(false)
-  }, [isLoading, error])
+    isAuthenticated,
+    isTemporary,
+    isLoading,
+    error: error ?? undefined,
+    isEmptyThread,
+    lastMessageRole: lastMessage?.role,
+    effectiveReasoningEffort,
+    supportedReasoningEfforts: modelPreferences.isLoading
+      ? []
+      : modelConfig.supportedReasoningEfforts,
+    modelLoading: modelPreferences.isLoading,
+    messagesLength: messages.length,
+    persistableMessages: () =>
+      toPersistableTemporaryMessages(
+        messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: chatMessageText(message),
+          thinking: chatMessageThinking(message),
+          createdAt:
+            "createdAt" in message && message.createdAt instanceof Date
+              ? message.createdAt.getTime()
+              : Date.now(),
+        })),
+        attachmentIdsByMessageRef.current,
+        new Set([...stoppedMessageIds, ...locallyStoppedMessageIds]),
+        webSearchSourcesForPersist(
+          webSearchSources,
+          lastAssistantMessageId,
+          turnWebSearchSources
+        ),
+        webSearchQueriesForPersist(
+          webSearchQueries,
+          lastAssistantMessageId,
+          turnWebSearchQueries
+        ),
+        thinkingSearchSplitAtForPersist(
+          thinkingSearchSplitAt,
+          lastAssistantMessageId,
+          turnThinkingSearchSplitAt
+        )
+      ),
+    generationStats: resolvedGenerationStats,
+    stoppedMessageIds: [...stoppedMessageIds, ...locallyStoppedMessageIds],
+    submit: () => submitMessageRef.current(),
+    stop: () => stopGenerationRef.current(),
+    flushPending: () => flushPendingSubmissionRef.current(),
+  })
 
   return (
     <div className="chat-surface absolute inset-0 min-h-0 overflow-hidden bg-background text-foreground">
@@ -1083,7 +963,7 @@ export function ChatThreadView({
                 <MessageScrollerContent
                   aria-busy={!isReady || isLoading}
                   className={cn(
-                    "mx-auto w-full min-w-0 max-w-3xl px-4 pt-20 pb-6"
+                    "mx-auto w-full max-w-3xl min-w-0 px-4 pt-20 pb-6"
                   )}
                 >
                   {messageRows}

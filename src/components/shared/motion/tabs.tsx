@@ -1,16 +1,9 @@
 "use client"
-// beui.dev/components/motion/tabs
 
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { MotionConfig, useReducedMotion } from "motion/react"
 import * as m from "motion/react-m"
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useId,
-  useMemo,
-  useState,
-} from "react"
+import { createContext, useContext, useId, useState } from "react"
 import type { ReactNode } from "react"
 
 import {
@@ -22,7 +15,6 @@ import { cn } from "@/lib/utils"
 
 type TabsContextValue = {
   value: string
-  setValue: (value: string) => void
   layoutId: string
   variant: TabsVariant
 }
@@ -53,26 +45,23 @@ export function Tabs({
   const [internal, setInternal] = useState(defaultValue ?? "")
   const layoutId = useId()
   const reduce = useReducedMotion()
-  const controlled = value !== undefined
-  const current = controlled ? value : internal
-  const setValue = useCallback(
-    (nextValue: string) => {
-      if (!controlled) setInternal(nextValue)
-      onValueChange?.(nextValue)
-    },
-    [controlled, onValueChange]
-  )
-  const contextValue = useMemo(
-    () => ({ value: current, setValue, layoutId, variant }),
-    [current, layoutId, setValue, variant]
-  )
+  const current = value ?? internal
 
   return (
     <MotionConfig transition={reduce ? { duration: 0 } : TABS_TRANSITION}>
-      <TabsContext.Provider value={contextValue}>
-        <m.div layoutRoot className={className}>
+      <TabsContext.Provider value={{ value: current, layoutId, variant }}>
+        <TabsPrimitive.Root
+          value={current}
+          onValueChange={(next) => {
+            if (next == null) return
+            const nextValue = String(next)
+            if (value === undefined) setInternal(nextValue)
+            onValueChange?.(nextValue)
+          }}
+          className={className}
+        >
           {children}
-        </m.div>
+        </TabsPrimitive.Root>
       </TabsContext.Provider>
     </MotionConfig>
   )
@@ -89,13 +78,12 @@ export function TabsList({
   const { variant } = useTabs()
 
   return (
-    <div
-      role="tablist"
+    <TabsPrimitive.List
       className={cn(TABS_LIST_CLASSES[variant], className)}
       {...props}
     >
       {children}
-    </div>
+    </TabsPrimitive.List>
   )
 }
 
@@ -110,17 +98,14 @@ export function TabsTrigger({
   className?: string
   indicatorClassName?: string
 }) {
-  const { value: current, setValue, layoutId, variant } = useTabs()
+  const { value: current, layoutId, variant } = useTabs()
   const active = current === value
 
   if (variant === "underline") {
     return (
-      <button
-        type="button"
-        role="tab"
-        aria-selected={active}
+      <TabsPrimitive.Tab
+        value={value}
         data-state={active ? "active" : "inactive"}
-        onClick={() => setValue(value)}
         className={cn(
           "relative isolate -mb-px inline-flex min-h-11 items-center px-3 pt-1 pb-2.5 text-sm font-medium transition-colors",
           active
@@ -139,7 +124,7 @@ export function TabsTrigger({
             )}
           />
         ) : null}
-      </button>
+      </TabsPrimitive.Tab>
     )
   }
 
@@ -158,12 +143,9 @@ export function TabsTrigger({
           )}
         />
       ) : null}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={active}
+      <TabsPrimitive.Tab
+        value={value}
         data-state={active ? "active" : "inactive"}
-        onClick={() => setValue(value)}
         className={cn(
           "relative z-10 inline-flex cursor-pointer items-center justify-center bg-transparent px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors outline-none",
           active
@@ -174,7 +156,7 @@ export function TabsTrigger({
         )}
       >
         {children}
-      </button>
+      </TabsPrimitive.Tab>
     </div>
   )
 }
