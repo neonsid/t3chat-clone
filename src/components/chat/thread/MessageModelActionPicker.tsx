@@ -7,10 +7,7 @@ import { ModelCapabilityBadges } from "@/components/chat/model-picker/ModelCapab
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import { modelsForRailTab } from "@/components/chat/model-picker/logic"
-import {
-  MESSAGE_BRANCH,
-  MESSAGE_CHROME,
-} from "@/components/chat/thread/constants"
+import { MESSAGE_BRANCH } from "@/components/chat/thread/constants"
 import { Button } from "@/components/shared/ui/button"
 import {
   Popover,
@@ -22,6 +19,14 @@ import { useModelPreferences } from "@/hooks/useModelPreferences"
 import { isChatModelId } from "@/lib/chat-models"
 import type { ModelRailTab } from "@/stores/model-picker-store"
 import { cn } from "@/lib/utils"
+
+const providerButtonClassName = cn(
+  "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm",
+  "text-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
+  "focus-visible:bg-accent focus-visible:text-foreground",
+  "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+  "data-active:bg-accent data-active:text-foreground"
+)
 
 export type MessageModelAction = {
   modelId?: string
@@ -140,7 +145,7 @@ export function MessageModelActionPicker({
               type="button"
               size="icon-xs"
               variant="ghost"
-              className={MESSAGE_CHROME.iconButtonClassName}
+              className="size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground"
               aria-label={label}
               disabled={disabled}
             />
@@ -165,7 +170,7 @@ export function MessageModelActionPicker({
           <div className="p-1.5">
             <button
               type="button"
-              className={MESSAGE_BRANCH.providerButtonClassName}
+              className={providerButtonClassName}
               disabled={pending}
               onClick={() => commitAction()}
             >
@@ -197,7 +202,7 @@ export function MessageModelActionPicker({
               aria-label="Favorites"
               aria-selected={railTab === "favorites"}
               data-active={railTab === "favorites" || undefined}
-              className={MESSAGE_BRANCH.providerButtonClassName}
+              className={providerButtonClassName}
               onPointerEnter={() => setRailTab("favorites")}
               onFocus={() => setRailTab("favorites")}
               onClick={() => setRailTab("favorites")}
@@ -226,7 +231,7 @@ export function MessageModelActionPicker({
                 aria-label={provider.name}
                 aria-selected={railTab === provider.id}
                 data-active={railTab === provider.id || undefined}
-                className={MESSAGE_BRANCH.providerButtonClassName}
+                className={providerButtonClassName}
                 onPointerEnter={() => setRailTab(provider.id)}
                 onFocus={() => setRailTab(provider.id)}
                 onClick={() => setRailTab(provider.id)}

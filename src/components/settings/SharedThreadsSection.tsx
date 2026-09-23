@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { useState } from "react"
+import { Link } from "@tanstack/react-router"
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -8,64 +8,69 @@ import {
   PencilIcon,
   SquareStackIcon,
   Trash2Icon,
-} from "lucide-react";
+} from "lucide-react"
 
-import { HistoryPagination } from "@/components/settings/HistoryThreadList";
+import { HistoryPagination } from "@/components/settings/HistoryThreadList"
 import {
   HISTORY_PAGE,
   HISTORY_PAGE_SIZE,
   SHARED_THREADS_PAGE,
-} from "@/components/settings/constants";
+} from "@/components/settings/constants"
 import {
   getHistoryPage,
   historyActionLabel,
   pageSelection,
   setPageSelected,
   toggleIdInList,
-} from "@/components/settings/logic";
-import { SettingsCheckbox } from "@/components/settings/SettingsCheckbox";
-import { Tooltip } from "@/components/shared/motion/tooltip";
-import { Button } from "@/components/shared/ui/button";
-import { formatShareAge } from "@/lib/share-id";
-import { cn } from "@/lib/utils";
+} from "@/components/settings/logic"
+import { SettingsCheckbox } from "@/components/settings/SettingsCheckbox"
+import { SettingsIconButton } from "@/components/settings/SettingsMenuItem"
+import { Tooltip } from "@/components/shared/motion/tooltip"
+import { Button } from "@/components/shared/ui/button"
+import { formatShareAge } from "@/lib/share-id"
+import { cn } from "@/lib/utils"
 
 export type SharedThreadItem = {
-  id: string;
-  title: string;
+  id: string
+  title: string
   shares: ReadonlyArray<{
-    id: string;
-    publicId: string;
-    url: string;
-    forkCount: number;
-    viewCount: number;
-    createdAt: number;
-  }>;
-};
+    id: string
+    publicId: string
+    url: string
+    forkCount: number
+    viewCount: number
+    createdAt: number
+  }>
+}
 
 export function SharedThreadsSection({
   threads,
   onDelete,
   onEdit,
 }: {
-  threads: ReadonlyArray<SharedThreadItem>;
-  onDelete: (ids: ReadonlyArray<string>) => void;
-  onEdit: (threadId: string, title: string) => void;
+  threads: ReadonlyArray<SharedThreadItem>
+  onDelete: (ids: ReadonlyArray<string>) => void
+  onEdit: (threadId: string, title: string) => void
 }) {
-  const [page, setPage] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Array<string>>([]);
-  const [expandedIds, setExpandedIds] = useState<Array<string>>([]);
-  const sharedPage = getHistoryPage(threads, page, HISTORY_PAGE_SIZE);
+  const [page, setPage] = useState(0)
+  const [selectedIds, setSelectedIds] = useState<Array<string>>([])
+  const [expandedIds, setExpandedIds] = useState<Array<string>>([])
+  const sharedPage = getHistoryPage(threads, page, HISTORY_PAGE_SIZE)
   const pageShareIds = sharedPage.items.flatMap((thread) =>
-    thread.shares.map((share) => share.id),
-  );
-  const selection = pageSelection(pageShareIds, selectedIds);
-  const selectedCount = selectedIds.length;
+    thread.shares.map((share) => share.id)
+  )
+  const selection = pageSelection(pageShareIds, selectedIds)
+  const selectedCount = selectedIds.length
 
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{SHARED_THREADS_PAGE.title}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{SHARED_THREADS_PAGE.description}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {SHARED_THREADS_PAGE.title}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {SHARED_THREADS_PAGE.description}
+        </p>
       </div>
 
       {threads.length === 0 ? (
@@ -78,10 +83,14 @@ export function SharedThreadsSection({
               indeterminate={selection === "some"}
               ariaLabel={SHARED_THREADS_PAGE.selectPage}
               onCheckedChange={(checked) =>
-                setSelectedIds(setPageSelected(pageShareIds, selectedIds, checked))
+                setSelectedIds(
+                  setPageSelected(pageShareIds, selectedIds, checked)
+                )
               }
             />
-            <p className="text-sm font-medium text-foreground">{HISTORY_PAGE.titleColumn}</p>
+            <p className="text-sm font-medium text-foreground">
+              {HISTORY_PAGE.titleColumn}
+            </p>
             {selectedCount > 0 ? (
               <div className="ml-auto flex items-center gap-2">
                 <Button
@@ -89,8 +98,8 @@ export function SharedThreadsSection({
                   size="sm"
                   className="rounded-md"
                   onClick={() => {
-                    onDelete(selectedIds);
-                    setSelectedIds([]);
+                    onDelete(selectedIds)
+                    setSelectedIds([])
                   }}
                 >
                   <Trash2Icon />
@@ -101,18 +110,18 @@ export function SharedThreadsSection({
           </div>
           <ul>
             {sharedPage.items.map((thread) => {
-              const threadShareIds = thread.shares.map((share) => share.id);
-              const threadSelection = pageSelection(threadShareIds, selectedIds);
-              const expanded = expandedIds.includes(thread.id);
+              const threadShareIds = thread.shares.map((share) => share.id)
+              const threadSelection = pageSelection(threadShareIds, selectedIds)
+              const expanded = expandedIds.includes(thread.id)
               return (
                 <li
                   key={thread.id}
-                  className="border-b cursor-pointer border-border last:border-b-0"
+                  className="cursor-pointer border-b border-border last:border-b-0"
                 >
                   <div
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50",
-                      threadSelection !== "none" && "bg-muted/80",
+                      threadSelection !== "none" && "bg-muted/80"
                     )}
                   >
                     <SettingsCheckbox
@@ -120,29 +129,37 @@ export function SharedThreadsSection({
                       indeterminate={threadSelection === "some"}
                       ariaLabel={`${HISTORY_PAGE.selectThread} ${thread.title}`}
                       onCheckedChange={(checked) =>
-                        setSelectedIds(setPageSelected(threadShareIds, selectedIds, checked))
+                        setSelectedIds(
+                          setPageSelected(threadShareIds, selectedIds, checked)
+                        )
                       }
                     />
-                    <Tooltip content={thread.title} side="top" wrapperClassName="min-w-0 flex-1">
+                    <Tooltip
+                      content={thread.title}
+                      side="top"
+                      wrapperClassName="min-w-0 flex-1"
+                    >
                       <p className="w-full min-w-0 truncate text-sm text-foreground">
                         {thread.title}
                       </p>
                     </Tooltip>
-                    <button
-                      type="button"
-                      aria-expanded={expanded}
-                      aria-label={
-                        expanded ? SHARED_THREADS_PAGE.collapse : SHARED_THREADS_PAGE.expand
+                    <SettingsIconButton
+                      label={
+                        expanded
+                          ? SHARED_THREADS_PAGE.collapse
+                          : SHARED_THREADS_PAGE.expand
                       }
-                      onClick={() => setExpandedIds(toggleIdInList(expandedIds, thread.id))}
-                      className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                      expanded={expanded}
+                      onClick={() =>
+                        setExpandedIds(toggleIdInList(expandedIds, thread.id))
+                      }
                     >
                       {expanded ? (
                         <ChevronUpIcon className="size-4" />
                       ) : (
                         <ChevronDownIcon className="size-4" />
                       )}
-                    </button>
+                    </SettingsIconButton>
                   </div>
                   {expanded
                     ? thread.shares.map((share) => (
@@ -151,14 +168,16 @@ export function SharedThreadsSection({
                           share={share}
                           selected={selectedIds.includes(share.id)}
                           onSelectedChange={() =>
-                            setSelectedIds(toggleIdInList(selectedIds, share.id))
+                            setSelectedIds(
+                              toggleIdInList(selectedIds, share.id)
+                            )
                           }
                           onEdit={() => onEdit(thread.id, thread.title)}
                         />
                       ))
                     : null}
                 </li>
-              );
+              )
             })}
           </ul>
           <HistoryPagination
@@ -170,7 +189,7 @@ export function SharedThreadsSection({
         </div>
       )}
     </section>
-  );
+  )
 }
 
 function SharedThreadShareRow({
@@ -179,16 +198,16 @@ function SharedThreadShareRow({
   onSelectedChange,
   onEdit,
 }: {
-  share: SharedThreadItem["shares"][number];
-  selected: boolean;
-  onSelectedChange: () => void;
-  onEdit: () => void;
+  share: SharedThreadItem["shares"][number]
+  selected: boolean
+  onSelectedChange: () => void
+  onEdit: () => void
 }) {
   return (
     <div
       className={cn(
         "flex items-center gap-3 bg-background/40 py-2.5 pr-4 pl-12",
-        selected && "bg-muted/80",
+        selected && "bg-muted/80"
       )}
     >
       <SettingsCheckbox
@@ -215,27 +234,32 @@ function SharedThreadShareRow({
       <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
         {formatShareAge(share.createdAt, Date.now())}
       </span>
-      <button
-        type="button"
-        aria-label={SHARED_THREADS_PAGE.editShare}
+      <SettingsIconButton
+        label={SHARED_THREADS_PAGE.editShare}
         onClick={onEdit}
-        className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
       >
         <PencilIcon className="size-3.5" />
-      </button>
+      </SettingsIconButton>
     </div>
-  );
+  )
 }
 
 function SharedThreadsEmpty() {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-border px-6 py-16 text-center">
-      <SquareStackIcon className="size-10 text-muted-foreground" aria-hidden="true" />
-      <p className="mt-5 text-lg font-semibold text-foreground">{SHARED_THREADS_PAGE.emptyTitle}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{SHARED_THREADS_PAGE.emptyDescription}</p>
+      <SquareStackIcon
+        className="size-10 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <p className="mt-5 text-lg font-semibold text-foreground">
+        {SHARED_THREADS_PAGE.emptyTitle}
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {SHARED_THREADS_PAGE.emptyDescription}
+      </p>
       <Button render={<Link to="/" />} className="mt-6 rounded-md">
         {SHARED_THREADS_PAGE.createThread}
       </Button>
     </div>
-  );
+  )
 }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react"
+import { memo } from "react"
 import {
   ChevronDownIcon,
   GlobeIcon,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 
 import { WEB_SEARCH_BLOCK } from "@/components/chat/thread/constants"
+import { useStreamingDisclosure } from "@/components/chat/thread/useStreamingDisclosure"
 import { hostnameFromUrl } from "@/lib/web-search"
 import type { WebSearchSource } from "@/lib/web-search"
 import { cn } from "@/lib/utils"
@@ -22,13 +23,10 @@ export const WebSearchBlock = memo(function WebSearchBlock({
   queries,
   isSearching,
 }: WebSearchBlockProps) {
-  const [expanded, setExpanded] = useState(isSearching)
-  const [userToggled, setUserToggled] = useState(false)
-
-  useEffect(() => {
-    if (userToggled) return
-    if (isSearching) setExpanded(true)
-  }, [isSearching, userToggled])
+  const { expanded, toggle } = useStreamingDisclosure(
+    isSearching,
+    "expand-only"
+  )
 
   const label = isSearching
     ? WEB_SEARCH_BLOCK.streamingLabel
@@ -43,10 +41,7 @@ export const WebSearchBlock = memo(function WebSearchBlock({
         aria-busy={isSearching}
         aria-expanded={expanded}
         className="inline-flex max-w-full cursor-pointer items-center gap-2 rounded-sm py-1 text-sm text-muted-foreground transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none"
-        onClick={() => {
-          setUserToggled(true)
-          setExpanded((value) => !value)
-        }}
+        onClick={toggle}
       >
         <span className="inline-flex shrink-0 items-center gap-1.5">
           <ScanSearchIcon aria-hidden="true" className="size-4" />

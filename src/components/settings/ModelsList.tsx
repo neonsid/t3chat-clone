@@ -5,6 +5,7 @@ import type { ModelCatalogEntry } from "@t3chat/model-catalog"
 import { MODELS_PAGE } from "@/components/settings/constants"
 import { ProviderLogo } from "@/components/chat/model-picker/ProviderLogo"
 import { ModelPriceMeter } from "@/components/chat/model-picker/ModelPriceMeter"
+import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem"
 import { Button } from "@/components/shared/ui/button"
 import {
   Popover,
@@ -124,14 +125,12 @@ function ModelRowMenu({
         sideOffset={8}
         className="w-48 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md"
       >
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
+        <SettingsMenuItem
+          label={favorite ? MODELS_PAGE.unfavorite : MODELS_PAGE.favorite}
+          onSelect={() => {
             onToggleFavorite()
             setOpen(false)
           }}
-          className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
         >
           <StarIcon
             className={cn(
@@ -139,8 +138,7 @@ function ModelRowMenu({
               favorite && "fill-amber-400 text-amber-400"
             )}
           />
-          {favorite ? MODELS_PAGE.unfavorite : MODELS_PAGE.favorite}
-        </button>
+        </SettingsMenuItem>
       </PopoverContent>
     </Popover>
   )

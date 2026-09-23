@@ -4,10 +4,15 @@ import { useConvexAuth } from "convex/react"
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react"
 
 import { ChatThreadView } from "@/components/chat/thread/ChatThreadView"
+import { resolveThreadPanelView } from "@/components/chat/thread-panel-logic"
 import { useActiveThread } from "@/hooks/useActiveThread"
 import { useChatRouteState } from "@/hooks/useChatRouteState"
 import { SIGN_IN_PATH } from "@/lib/auth"
-import { createPendingChatThread } from "@/lib/threads"
+import {
+  createPendingChatThread,
+  type ActiveChatThread,
+  type ChatThread,
+} from "@/lib/threads"
 import { storedTemporaryThreadToChatThread } from "@/lib/temporary-chat"
 import { useChatUiStore } from "@/stores/AppStateProvider"
 import { chatRuntimeStore } from "@/stores/chat-runtime-store"
@@ -58,12 +63,12 @@ export function ChatThreadPanel() {
         : null,
     [storedTemporaryThread]
   )
-  const renderedThread =
-    isTemporary && restoredTemporaryThread
-      ? restoredTemporaryThread
-      : activeThread && !messagesLoading
-        ? activeThread
-        : pendingThread
+  let renderedThread: ChatThread | ActiveChatThread = pendingThread
+  if (isTemporary && restoredTemporaryThread) {
+    renderedThread = restoredTemporaryThread
+  } else if (activeThread && !messagesLoading) {
+    renderedThread = activeThread
+  }
   const restoredStoppedMessageIds = useMemo(
     () =>
       storedTemporaryThread
@@ -99,59 +104,24 @@ export function ChatThreadPanel() {
     })
   }, [isSignedIn, navigate, returnTo])
 
-  if (isTemporary && !isTemporaryThreadsHydrated) {
-    return null
-  }
+  const panelView = resolveThreadPanelView({
+    isTemporary,
+    isTemporaryThreadsHydrated,
+    storedTemporaryThreadMissing: storedTemporaryThread == null,
+    currentThreadHadPendingSubmission,
+    activeThreadMissing,
+    isDraft,
+    isRouteDataReady,
+    isChatUiHydrated,
+    isChatDataReady,
+    renderedThreadEmpty: renderedThread.messages.length === 0,
+    isSignedIn,
+    isAuthenticated,
+    wasCurrentThreadReady,
+  })
 
-  if (
-    isTemporary &&
-    isTemporaryThreadsHydrated &&
-    storedTemporaryThread == null &&
-    !currentThreadHadPendingSubmission
-  ) {
-    return <Navigate to="/" replace />
-  }
-
-  if (activeThreadMissing) {
-    return <Navigate to="/" replace />
-  }
-
-  if (
-    !isDraft &&
-    !isTemporary &&
-    isRouteDataReady &&
-    isChatUiHydrated &&
-    isChatDataReady &&
-    renderedThread.messages.length === 0 &&
-    !currentThreadHadPendingSubmission
-  ) {
-    return <Navigate to="/" replace />
-  }
-
-  if (
-    !isDraft &&
-    !isTemporary &&
-    isRouteDataReady &&
-    isSignedIn &&
-    !isAuthenticated
-  ) {
-    return <Navigate to="/" replace />
-  }
-
-  // A thread reached through the draft handoff is known to be empty, because
-  // createOrReuseEmpty only ever returns a thread without messages. Waiting on
-  // its Convex subscriptions would drop the surface for a round trip in the
-  // middle of the navigation, blanking the optimistic bubble the draft route was
-  // already painting.
-  if (!(
-    isDraft ||
-    isTemporary ||
-    isChatDataReady ||
-    wasCurrentThreadReady ||
-    currentThreadHadPendingSubmission
-  )) {
-    return null
-  }
+  if (panelView === "loading") return null
+  if (panelView === "redirect") return <Navigate to="/" replace />
 
   const threadStateKey = createThreadStateKey(user?.id, renderedThread.id)
   const userName =

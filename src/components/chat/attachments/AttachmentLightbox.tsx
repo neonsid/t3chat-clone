@@ -5,6 +5,7 @@ import { DownloadIcon, ExternalLinkIcon, XIcon } from "lucide-react"
 import { ATTACHMENT_VIEWER } from "@/components/chat/attachments/constants"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { hasDocument } from "@/lib/runtime-env"
+import { cn } from "@/lib/utils"
 
 async function downloadNamedFile(url: string, filename: string) {
   try {
@@ -21,6 +22,12 @@ async function downloadNamedFile(url: string, filename: string) {
     window.open(url, "_blank", "noopener,noreferrer")
   }
 }
+
+const iconButtonClassName = cn(
+  "inline-flex size-8 cursor-pointer items-center justify-center rounded-md border",
+  "border-border/70 bg-muted text-muted-foreground",
+  "hover:bg-accent hover:text-foreground"
+)
 
 export function AttachmentLightbox({
   open,
@@ -43,19 +50,28 @@ export function AttachmentLightbox({
       <Dialog.Portal container={container}>
         <Dialog.Backdrop
           data-attachment-lightbox=""
-          className={ATTACHMENT_VIEWER.backdrop}
+          className="fixed inset-0 z-[300] bg-background/80"
         />
         <Dialog.Popup
           ref={setPopupEl}
           data-attachment-lightbox=""
-          className={ATTACHMENT_VIEWER.popup}
+          className={cn(
+            "pointer-events-none fixed inset-0 z-[300] flex items-center justify-center",
+            "outline-none"
+          )}
         >
-          <div className={ATTACHMENT_VIEWER.frame}>
-            <div className={ATTACHMENT_VIEWER.header}>
-              <Dialog.Title className={ATTACHMENT_VIEWER.title}>
+          <div
+            className={cn(
+              "pointer-events-auto flex w-max max-w-[min(56rem,calc(100vw-3rem))] flex-col",
+              "max-h-[calc(100vh-3rem)] overflow-hidden rounded-md border border-border bg-card",
+              "shadow-[0_16px_48px_rgb(0_0_0/0.4)]"
+            )}
+          >
+            <div className="flex w-full shrink-0 items-center justify-between gap-4 px-5 py-3">
+              <Dialog.Title className="min-w-0 flex-1 truncate text-sm text-foreground">
                 {filename}
               </Dialog.Title>
-              <div className={ATTACHMENT_VIEWER.actions}>
+              <div className="flex shrink-0 items-center gap-2">
                 <Tooltip
                   content={ATTACHMENT_VIEWER.downloadLabel}
                   portalContainer={popupEl}
@@ -63,7 +79,7 @@ export function AttachmentLightbox({
                   <button
                     type="button"
                     aria-label={ATTACHMENT_VIEWER.downloadLabel}
-                    className={ATTACHMENT_VIEWER.iconButton}
+                    className={iconButtonClassName}
                     onClick={() => {
                       void downloadNamedFile(url, filename)
                     }}
@@ -78,7 +94,7 @@ export function AttachmentLightbox({
                   <button
                     type="button"
                     aria-label={ATTACHMENT_VIEWER.openLabel}
-                    className={ATTACHMENT_VIEWER.iconButton}
+                    className={iconButtonClassName}
                     onClick={() => {
                       window.open(url, "_blank", "noopener,noreferrer")
                     }}
@@ -95,7 +111,7 @@ export function AttachmentLightbox({
                       <button
                         type="button"
                         aria-label={ATTACHMENT_VIEWER.closeLabel}
-                        className={ATTACHMENT_VIEWER.iconButton}
+                        className={iconButtonClassName}
                       />
                     }
                   >
@@ -104,11 +120,14 @@ export function AttachmentLightbox({
                 </Tooltip>
               </div>
             </div>
-            <div className={ATTACHMENT_VIEWER.imageWrap}>
+            <div className="flex min-h-0 items-center justify-center overflow-hidden px-5 pb-5">
               <img
                 src={url}
                 alt={filename}
-                className={ATTACHMENT_VIEWER.image}
+                className={cn(
+                  "h-auto w-auto object-contain",
+                  "max-h-[calc(100vh-9rem)] max-w-[min(56rem,calc(100vw-5.5rem))]"
+                )}
               />
             </div>
           </div>

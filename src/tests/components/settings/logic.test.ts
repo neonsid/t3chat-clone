@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   getActiveSettingsTabId,
+  getSettingsTabNavigation,
   getPlanAction,
   isSettingsPlaceholderSection,
   canAddTrait,
@@ -62,6 +63,22 @@ describe("isSettingsPlaceholderSection", () => {
     expect(isSettingsPlaceholderSection("history")).toBe(false)
     expect(isSettingsPlaceholderSection("models")).toBe(false)
     expect(isSettingsPlaceholderSection("billing")).toBe(false)
+  })
+})
+
+describe("getSettingsTabNavigation", () => {
+  it("routes implemented tabs to their pages", () => {
+    expect(getSettingsTabNavigation("account")).toEqual({ to: "/settings" })
+    expect(getSettingsTabNavigation("customization")).toEqual({
+      to: "/settings/customization",
+    })
+  })
+
+  it("routes placeholder tabs through the section param", () => {
+    expect(getSettingsTabNavigation("api-keys")).toEqual({
+      to: "/settings/$section",
+      params: { section: "api-keys" },
+    })
   })
 })
 

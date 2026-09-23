@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import type { ModelCapability } from "@t3chat/model-catalog"
 
 import {
@@ -11,13 +12,17 @@ import { cn } from "@/lib/utils"
 type ModelCapabilityBadgesProps = {
   capabilities: ReadonlyArray<ModelCapability>
   className?: string
+  iconClassName?: string
+  empty?: ReactNode
 }
 
 export function ModelCapabilityBadges({
   capabilities,
   className,
+  iconClassName = "size-3",
+  empty = null,
 }: ModelCapabilityBadgesProps) {
-  if (capabilities.length === 0) return null
+  if (capabilities.length === 0) return empty
 
   const visibleCapabilities = capabilities.slice(
     0,
@@ -42,10 +47,11 @@ export function ModelCapabilityBadges({
               aria-label={label}
               className={cn(
                 visual.className,
-                "inline-flex size-3 items-center justify-center bg-transparent"
+                "inline-flex items-center justify-center bg-transparent",
+                iconClassName
               )}
             >
-              <Icon className="size-3" />
+              <Icon className={iconClassName} />
             </span>
           </Tooltip>
         )

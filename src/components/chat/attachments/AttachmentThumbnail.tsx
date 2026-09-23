@@ -1,14 +1,11 @@
-import { BanIcon, FileTextIcon, XIcon } from "lucide-react"
+import { FileTextIcon } from "lucide-react"
 
-import { AttachmentShell } from "@/components/chat/attachments/AttachmentShell"
 import {
-  ATTACHMENT_FILE_CHIP,
-  ATTACHMENT_THUMBNAIL_ACTION,
-  ATTACHMENT_THUMBNAIL_CLASS,
-  ATTACHMENT_THUMBNAIL_FRAME_CLASS,
-  ATTACHMENT_UPLOAD_PROGRESS,
-  attachmentUploadPercent,
-} from "@/components/chat/attachments/constants"
+  AttachmentRemoveButton,
+  UploadProgressOverlay,
+} from "@/components/chat/attachments/AttachmentFileChip"
+import { AttachmentShell } from "@/components/chat/attachments/AttachmentShell"
+import { attachmentUploadPercent } from "@/components/chat/attachments/constants"
 import { Tooltip } from "@/components/shared/motion/tooltip"
 import { cn } from "@/lib/utils"
 
@@ -41,25 +38,22 @@ export function AttachmentThumbnail({
   )
   const preview =
     kind === "image" && src ? (
-      <img
-        src={src}
-        alt=""
-        className={
-          isUploading
-            ? ATTACHMENT_UPLOAD_PROGRESS.imageUploadingClass
-            : ATTACHMENT_UPLOAD_PROGRESS.imageClass
-        }
-      />
+      <img src={src} alt="" className="h-8 w-auto max-w-full object-cover" />
     ) : (
       <div className="flex size-full items-center justify-center text-muted-foreground">
         <FileTextIcon className="size-5" />
       </div>
     )
 
-  const body = (
+  const chip = (
     <AttachmentShell className="group/upload relative" failed={failed}>
-      <div className={ATTACHMENT_THUMBNAIL_CLASS}>
-        <div className={ATTACHMENT_THUMBNAIL_FRAME_CLASS}>
+      <div className="flex h-8 w-fit max-w-full shrink-0">
+        <div
+          className={cn(
+            "relative h-full w-fit overflow-hidden rounded-md bg-foreground/80",
+            "shadow-[0_8px_18px_rgb(0_0_0/0.35)]"
+          )}
+        >
           {onOpen && !isUploading ? (
             <button
               type="button"
@@ -75,7 +69,8 @@ export function AttachmentThumbnail({
           {statusLabel ? (
             <p
               className={cn(
-                "pointer-events-none absolute inset-x-0 bottom-0 truncate px-1 py-0.5 text-center text-[10px] leading-4",
+                "pointer-events-none absolute inset-x-0 bottom-0 truncate px-1 py-0.5",
+                "text-center text-[10px] leading-4",
                 failed
                   ? "bg-destructive/80 text-destructive-foreground"
                   : "bg-background/80 text-muted-foreground"
@@ -85,61 +80,23 @@ export function AttachmentThumbnail({
             </p>
           ) : null}
           {showPercent ? (
-            <>
-              <div
-                className={cn(
-                  ATTACHMENT_UPLOAD_PROGRESS.overlayClass,
-                  ATTACHMENT_UPLOAD_PROGRESS.imageWashClass
-                )}
-              >
-                <span className={ATTACHMENT_UPLOAD_PROGRESS.percentClass}>
-                  {`${percent}%`}
-                </span>
-              </div>
-              <div className={ATTACHMENT_UPLOAD_PROGRESS.trackClass}>
-                <div
-                  className={ATTACHMENT_UPLOAD_PROGRESS.fillClass}
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            </>
+            <UploadProgressOverlay percent={percent} wash />
           ) : null}
         </div>
       </div>
       {onRemove ? (
-        <Tooltip
-          wrapperClassName={ATTACHMENT_FILE_CHIP.actionWrap}
-          content={
-            isUploading
-              ? ATTACHMENT_THUMBNAIL_ACTION.cancelLabel
-              : ATTACHMENT_THUMBNAIL_ACTION.removeLabel
-          }
-        >
-          <button
-            type="button"
-            aria-label={
-              isUploading
-                ? ATTACHMENT_THUMBNAIL_ACTION.cancelLabel
-                : ATTACHMENT_THUMBNAIL_ACTION.removeLabel
-            }
-            disabled={removeDisabled}
-            onClick={onRemove}
-            className={ATTACHMENT_THUMBNAIL_ACTION.button}
-          >
-            {isUploading ? (
-              <BanIcon className="size-3" />
-            ) : (
-              <XIcon className="size-3" />
-            )}
-          </button>
-        </Tooltip>
+        <AttachmentRemoveButton
+          uploading={isUploading}
+          disabled={removeDisabled}
+          onClick={onRemove}
+        />
       ) : null}
     </AttachmentShell>
   )
 
   if (failed && statusLabel) {
-    return <Tooltip content={statusLabel}>{body}</Tooltip>
+    return <Tooltip content={statusLabel}>{chip}</Tooltip>
   }
 
-  return body
+  return chip
 }

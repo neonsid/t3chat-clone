@@ -6,11 +6,6 @@ import {
   type Transition,
 } from "motion/react"
 
-import {
-  TEMPORARY_CHAT_TOAST_ANCHOR_CLASS,
-  TEMPORARY_CHAT_TOAST_ITEM_CLASS,
-  TEMPORARY_CHAT_TOAST_STACK_CLASS,
-} from "@/components/chat/temporary-chat/constants"
 import type { AnimatedToast } from "@/components/shared/motion/animated-toast-stack"
 import { EASE_OUT } from "@/lib/ease"
 
@@ -21,23 +16,22 @@ const TOAST_SPRING: Transition = {
   mass: 0.75,
 }
 
-export function TemporaryChatToast({
-  toasts,
-}: {
-  toasts: AnimatedToast[]
-}) {
+export function TemporaryChatToast({ toasts }: { toasts: AnimatedToast[] }) {
   const visibleToast = toasts.at(-1)
 
   return (
-    <div className={TEMPORARY_CHAT_TOAST_ANCHOR_CLASS}>
+    <div className="chat-shell-toast-anchor">
       <ol
         aria-live="polite"
         aria-atomic="false"
-        className={TEMPORARY_CHAT_TOAST_STACK_CLASS}
+        className="pointer-events-none relative z-10 w-80 max-w-[calc(100vw-2rem)]"
       >
         <AnimatePresence initial={false}>
           {visibleToast ? (
-            <TemporaryChatToastItem key={visibleToast.id} toast={visibleToast} />
+            <TemporaryChatToastItem
+              key={visibleToast.id}
+              toast={visibleToast}
+            />
           ) : null}
         </AnimatePresence>
       </ol>
@@ -64,14 +58,16 @@ function TemporaryChatToastItem({ toast }: { toast: AnimatedToast }) {
       }
       transition={TOAST_SPRING}
     >
-      <div className={TEMPORARY_CHAT_TOAST_ITEM_CLASS}>
+      <div className="flex w-full items-center gap-3 rounded-md border border-border bg-card px-4 py-3 shadow-lg">
         {status === "loading" ? (
           <LoaderCircle className="size-4 shrink-0 animate-spin text-foreground" />
-        ) : status === "error" ? (
+        ) : null}
+        {status === "error" ? (
           <CircleAlert className="size-4 shrink-0 text-foreground" />
-        ) : (
+        ) : null}
+        {status !== "loading" && status !== "error" ? (
           <CircleCheck className="size-4 shrink-0 text-foreground" />
-        )}
+        ) : null}
         <p className="min-w-0 truncate text-sm leading-5 font-medium text-foreground">
           {toast.title}
         </p>

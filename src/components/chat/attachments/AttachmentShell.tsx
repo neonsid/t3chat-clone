@@ -1,7 +1,23 @@
 import type { ReactNode } from "react"
+import { cva } from "class-variance-authority"
 
-import { ATTACHMENT_SHELL } from "@/components/chat/attachments/constants"
 import { cn } from "@/lib/utils"
+
+const attachmentShellVariants = cva(
+  "inline-flex max-w-full rounded-md border border-border bg-muted/40 p-2",
+  {
+    variants: {
+      tone: {
+        default: "",
+        failed: "border-destructive/40",
+        warning: "border-amber-500/50",
+      },
+    },
+    defaultVariants: {
+      tone: "default",
+    },
+  }
+)
 
 export function AttachmentShell({
   children,
@@ -14,15 +30,12 @@ export function AttachmentShell({
   warning?: boolean
   className?: string
 }) {
+  let tone: "default" | "failed" | "warning" = "default"
+  if (failed) tone = "failed"
+  else if (warning) tone = "warning"
+
   return (
-    <div
-      className={cn(
-        ATTACHMENT_SHELL.root,
-        failed && ATTACHMENT_SHELL.failed,
-        warning && ATTACHMENT_SHELL.warning,
-        className
-      )}
-    >
+    <div className={cn(attachmentShellVariants({ tone }), className)}>
       {children}
     </div>
   )

@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { ArchiveIcon, ChevronLeftIcon, ChevronRightIcon, PinIcon, Trash2Icon } from "lucide-react";
 
-import {
-  HISTORY_PAGE,
-  HISTORY_PAGE_SIZE,
-  type HistoryMockThread,
-} from "@/components/settings/constants";
+import { HISTORY_PAGE, HISTORY_PAGE_SIZE } from "@/components/settings/constants";
+import { type HistoryMockThread } from "@/components/settings/history-fixtures";
 import {
   getHistoryPage,
   historyActionLabel,
@@ -81,7 +78,7 @@ export function HistoryThreadList({
             <li
               key={thread.id}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/50",
+                "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50",
                 selected && "bg-muted/80",
               )}
             >
